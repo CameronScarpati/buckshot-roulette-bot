@@ -4,10 +4,24 @@
 
 #include "Player.h"
 
+/**
+ * @brief This class extends the Player class to define a Human Player.
+ */
 class HumanPlayer : public Player {
 public:
+    /**
+     * @brief This constructor creates a human player object with name and health.
+     * @param name String (Human player identifier).
+     * @param health Integer (Health amount).
+     */
     HumanPlayer(const std::string& name, int health);
-    virtual Action chooseAction(const Shotgun& currentShotgun) override;
+
+    /**
+     * @brief This function allows the user to choose an action to perform.
+     * @param currentShotgun Shotgun (Shotgun state)
+     * @return Action that they performed.
+     */
+    Action chooseAction(const Shotgun& currentShotgun) override;
 };
 
 
