@@ -17,7 +17,7 @@ public:
     HumanPlayer(const std::string& name, int health);
 
     /**
-     * @brief This function allows the user to choose an action to perform.
+     * @brief This function allows the player to choose an action to perform.
      * @param currentShotgun Shotgun (Shotgun state)
      * @return Action that they performed.
      */
