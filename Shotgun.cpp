@@ -1,20 +1,40 @@
 #include "Shotgun.h"
-#include <cstdlib>   // For random functions (e.g., rand())
-#include <ctime>     // For seeding randomness (if needed)
+#include <random>
 
-Shotgun::Shotgun() : totalShells(8), liveShells(4), blankShells(4) {
-    // Optionally seed your random number generator here, e.g., std::srand(std::time(nullptr));
+Shotgun::Shotgun() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> dist(2, 8);
+
+    totalShells = dist(gen);
+
+    if (totalShells % 2 == 0) {
+        liveShells = totalShells / 2;
+        blankShells = totalShells / 2;
+    } else {
+        liveShells = (totalShells / 2) + 1;
+        blankShells = totalShells / 2;
+    }
+
+    loadedShells = std::deque<ShellType>(liveShells, ShellType::Live);
+    loadedShells.insert(loadedShells.end(), blankShells, ShellType::Blank);
+    std::shuffle(loadedShells.begin(), loadedShells.end(), gen);
 }
 
-void Shotgun::load() {
-    // TODO: Randomly shuffle or set liveShells and blankShells.
-}
+[[nodiscard]] ShellType Shotgun::getNextShell() {
+    if (isEmpty()) throw std::runtime_error("The Shotgun is empty.");
 
-int Shotgun::getNextShell() {
-    // TODO: Return the next shell's type (1 for live, 0 for blank) and update the counts.
-    return 0;
+    ShellType nextShell = loadedShells.front();
+    loadedShells.pop_front();
+
+    if (nextShell == ShellType::Live) {
+        --liveShells;
+    } else --blankShells;
+    --totalShells;
+
+    return nextShell;
 }
 
 bool Shotgun::isEmpty() const {
-    return (liveShells + blankShells) <= 0;
+    return totalShells == 0;
 }

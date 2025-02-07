@@ -2,18 +2,44 @@
 #define BUCKSHOT_ROULETTE_BOT_SHOTGUN_H
 
 
+#include <deque>
+#include <system_error>
+
+/**
+ * @brief This enum defines shell types.
+ */
+enum class ShellType : int {
+    Blank = 0,
+    Live = 1
+};
+
+/**
+ * @brief This class defines the Shotgun's behavior.
+ */
 class Shotgun {
 public:
+    /**
+     * @brief This constructor initializes the Shotgun object and loads the shells.
+     */
     Shotgun();
-    void load();         // Load shells randomly based on a fixed configuration.
-    int getNextShell();  // Return 1 for a live shell, 0 for a blank.
+
+    /**
+     * @brief This function returns the next shell in the chamber.
+     * @return ShellType::Live/Blank (Random).
+     */
+    [[nodiscard("The shell needs to be used.")]] ShellType getNextShell();
+
+    /**
+     * @brief This function returns if the Shotgun is empty or not.
+     * @return Boolean (Empty/Has Shells).
+     */
     bool isEmpty() const;
 
 private:
-    int totalShells;  // e.g., 8
-    int liveShells;   // e.g., 4 (adjust as needed)
-    int blankShells;  // e.g., 4 (adjust as needed)
-    // Optionally, add a container (like std::vector<int>) to represent the randomized shell order.
+    int totalShells;
+    int liveShells;
+    int blankShells;
+    std::deque<ShellType> loadedShells;
 };
 
 
