@@ -9,8 +9,8 @@
  * @brief This enum defines the actions you can perform.
  */
 enum class Action : int {
-    ShootSelf = 0,
-    ShootOpponent = 1
+    SHOOT_SELF = 0,
+    SHOOT_OPPONENT = 1
 };
 
 /**
@@ -50,6 +50,11 @@ public:
     void resetHealth(int newHealth);
 
     /**
+     * @brief Resets the health to the maximum.
+     */
+     void resetHealth();
+
+    /**
      * @brief Checks if a player is alive.
      * @return Boolean (Player alive/dead).
      */
@@ -60,6 +65,12 @@ public:
      * @return String (Player identifier).
      */
     std::string getName() const;
+
+    /**
+     * @brief Getter.
+     * @return Integer (Player health).
+     */
+     int getHealth() const;
 
 protected:
     std::string name;

@@ -16,8 +16,8 @@ Shotgun::Shotgun() {
         blankShells = totalShells / 2;
     }
 
-    loadedShells = std::deque<ShellType>(liveShells, ShellType::Live);
-    loadedShells.insert(loadedShells.end(), blankShells, ShellType::Blank);
+    loadedShells = std::deque<ShellType>(liveShells, ShellType::LIVE_SHELL);
+    loadedShells.insert(loadedShells.end(), blankShells, ShellType::BLANK_SHELL);
     std::shuffle(loadedShells.begin(), loadedShells.end(), gen);
 }
 
@@ -27,7 +27,7 @@ Shotgun::Shotgun() {
     ShellType nextShell = loadedShells.front();
     loadedShells.pop_front();
 
-    if (nextShell == ShellType::Live) {
+    if (nextShell == ShellType::LIVE_SHELL) {
         --liveShells;
     } else --blankShells;
     --totalShells;

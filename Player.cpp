@@ -23,10 +23,18 @@ void Player::resetHealth(int newHealth) {
     health = newHealth;
 }
 
+void Player::resetHealth() {
+    health = maxHealth;
+}
+
 bool Player::isAlive() const {
     return health > 0;
 }
 
 std::string Player::getName() const {
     return name;
+}
+
+int Player::getHealth() const {
+    return health;
 }

@@ -9,8 +9,8 @@
  * @brief This enum defines shell types.
  */
 enum class ShellType : int {
-    Blank = 0,
-    Live = 1
+    BLANK_SHELL = 0,
+    LIVE_SHELL = 1
 };
 
 /**
@@ -25,7 +25,7 @@ public:
 
     /**
      * @brief This function returns the next shell in the chamber.
-     * @return ShellType::Live/Blank (Random).
+     * @return ShellType::LIVE_SHELL/BLANK_SHELL (Random).
      */
     [[nodiscard("The shell needs to be used.")]] ShellType getNextShell();
 
