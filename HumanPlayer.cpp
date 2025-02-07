@@ -4,6 +4,9 @@
 HumanPlayer::HumanPlayer(const std::string& name, int health)
         : Player(name, health) {}
 
+HumanPlayer::HumanPlayer(const std::string& name, int health, Player* opponent)
+        : Player(name, health, opponent) {}
+
 Action HumanPlayer::chooseAction(const Shotgun& currentShotgun) {
     int input;
 

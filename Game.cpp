@@ -97,6 +97,14 @@ void Game::runGame() {
         std::cout << player2->getName() << " wins the game!" << std::endl;
 }
 
+int Game::getPlayerOneHealth() {
+    return player1->getHealth();
+}
+
+int Game::getPlayerTwoHealth() {
+    return player2->getHealth();
+}
+
 void Game::processTurn(Player* currentPlayer) {
     Player* opponent = (currentPlayer == player1) ? player2 : player1;
 

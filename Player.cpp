@@ -5,8 +5,15 @@
 int Player::maxHealth;
 
 Player::Player(std::string name, int health)
-        : name(std::move(name)), health(health) {
-    if (maxHealth == 0) maxHealth = health;
+        : Player(std::move(name), health, nullptr)
+{
+}
+
+Player::Player(std::string name, int health, Player* opponent)
+        : name(std::move(name)), health(health), opponent(opponent)
+{
+    if (maxHealth == 0)
+        maxHealth = health;
 }
 
 void Player::loseHealth(bool sawUsed) {

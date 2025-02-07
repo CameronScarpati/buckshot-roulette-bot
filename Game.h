@@ -39,6 +39,18 @@ public:
      */
     void runGame();
 
+    /**
+     * @brief Getter.
+     * @return Integer (Player health).
+     */
+    int getPlayerOneHealth();
+
+    /**
+    * @brief Getter.
+    * @return Integer (Player health).
+    */
+    int getPlayerTwoHealth();
+
 private:
     Player* player1;
     Player* player2;

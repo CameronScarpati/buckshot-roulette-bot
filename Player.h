@@ -26,6 +26,21 @@ public:
     Player(std::string name, int health);
 
     /**
+     * @brief This constructor creates a player object with name and health and opponent.
+     * @param name String (Player identifier).
+     * @param health Integer (Health amount).
+     * @param opponent Player (Player opponent).
+     */
+    Player(std::string name, int health, Player* opponent);
+
+    /**
+     * @brief Set opponent
+     */
+    void setOpponent(Player* opponent) {
+        this->opponent = opponent;
+    }
+
+    /**
      * @brief This function allows the player to choose an action to perform.
      * @param currentShotgun Shotgun (Shotgun state)
      * @return Action that they performed.
@@ -76,6 +91,7 @@ protected:
     std::string name;
     int health;
     static int maxHealth;
+    Player* opponent;
 };
 
 

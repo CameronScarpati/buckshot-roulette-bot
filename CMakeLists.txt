@@ -16,4 +16,5 @@ add_executable(buckshot_roulette_bot
         Player.cpp
         Player.h
         Shotgun.cpp
-        Shotgun.h)
+        Shotgun.h
+        SimulationState.h)

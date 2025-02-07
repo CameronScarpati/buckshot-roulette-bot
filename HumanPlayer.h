@@ -17,6 +17,13 @@ public:
     HumanPlayer(const std::string& name, int health);
 
     /**
+     * @brief This constructor creates a human player object with name, health and opponent.
+     * @param name String (Bot player identifier).
+     * @param health Integer (Health amount).
+     */
+    HumanPlayer(const std::string& name, int health, Player* opponent);
+
+    /**
      * @brief This function allows the player to choose an action to perform.
      * @param currentShotgun Shotgun (Shotgun state)
      * @return Action that they performed.
