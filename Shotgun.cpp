@@ -38,3 +38,11 @@ Shotgun::Shotgun() {
 bool Shotgun::isEmpty() const {
     return totalShells == 0;
 }
+
+int Shotgun::liveShellCount() const {
+    return liveShells;
+}
+
+int Shotgun::totalShellCount() const {
+    return totalShells;
+}

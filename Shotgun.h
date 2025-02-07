@@ -35,6 +35,18 @@ public:
      */
     bool isEmpty() const;
 
+    /**
+     * @brief Getter.
+     * @return Integer (Live shell count).
+     */
+    int liveShellCount() const;
+
+    /**
+     * @brief Getter.
+     * @return Integer (Total shell count).
+     */
+    int totalShellCount() const;
+
 private:
     int totalShells;
     int liveShells;
