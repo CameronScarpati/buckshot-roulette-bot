@@ -31,7 +31,7 @@ public:
 
     /**
      * @brief This function returns if the Shotgun is empty or not.
-     * @return Boolean (Empty/Has Shells).
+     * @return Boolean (Empty/Has shells).
      */
     bool isEmpty() const;
 
