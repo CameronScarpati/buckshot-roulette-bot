@@ -6,9 +6,19 @@
 
 class BotPlayer : public Player {
 public:
+    /**
+     * @brief This constructor creates a bot player object with name and health.
+     * @param name String (Human player identifier).
+     * @param health Integer (Health amount).
+     */
     BotPlayer(const std::string& name, int health);
-    virtual Action chooseAction(const Shotgun& currentShotgun) override;
-    // Additional instance variables for bot strategy can be added here.
+
+    /**
+     * @brief This function allows the bot to choose an action to perform.
+     * @param currentShotgun Shotgun (Shotgun state)
+     * @return Action that they performed.
+     */
+    Action chooseAction(const Shotgun& currentShotgun) override;
 };
 
 
