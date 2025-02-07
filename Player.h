@@ -5,23 +5,63 @@
 #include "Shotgun.h"
 #include <string>
 
+/**
+ * @brief This enum defines the actions you can perform.
+ */
 enum Action { SHOOT_SELF, SHOOT_OPPONENT };
 
+/**
+ * @brief This class defines a player's actions.
+ */
 class Player {
 public:
-    Player(const std::string& name, int health);
-    virtual ~Player();
+    /**
+     * @brief This constructor creates a player object with name and health.
+     * @param name String (Player identifier).
+     * @param health Integer (Health amount).
+     */
+    Player(std::string name, int health);
 
-    // Pure virtual function: each derived class must implement its own decision logic.
+    /**
+     * @brief This function allows the user to choose an action to perform.
+     * @param currentShotgun Shotgun (Shotgun state)
+     * @return Action that they performed.
+     */
     virtual Action chooseAction(const Shotgun& currentShotgun) = 0;
 
-    void loseHealth(int amount);
+    /**
+     * @brief This function changes how much health I have when I get shot.
+     * @param sawUsed Boolean (Saw item used for double damage).
+     */
+    void loseHealth(bool sawUsed);
+
+    /**
+     * @brief Heal one health.
+     */
+    void useStimulant();
+
+    /**
+     * @brief Changes the new max health and resets current.
+     * @param newHealth Integer (New maximum health).
+     */
+    void resetHealth(int newHealth);
+
+    /**
+     * @brief Checks if a player is alive.
+     * @return Boolean (Player alive/dead).
+     */
     bool isAlive() const;
+
+    /**
+     * @brief Getter.
+     * @return String (Player identifier).
+     */
     std::string getName() const;
 
 protected:
     std::string name;
     int health;
+    static int maxHealth;
 };
 
 

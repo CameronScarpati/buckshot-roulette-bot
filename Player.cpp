@@ -1,12 +1,26 @@
 #include "Player.h"
 
-Player::Player(const std::string& name, int health)
-        : name(name), health(health) {}
+#include <utility>
 
-Player::~Player() {}
+int Player::maxHealth;
 
-void Player::loseHealth(int amount) {
-    health -= amount;
+Player::Player(std::string name, int health)
+        : name(std::move(name)), health(health) {
+    if (maxHealth == 0) maxHealth = health;
+}
+
+void Player::loseHealth(bool sawUsed) {
+    if (!isAlive()) throw std::runtime_error("This person is already dead.");
+    health -= (sawUsed) ? 2 : 1;
+}
+
+void Player::useStimulant() {
+    ++health;
+}
+
+void Player::resetHealth(int newHealth) {
+    maxHealth = newHealth;
+    health = newHealth;
 }
 
 bool Player::isAlive() const {
