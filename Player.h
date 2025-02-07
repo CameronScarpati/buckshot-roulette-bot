@@ -8,7 +8,10 @@
 /**
  * @brief This enum defines the actions you can perform.
  */
-enum Action { SHOOT_SELF, SHOOT_OPPONENT };
+enum class Action : int {
+    ShootSelf = 0,
+    ShootOpponent = 1
+};
 
 /**
  * @brief This class defines a player's actions.
@@ -23,7 +26,7 @@ public:
     Player(std::string name, int health);
 
     /**
-     * @brief This function allows the user to choose an action to perform.
+     * @brief This function allows the player to choose an action to perform.
      * @param currentShotgun Shotgun (Shotgun state)
      * @return Action that they performed.
      */
