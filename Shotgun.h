@@ -43,6 +43,12 @@ public:
 
     /**
      * @brief Getter.
+     * @reutrn Integer (Blank shell count).
+     */
+    int blankShellCount() const;
+
+    /**
+     * @brief Getter.
      * @return Integer (Total shell count).
      */
     int totalShellCount() const;

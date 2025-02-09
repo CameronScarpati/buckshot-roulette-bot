@@ -1,5 +1,6 @@
 #include "Shotgun.h"
 #include <random>
+#include <iostream>
 
 Shotgun::Shotgun() {
     std::random_device rd;
@@ -19,6 +20,9 @@ Shotgun::Shotgun() {
     loadedShells = std::deque<ShellType>(liveShells, ShellType::LIVE_SHELL);
     loadedShells.insert(loadedShells.end(), blankShells, ShellType::BLANK_SHELL);
     std::shuffle(loadedShells.begin(), loadedShells.end(), gen);
+
+    std::cout << "Shotgun was loaded with " << liveShells << " live rounds and " << blankShells << " blank rounds." << std::endl;
+    std::cout << "Best of luck..." << std::endl;
 }
 
 [[nodiscard]] ShellType Shotgun::getNextShell() {
@@ -41,6 +45,10 @@ bool Shotgun::isEmpty() const {
 
 int Shotgun::liveShellCount() const {
     return liveShells;
+}
+
+int Shotgun::blankShellCount() const {
+    return blankShells;
 }
 
 int Shotgun::totalShellCount() const {

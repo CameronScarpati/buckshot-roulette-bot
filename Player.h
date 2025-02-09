@@ -17,6 +17,12 @@ enum class Action : int {
  * @brief This class defines a player's actions.
  */
 class Player {
+protected:
+    std::string name;
+    int health;
+    static int maxHealth;
+    Player* opponent;
+
 public:
     /**
      * @brief This constructor creates a player object with name and health.
@@ -36,8 +42,8 @@ public:
     /**
      * @brief Set opponent
      */
-    void setOpponent(Player* opponent) {
-        this->opponent = opponent;
+    void setOpponent(Player* opp) {
+        this->opponent = opp;
     }
 
     /**
@@ -45,7 +51,7 @@ public:
      * @param currentShotgun Shotgun (Shotgun state)
      * @return Action that they performed.
      */
-    virtual Action chooseAction(const Shotgun& currentShotgun) = 0;
+    [[nodiscard("Action needs to be performed.")]] virtual Action chooseAction(const Shotgun& currentShotgun) = 0;
 
     /**
      * @brief This function changes how much health I have when I get shot.
@@ -86,12 +92,6 @@ public:
      * @return Integer (Player health).
      */
      int getHealth() const;
-
-protected:
-    std::string name;
-    int health;
-    static int maxHealth;
-    Player* opponent;
 };
 
 
