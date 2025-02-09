@@ -1,7 +1,6 @@
 #ifndef BUCKSHOT_ROULETTE_BOT_GAME_H
 #define BUCKSHOT_ROULETTE_BOT_GAME_H
 
-
 #include "Player.h"
 #include "Shotgun.h"
 #include <iostream>
@@ -25,8 +24,8 @@ public:
      * @brief Changes the game state for an action performed.
      * @param action Action (To be performed).
      */
-     void performAction(Action action);
-
+    void performAction(Action action);
+ 
     /**
      * @brief Runs the main game loop until one player loses.
      */
@@ -47,6 +46,5 @@ private:
      */
     bool checkRoundEnd();
 };
-
 
 #endif // BUCKSHOT_ROULETTE_BOT_GAME_H

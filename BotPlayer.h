@@ -1,7 +1,6 @@
 #ifndef BUCKSHOT_ROULETTE_BOT_BOTPLAYER_H
 #define BUCKSHOT_ROULETTE_BOT_BOTPLAYER_H
 
-
 #include "Player.h"
 #include "SimulationState.h"
 
@@ -13,14 +12,14 @@ private:
      * @return Float (How good the state is for the bot).
      */
     static float evaluateState(const SimState& state);
-
+ 
     /**
      * @brief This function changes the state according to an action and branches the outcomes.
      * @param state Recursive game state.
      * @param action The action to perform.
      * @return Pair<SimState, SimState> (Live/Blank).
      */
-    static std::pair<SimState, SimState> simulateAction(const SimState &state, Action action);
+    static std::pair<SimState, SimState> simulateAction(const SimState& state, Action action);
 
     /**
      * @brief This function gives a value to the action it believes it should perform.
@@ -53,6 +52,5 @@ public:
      */
     Action chooseAction(const Shotgun& currentShotgun) override;
 };
-
 
 #endif //BUCKSHOT_ROULETTE_BOT_BOTPLAYER_H

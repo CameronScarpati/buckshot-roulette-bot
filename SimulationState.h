@@ -13,5 +13,5 @@ struct SimState {
     int totalShells;
     Turn playerTurn;
 };
-
+ 
 #endif //BUCKSHOT_ROULETTE_BOT_SIMULATIONSTATE_H

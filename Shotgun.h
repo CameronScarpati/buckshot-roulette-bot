@@ -1,7 +1,6 @@
 #ifndef BUCKSHOT_ROULETTE_BOT_SHOTGUN_H
 #define BUCKSHOT_ROULETTE_BOT_SHOTGUN_H
 
-
 #include <deque>
 #include <system_error>
 
@@ -59,6 +58,5 @@ private:
     int blankShells;
     std::deque<ShellType> loadedShells;
 };
-
 
 #endif //BUCKSHOT_ROULETTE_BOT_SHOTGUN_H

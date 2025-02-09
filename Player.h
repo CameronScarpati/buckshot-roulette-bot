@@ -1,7 +1,6 @@
 #ifndef BUCKSHOT_ROULETTE_BOT_PLAYER_H
 #define BUCKSHOT_ROULETTE_BOT_PLAYER_H
 
-
 #include "Shotgun.h"
 #include <string>
 
@@ -42,9 +41,7 @@ public:
     /**
      * @brief Set opponent
      */
-    void setOpponent(Player* opp) {
-        this->opponent = opp;
-    }
+    void setOpponent(Player* opp);
 
     /**
      * @brief This function allows the player to choose an action to perform.
@@ -58,7 +55,7 @@ public:
      * @param sawUsed Boolean (Saw item used for double damage).
      */
     void loseHealth(bool sawUsed);
-
+ 
     /**
      * @brief Heal one health.
      */
@@ -73,7 +70,7 @@ public:
     /**
      * @brief Resets the health to the maximum.
      */
-     void resetHealth();
+    void resetHealth();
 
     /**
      * @brief Checks if a player is alive.
@@ -91,8 +88,7 @@ public:
      * @brief Getter.
      * @return Integer (Player health).
      */
-     int getHealth() const;
+    int getHealth() const;
 };
-
 
 #endif //BUCKSHOT_ROULETTE_BOT_PLAYER_H
