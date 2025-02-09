@@ -8,7 +8,6 @@ void Game::performAction(Action action) {
     switch(action) {
         case Action::SHOOT_SELF: {
             Player* currentPlayer = isPlayerOneTurn ? player1 : player2;
-            Player* otherPlayer = isPlayerOneTurn ? player2 : player1;
             ShellType currentShell = shotgun.getNextShell();
 
             std::cout << currentPlayer->getName() + " shoots themself." << std::endl;
