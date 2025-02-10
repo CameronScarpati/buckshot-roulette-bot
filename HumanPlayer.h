@@ -28,7 +28,7 @@ public:
    * @param currentShotgun Shotgun (Shotgun state)
    * @return Action that they performed.
    */
-  Action chooseAction(const Shotgun &currentShotgun) override;
+  Action chooseAction(const Shotgun *currentShotgun) override;
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_HUMANPLAYER_H

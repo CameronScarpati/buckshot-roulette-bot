@@ -2,7 +2,9 @@
 #include <iostream>
 #include <random>
 
-Shotgun::Shotgun() {
+Shotgun::Shotgun() { loadShells(); }
+
+void Shotgun::loadShells() {
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<int> dist(2, 8);
@@ -20,10 +22,6 @@ Shotgun::Shotgun() {
   loadedShells = std::deque<ShellType>(liveShells, ShellType::LIVE_SHELL);
   loadedShells.insert(loadedShells.end(), blankShells, ShellType::BLANK_SHELL);
   std::shuffle(loadedShells.begin(), loadedShells.end(), gen);
-
-  std::cout << "Shotgun was loaded with " << liveShells << " live rounds and "
-            << blankShells << " blank rounds." << std::endl;
-  std::cout << "Best of luck..." << std::endl;
 }
 
 [[nodiscard]] ShellType Shotgun::getNextShell() {
@@ -44,8 +42,16 @@ Shotgun::Shotgun() {
 
 bool Shotgun::isEmpty() const { return totalShells == 0; }
 
-int Shotgun::liveShellCount() const { return liveShells; }
+int Shotgun::getLiveShellCount() const { return liveShells; }
 
-int Shotgun::blankShellCount() const { return blankShells; }
+int Shotgun::getBlankShellCount() const { return blankShells; }
 
-int Shotgun::totalShellCount() const { return totalShells; }
+int Shotgun::getTotalShellCount() const { return totalShells; }
+
+float Shotgun::getLiveShellProbability() const {
+  return static_cast<float>(liveShells) / static_cast<float>(totalShells);
+}
+
+float Shotgun::getBlankShellProbability() const {
+  return 1 - getLiveShellProbability();
+}

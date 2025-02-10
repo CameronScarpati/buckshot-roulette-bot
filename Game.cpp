@@ -1,15 +1,25 @@
 #include "Game.h"
 #include <iostream>
 
-Game::Game(Player *p1, Player *p2)
-    : player1(p1), player2(p2), shotgun(Shotgun()), currentRound(1),
-      playerOneWins(0), playerTwoWins(0), isPlayerOneTurn(true) {}
+Game::Game(Player *pOne, Player *pTwo)
+    : playerOne(pOne), playerTwo(pTwo), shotgun(new Shotgun()), currentRound(1),
+      playerOneWins(0), playerTwoWins(0), isPlayerOneTurn(true) {
+  std::cout << "Buckshot Roulette game starting. Good luck!" << std::endl;
+  printShells();
+}
+
+void Game::printShells() {
+  std::cout << "Shotgun was loaded with " << shotgun->getLiveShellCount()
+            << " live rounds and " << shotgun->getBlankShellCount()
+            << " blank rounds." << std::endl;
+  std::cout << "Best of luck..." << std::endl;
+}
 
 void Game::performAction(Action action) {
   switch (action) {
   case Action::SHOOT_SELF: {
-    Player *currentPlayer = isPlayerOneTurn ? player1 : player2;
-    ShellType currentShell = shotgun.getNextShell();
+    Player *currentPlayer = isPlayerOneTurn ? playerOne : playerTwo;
+    ShellType currentShell = shotgun->getNextShell();
 
     std::cout << currentPlayer->getName() + " shoots themself." << std::endl;
 
@@ -26,9 +36,9 @@ void Game::performAction(Action action) {
     break;
   }
   case Action::SHOOT_OPPONENT: {
-    Player *currentPlayer = isPlayerOneTurn ? player1 : player2;
-    Player *otherPlayer = isPlayerOneTurn ? player2 : player1;
-    ShellType currentShell = shotgun.getNextShell();
+    Player *currentPlayer = isPlayerOneTurn ? playerOne : playerTwo;
+    Player *otherPlayer = isPlayerOneTurn ? playerTwo : playerOne;
+    ShellType currentShell = shotgun->getNextShell();
 
     std::cout << currentPlayer->getName() + " shoots " + otherPlayer->getName()
               << std::endl;
@@ -41,57 +51,56 @@ void Game::performAction(Action action) {
       std::cout << "The shell was blank." << std::endl;
 
     isPlayerOneTurn = !isPlayerOneTurn;
+
     break;
   }
   }
 }
 
 void Game::runGame() {
-  std::cout << "Buckshot Roulette game starting. Good luck!" << std::endl;
-
   while (true) {
     if (checkRoundEnd()) {
-      if (!player2->isAlive()) {
-        std::cout << player1->getName() << " wins the round!" << std::endl;
+      if (!playerTwo->isAlive()) {
+        std::cout << playerOne->getName() << " wins the round!" << std::endl;
         playerOneWins++;
-        player1->resetHealth();
-        player2->resetHealth();
-      } else if (!player1->isAlive()) {
-        std::cout << player2->getName() << " wins the round!" << std::endl;
+        playerOne->resetHealth();
+        playerTwo->resetHealth();
+      } else if (!playerOne->isAlive()) {
+        std::cout << playerTwo->getName() << " wins the round!" << std::endl;
         playerTwoWins++;
-        player1->resetHealth();
-        player2->resetHealth();
+        playerOne->resetHealth();
+        playerTwo->resetHealth();
       }
 
       if (playerOneWins >= 3) {
-        std::cout << player1->getName()
-                  << " wins the game by winning 3 consecutive rounds!"
-                  << std::endl;
+        std::cout << playerOne->getName()
+                  << " wins the game by winning 3 rounds!" << std::endl;
         break;
       } else if (playerTwoWins >= 3) {
-        std::cout << player2->getName()
-                  << " wins the game by winning 3 consecutive rounds!"
-                  << std::endl;
+        std::cout << playerTwo->getName()
+                  << " wins the game by winning 3 rounds!" << std::endl;
         break;
       }
 
-      shotgun = Shotgun();
+      shotgun->loadShells();
+
+      printShells();
       currentRound++;
       std::cout << "Round reset. Now starting round " << currentRound << "."
                 << std::endl;
-      std::cout << player1->getName() + " has " << playerOneWins
+      std::cout << playerOne->getName() + " has " << playerOneWins
                 << " round wins." << std::endl;
-      std::cout << player2->getName() + " has " << playerTwoWins
+      std::cout << playerTwo->getName() + " has " << playerTwoWins
                 << " round wins." << std::endl;
-    } else if (shotgun.isEmpty()) {
-      shotgun = Shotgun();
-      continue;
+    } else if (shotgun->isEmpty()) {
+      shotgun->loadShells();
+      printShells();
     }
 
-    Player *currentPlayer = (isPlayerOneTurn) ? player1 : player2;
-    std::cout << player1->getName() + " has " << player1->getHealth()
+    Player *currentPlayer = (isPlayerOneTurn) ? playerOne : playerTwo;
+    std::cout << playerOne->getName() + " has " << playerOne->getHealth()
               << " health." << std::endl;
-    std::cout << player2->getName() + " has " << player2->getHealth()
+    std::cout << playerTwo->getName() + " has " << playerTwo->getHealth()
               << " health." << std::endl;
     Action action = currentPlayer->chooseAction(shotgun);
     performAction(action);
@@ -101,5 +110,5 @@ void Game::runGame() {
 }
 
 bool Game::checkRoundEnd() {
-  return !player1->isAlive() || !player2->isAlive();
+  return !playerOne->isAlive() || !playerTwo->isAlive();
 }

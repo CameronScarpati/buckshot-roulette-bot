@@ -13,6 +13,12 @@ enum class ShellType : int { BLANK_SHELL = 0, LIVE_SHELL = 1 };
  * @brief This class defines the Shotgun's behavior.
  */
 class Shotgun {
+protected:
+  int totalShells{};
+  int liveShells{};
+  int blankShells{};
+  std::deque<ShellType> loadedShells;
+
 public:
   /**
    * @brief This constructor initializes the Shotgun object and loads the
@@ -21,10 +27,15 @@ public:
   Shotgun();
 
   /**
+   * @brief This function loads the shells.
+   */
+  void loadShells();
+
+  /**
    * @brief This function returns the next shell in the chamber.
    * @return ShellType::LIVE_SHELL/BLANK_SHELL (Random).
    */
-  [[nodiscard("The shell needs to be used.")]] ShellType getNextShell();
+  [[nodiscard("The shell needs to be used.")]] virtual ShellType getNextShell();
 
   /**
    * @brief This function returns if the Shotgun is empty or not.
@@ -36,25 +47,23 @@ public:
    * @brief Getter.
    * @return Integer (Live shell count).
    */
-  int liveShellCount() const;
+  int getLiveShellCount() const;
 
   /**
    * @brief Getter.
    * @reutrn Integer (Blank shell count).
    */
-  int blankShellCount() const;
+  int getBlankShellCount() const;
 
   /**
    * @brief Getter.
    * @return Integer (Total shell count).
    */
-  int totalShellCount() const;
+  int getTotalShellCount() const;
 
-private:
-  int totalShells;
-  int liveShells;
-  int blankShells;
-  std::deque<ShellType> loadedShells;
+  float getLiveShellProbability() const;
+
+  float getBlankShellProbability() const;
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_SHOTGUN_H

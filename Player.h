@@ -47,7 +47,7 @@ public:
    * @return Action that they performed.
    */
   [[nodiscard("Action needs to be performed.")]] virtual Action
-  chooseAction(const Shotgun &currentShotgun) = 0;
+  chooseAction(const Shotgun *currentShotgun) = 0;
 
   /**
    * @brief This function changes how much health I have when I get shot.
