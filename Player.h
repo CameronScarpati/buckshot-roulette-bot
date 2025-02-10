@@ -5,87 +5,90 @@
 #include <string>
 
 /**
- * @brief This enum defines the actions you can perform.
+ * @brief Defines the possible actions a player can perform.
  */
 enum class Action : int { SHOOT_SELF = 0, SHOOT_OPPONENT = 1 };
 
 /**
- * @brief This class defines a player's actions.
+ * @brief Represents a player in the game.
+ *
+ * This class defines the attributes and actions of a player, including health
+ * management, opponent interactions, and decision-making.
  */
 class Player {
 protected:
-  std::string name;
-  int health;
-  static int maxHealth;
-  Player *opponent;
+  std::string name;     ///< Player's name.
+  int health;           ///< Current health of the player.
+  static int maxHealth; ///< Maximum health for all players.
+  Player *opponent;     ///< Pointer to the opponent player.
 
 public:
   /**
-   * @brief This constructor creates a player object with name and health.
-   * @param name String (Player identifier).
-   * @param health Integer (Health amount).
+   * @brief Constructs a Player with a given name and health.
+   * @param name The player's name.
+   * @param health The initial health of the player.
    */
   Player(std::string name, int health);
 
   /**
-   * @brief This constructor creates a player object with name and health and
-   * opponent.
-   * @param name String (Player identifier).
-   * @param health Integer (Health amount).
-   * @param opponent Player (Player opponent).
+   * @brief Constructs a Player with a given name, health, and opponent.
+   * @param name The player's name.
+   * @param health The initial health of the player.
+   * @param opponent Pointer to the opponent player.
    */
   Player(std::string name, int health, Player *opponent);
 
   /**
-   * @brief Set opponent
+   * @brief Sets the opponent for this player.
+   * @param opp Pointer to the opponent player.
    */
   void setOpponent(Player *opp);
 
   /**
-   * @brief This function allows the player to choose an action to perform.
-   * @param currentShotgun Shotgun (Shotgun state)
-   * @return Action that they performed.
+   * @brief Allows the player to choose an action.
+   * @param currentShotgun Pointer to the current shotgun state.
+   * @return The selected action.
    */
   [[nodiscard("Action needs to be performed.")]] virtual Action
   chooseAction(const Shotgun *currentShotgun) = 0;
 
   /**
-   * @brief This function changes how much health I have when I get shot.
-   * @param sawUsed Boolean (Saw item used for double damage).
+   * @brief Reduces the player's health when they get shot.
+   * @param sawUsed True if a saw item was used for double damage.
    */
   void loseHealth(bool sawUsed);
 
   /**
-   * @brief Heal one health.
+   * @brief Heals the player by restoring one health point.
    */
   void useStimulant();
 
   /**
-   * @brief Changes the new max health and resets current.
-   * @param newHealth Integer (New maximum health).
+   * @brief Sets a new maximum health value and resets the player's health.
+   * @param newHealth The new maximum health value.
    */
   void resetHealth(int newHealth);
 
   /**
-   * @brief Resets the health to the maximum.
+   * @brief Resets the player's health to the current maximum.
    */
   void resetHealth();
 
   /**
-   * @brief Checks if a player is alive.
-   * @return Boolean (Player alive/dead).
+   * @brief Checks if the player is still alive.
+   * @return True if the player is alive, false otherwise.
    */
   bool isAlive() const;
 
   /**
-   * @brief Getter.
-   * @return String (Player identifier).
+   * @brief Retrieves the player's name.
+   * @return The player's name as a string.
    */
   std::string getName() const;
 
   /**
-   * @brief Getter.
-   * @return Integer (Player health).
+   * @brief Retrieves the player's current health.
+   * @return The player's health as an integer.
    */
   int getHealth() const;
 };

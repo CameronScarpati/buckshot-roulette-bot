@@ -69,7 +69,6 @@ SimulatedGame BotPlayer::simulateBlankAction(const SimulatedGame &state,
   return nextState;
 }
 
-// Combine both outcomes into a pair, for the general case:
 std::pair<SimulatedGame, SimulatedGame>
 BotPlayer::simulateAction(const SimulatedGame &state, Action action) {
   SimulatedGame liveState = simulateLiveAction(state, action);

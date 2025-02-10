@@ -4,29 +4,32 @@
 #include "Player.h"
 
 /**
- * @brief This class extends the Player class to define a Human Player.
+ * @brief Represents a human player in the game.
+ *
+ * This class extends the Player class and allows human input for
+ * decision-making.
  */
 class HumanPlayer : public Player {
 public:
   /**
-   * @brief This constructor creates a human player object with name and health.
-   * @param name String (Human player identifier).
-   * @param health Integer (Health amount).
+   * @brief Constructs a HumanPlayer with a given name and health.
+   * @param name The player's name.
+   * @param health The initial health of the player.
    */
   HumanPlayer(const std::string &name, int health);
 
   /**
-   * @brief This constructor creates a human player object with name, health and
-   * opponent.
-   * @param name String (Bot player identifier).
-   * @param health Integer (Health amount).
+   * @brief Constructs a HumanPlayer with a given name, health, and opponent.
+   * @param name The player's name.
+   * @param health The initial health of the player.
+   * @param opponent Pointer to the opponent player.
    */
   HumanPlayer(const std::string &name, int health, Player *opponent);
 
   /**
-   * @brief This function allows the player to choose an action to perform.
-   * @param currentShotgun Shotgun (Shotgun state)
-   * @return Action that they performed.
+   * @brief Allows the human player to choose an action.
+   * @param currentShotgun Pointer to the current shotgun state.
+   * @return The selected action.
    */
   Action chooseAction(const Shotgun *currentShotgun) override;
 };

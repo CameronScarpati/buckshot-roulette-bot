@@ -6,9 +6,10 @@
 #include <iostream>
 
 /**
- * @brief The Game class manages the overall game loop, rounds, and turn order.
- * Inspired by the Steam guide for Buckshot Roulette,
- * this implementation supports both Human vs. Bot and Bot vs. Bot modes.
+ * @brief Manages the overall game loop, rounds, and turn order.
+ *
+ * Inspired by the Steam guide for Buckshot Roulette, this class supports both
+ * Human vs. Bot and Bot vs. Bot modes.
  */
 class Game {
 private:
@@ -22,24 +23,30 @@ private:
 
   /**
    * @brief Checks if the current round is over.
-   * @return Boolean (True/False - Over/Not Over).
+   *
+   * @return true if the round is over, false otherwise.
    */
   bool checkRoundEnd();
 
 public:
   /**
    * @brief Constructs a new Game instance.
-   * @param p1 Pointer to playerOne (the human or first bot).
-   * @param p2 Pointer to playerTwo (the Dealer or second bot).
+   *
+   * @param p1 Pointer to player one (human or first bot).
+   * @param p2 Pointer to player two (dealer or second bot).
    */
   Game(Player *p1, Player *p2);
 
   /**
-   * @brief Changes the game state for an action performed.
-   * @param action Action (To be performed).
+   * @brief Performs an action and updates the game state accordingly.
+   *
+   * @param action The action to perform.
    */
   void performAction(Action action);
 
+  /**
+   * @brief Prints the current shell status of the shotgun.
+   */
   void printShells();
 
   /**

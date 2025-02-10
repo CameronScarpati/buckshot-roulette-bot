@@ -5,64 +5,81 @@
 #include <system_error>
 
 /**
- * @brief This enum defines shell types.
+ * @brief Defines the possible types of shotgun shells.
  */
 enum class ShellType : int { BLANK_SHELL = 0, LIVE_SHELL = 1 };
 
 /**
- * @brief This class defines the Shotgun's behavior.
+ * @brief Represents the behavior of a shotgun in the game.
+ *
+ * This class manages shell loading, tracking live and blank shell counts,
+ * and determining shell probabilities.
  */
 class Shotgun {
 protected:
-  int totalShells{};
-  int liveShells{};
-  int blankShells{};
-  std::deque<ShellType> loadedShells;
+  int totalShells{}; ///< Total number of shells in the shotgun.
+  int liveShells{};  ///< Number of live shells remaining.
+  int blankShells{}; ///< Number of blank shells remaining.
+  std::deque<ShellType> loadedShells; ///< Queue representing the loaded shells.
 
 public:
   /**
-   * @brief This constructor initializes the Shotgun object and loads the
-   * shells.
+   * @brief Constructs a Shotgun object and loads the initial shells.
    */
   Shotgun();
 
   /**
-   * @brief This function loads the shells.
+   * @brief Loads shells into the shotgun.
    */
   void loadShells();
 
   /**
-   * @brief This function returns the next shell in the chamber.
-   * @return ShellType::LIVE_SHELL/BLANK_SHELL (Random).
+   * @brief Retrieves the next shell from the chamber.
+   *
+   * @return The next shell (LIVE_SHELL or BLANK_SHELL).
    */
   [[nodiscard("The shell needs to be used.")]] virtual ShellType getNextShell();
 
   /**
-   * @brief This function returns if the Shotgun is empty or not.
-   * @return Boolean (Empty/Has shells).
+   * @brief Checks if the shotgun is empty.
+   *
+   * @return True if no shells remain, false otherwise.
    */
   bool isEmpty() const;
 
   /**
-   * @brief Getter.
-   * @return Integer (Live shell count).
+   * @brief Gets the count of live shells remaining.
+   *
+   * @return The number of live shells.
    */
   int getLiveShellCount() const;
 
   /**
-   * @brief Getter.
-   * @reutrn Integer (Blank shell count).
+   * @brief Gets the count of blank shells remaining.
+   *
+   * @return The number of blank shells.
    */
   int getBlankShellCount() const;
 
   /**
-   * @brief Getter.
-   * @return Integer (Total shell count).
+   * @brief Gets the total number of shells in the shotgun.
+   *
+   * @return The total shell count.
    */
   int getTotalShellCount() const;
 
+  /**
+   * @brief Calculates the probability of drawing a live shell.
+   *
+   * @return The probability as a float.
+   */
   float getLiveShellProbability() const;
 
+  /**
+   * @brief Calculates the probability of drawing a blank shell.
+   *
+   * @return The probability as a float.
+   */
   float getBlankShellProbability() const;
 };
 
