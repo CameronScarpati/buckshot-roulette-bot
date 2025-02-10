@@ -19,27 +19,26 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
   return healthDiff + lowHealthPenalty;
 }
 
-bool BotPlayer::performAction(Action action, bool isPlayerOneTurn,
-                              Player *playerOne, Player *playerTwo,
-                              Shotgun *shotgun, ShellType shell) {
-  auto *simShotgun = dynamic_cast<SimulatedShotgun *>(shotgun);
+bool BotPlayer::performAction(Action action, SimulatedGame *state,
+                              ShellType shell) {
+  auto *simShotgun = dynamic_cast<SimulatedShotgun *>(state->getShotgun());
   if (!simShotgun)
     throw std::logic_error("Shotgun instance is not a SimulatedShotgun!");
 
-  auto *currentPlayer =
-      dynamic_cast<SimulatedPlayer *>(isPlayerOneTurn ? playerOne : playerTwo);
-  auto *otherPlayer =
-      dynamic_cast<SimulatedPlayer *>(isPlayerOneTurn ? playerTwo : playerOne);
+  auto *currentPlayer = dynamic_cast<SimulatedPlayer *>(
+      state->isPlayerOneTurn ? state->getPlayerOne() : state->getPlayerTwo());
+  auto *otherPlayer = dynamic_cast<SimulatedPlayer *>(
+      state->isPlayerOneTurn ? state->getPlayerTwo() : state->getPlayerOne());
 
   switch (action) {
   case Action::SHOOT_SELF:
     if (shell == ShellType::LIVE_SHELL) {
       simShotgun->simulateLiveShell();
       currentPlayer->loseHealth(false);
-      return !isPlayerOneTurn;
+      return !state->isPlayerOneTurn;
     } else {
       simShotgun->simulateBlankShell();
-      return isPlayerOneTurn;
+      return state->isPlayerOneTurn;
     }
 
   case Action::SHOOT_OPPONENT:
@@ -48,16 +47,17 @@ bool BotPlayer::performAction(Action action, bool isPlayerOneTurn,
       simShotgun->simulateLiveShell();
     } else
       simShotgun->simulateBlankShell();
-    return !isPlayerOneTurn;
+    return !state->isPlayerOneTurn;
+
+  case Action::USE_MAGNIFYING_GLASS:
+
+    return state->isPlayerOneTurn;
 
     // TODO Implement items.
     //  case Action::SMOKE_CIGARETTE:S
     //    // ...
     //    break;
     //  case Action::USE_HANDCUFFS:
-    //    // ...
-    //    break;
-    //  case Action::USE_MAGNIFYING_GLASS:
     //    // ...
     //    break;
     //  case Action::DRINK_BEER:
@@ -68,17 +68,13 @@ bool BotPlayer::performAction(Action action, bool isPlayerOneTurn,
     //    break;
   }
 
-  return !isPlayerOneTurn;
+  return !state->isPlayerOneTurn;
 }
 
 SimulatedGame *BotPlayer::simulateLiveAction(SimulatedGame *state,
                                              Action action) {
   auto *nextState = new SimulatedGame(*state);
-
-  bool newTurn =
-      performAction(action, nextState->isPlayerOneTurn,
-                    nextState->getPlayerOne(), nextState->getPlayerTwo(),
-                    nextState->getShotgun(), ShellType::LIVE_SHELL);
+  bool newTurn = performAction(action, nextState, ShellType::LIVE_SHELL);
 
   nextState->isPlayerOneTurn = newTurn;
   return nextState;
@@ -87,11 +83,7 @@ SimulatedGame *BotPlayer::simulateLiveAction(SimulatedGame *state,
 SimulatedGame *BotPlayer::simulateBlankAction(SimulatedGame *state,
                                               Action action) {
   auto *nextState = new SimulatedGame(*state);
-
-  bool newTurn =
-      performAction(action, nextState->isPlayerOneTurn,
-                    nextState->getPlayerOne(), nextState->getPlayerTwo(),
-                    nextState->getShotgun(), ShellType::BLANK_SHELL);
+  bool newTurn = performAction(action, nextState, ShellType::BLANK_SHELL);
 
   nextState->isPlayerOneTurn = newTurn;
   return nextState;

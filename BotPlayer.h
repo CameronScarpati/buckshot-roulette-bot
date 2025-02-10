@@ -34,9 +34,8 @@ private:
    * @param shell The type of shell drawn (live or blank).
    * @return The updated turn indicator after performing the action.
    */
-  static bool performAction(Action action, bool isPlayerOneTurn,
-                            Player *playerOne, Player *playerTwo,
-                            Shotgun *shotgun, ShellType shell);
+  static bool performAction(Action action, SimulatedGame *state,
+                            ShellType shell);
 
   /**
    * @brief Simulates the outcome of an action when a live shell is drawn.

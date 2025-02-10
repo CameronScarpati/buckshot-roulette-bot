@@ -31,3 +31,16 @@ ShellType SimulatedShotgun::simulateBlankShell() {
   --totalShells;
   return ShellType::BLANK_SHELL;
 }
+
+bool SimulatedShotgun::isNextShellRevealed() const { return nextShellRevealed; }
+
+ShellType SimulatedShotgun::getRevealedNextShell() const {
+  if (!nextShellRevealed)
+    throw std::logic_error("Next shell has not been revealed yet!");
+  return revealedShell;
+}
+
+void SimulatedShotgun::setRevealedNextShell(ShellType shell) {
+  nextShellRevealed = true;
+  revealedShell = shell;
+}

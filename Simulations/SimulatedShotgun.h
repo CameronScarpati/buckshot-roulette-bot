@@ -12,6 +12,10 @@
  * simulateBlankShell() to branch the game state without altering a real queue.
  */
 class SimulatedShotgun : public Shotgun {
+private:
+  bool nextShellRevealed = false;
+  ShellType revealedShell = ShellType::BLANK_SHELL;
+
 public:
   /**
    * @brief Constructs a simulated shotgun from the given state.
@@ -50,6 +54,12 @@ public:
    * @throws std::logic_error if no blank shells remain.
    */
   ShellType simulateBlankShell();
+
+  bool isNextShellRevealed() const;
+
+  ShellType getRevealedNextShell() const;
+
+  void setRevealedNextShell(ShellType shell);
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_SIMULATEDSHOTGUN_H
