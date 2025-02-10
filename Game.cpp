@@ -98,10 +98,6 @@ void Game::runGame() {
   }
 
   std::cout << "Game Over!" << std::endl;
-  if (player1->isAlive())
-    std::cout << player1->getName() << " wins the game!" << std::endl;
-  else
-    std::cout << player2->getName() << " wins the game!" << std::endl;
 }
 
 bool Game::checkRoundEnd() {
