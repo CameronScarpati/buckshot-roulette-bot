@@ -19,8 +19,6 @@ add_executable(buckshot_roulette_bot
         Shotgun.h
         Simulations/SimulatedPlayer.h
         Simulations/SimulatedPlayer.cpp
-        Simulations/SimulatedShotgun.h
-        Simulations/SimulatedShotgun.cpp
         Simulations/SimulatedGame.h
         Simulations/SimulatedGame.cpp
         Items/Cigarette.h
@@ -32,4 +30,5 @@ add_executable(buckshot_roulette_bot
         Items/Beer.h
         Items/Beer.cpp
         Items/Handsaw.h
-        Items/Handsaw.cpp)
+        Items/Handsaw.cpp
+        Simulations/SimulatedShotgun.cpp)

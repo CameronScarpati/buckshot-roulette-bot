@@ -10,6 +10,12 @@
  */
 enum class ShellType : int { BLANK_SHELL = 0, LIVE_SHELL = 1 };
 
+/**
+ * @brief Overloads the stream output operator for ShellType.
+ * @param os Output stream.
+ * @param shell The shell type to print.
+ * @return The modified output stream.
+ */
 inline std::ostream &operator<<(std::ostream &os, const ShellType &shell) {
   switch (shell) {
   case ShellType::BLANK_SHELL:
@@ -36,14 +42,9 @@ protected:
   int liveShells{};                   ///< Live shells remaining.
   int blankShells{};                  ///< Blank shells remaining.
   std::deque<ShellType> loadedShells; ///< Queue of loaded shells.
-  bool sawUsed;                       ///< Indicates if the saw has been used.
+  bool sawUsed{};                     ///< Indicates if the saw has been used.
 
 public:
-  /**
-   * @brief Initializes the shotgun and loads shells.
-   */
-  Shotgun();
-
   /**
    * @brief Loads shells into the shotgun.
    */
@@ -53,7 +54,7 @@ public:
    * @brief Retrieves the next shell.
    * @return The next shell type.
    */
-  [[nodiscard("The shell needs to be used.")]] ShellType getNextShell();
+  [[nodiscard("The shell needs to be used.")]] virtual ShellType getNextShell();
 
   /**
    * @brief Reveals the next shell in the queue.

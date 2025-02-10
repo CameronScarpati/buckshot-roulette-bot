@@ -1,51 +1,49 @@
 #ifndef BUCKSHOT_ROULETTE_BOT_SIMULATEDPLAYER_H
 #define BUCKSHOT_ROULETTE_BOT_SIMULATEDPLAYER_H
 
-/**
- * @class SimulatedPlayer
- * @brief Represents a simulated player with health management.
- *
- * This class provides methods to manage a player's health, including decreasing
- * health and checking if the player is dead.
- */
-class SimulatedPlayer {
-private:
-  int health; ///< The current health of the simulated player.
+#include "Player.h"
 
+/**
+ * @brief Represents a simulated player in the game.
+ *
+ * This class extends the Player class and implements an automated decision
+ * process for simulation purposes.
+ */
+class SimulatedPlayer : public Player {
 public:
   /**
-   * @brief Constructs a new SimulatedPlayer object with default health.
+   * @brief Constructs a SimulatedPlayer with a given name and health.
+   * @param name The player's name.
+   * @param health The player's starting health.
    */
-  SimulatedPlayer();
+  SimulatedPlayer(const std::string &name, int health);
 
   /**
-   * @brief Constructs a new SimulatedPlayer object with specified health.
-   * @param health The initial health value for the player.
+   * @brief Constructs a SimulatedPlayer with a given name, health, and
+   * opponent.
+   * @param name The player's name.
+   * @param health The player's starting health.
+   * @param opponent Pointer to the opponent player.
    */
-  explicit SimulatedPlayer(int health);
+  SimulatedPlayer(const std::string &name, int health, Player *opponent);
 
   /**
-   * @brief Reduces the player's health.
+   * @brief Automatically chooses an action based on a simple simulation
+   * heuristic.
    *
-   * Decreases the player's health based on whether a saw was used.
-   * @param sawUsed Indicates if a saw was used, which may affect the amount of
-   * health lost.
-   */
-  void loseHealth(bool sawUsed);
-
-  /**
-   * @brief Retrieves the player's current health.
-   * @return The current health value.
-   */
-  int getHealth() const;
-
-  /**
-   * @brief Determines whether the player is dead.
+   * This implementation uses a basic heuristic:
+   * - If health is below maximum and a Cigarette is available, use it.
+   * - Otherwise, if all shells are live (pLive == 1.0), shoot the opponent.
+   * - Otherwise, if all shells are blank (pLive == 0.0), shoot self.
+   * - Otherwise, default to shooting the opponent.
    *
-   * A player is considered dead if their health is zero or below.
-   * @return true if the player is dead, false otherwise.
+   * This method can later be replaced by a more sophisticated simulation-based
+   * algorithm.
+   *
+   * @param currentShotgun Pointer to the current shotgun state.
+   * @return The selected action.
    */
-  bool isDead() const;
+  Action chooseAction(const Shotgun *currentShotgun) override;
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_SIMULATEDPLAYER_H

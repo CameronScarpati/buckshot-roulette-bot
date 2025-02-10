@@ -2,34 +2,40 @@
 #define BUCKSHOT_ROULETTE_BOT_SIMULATEDGAME_H
 
 #include "Game.h"
-#include "SimulatedPlayer.h"
-#include "SimulatedShotgun.h"
 
 /**
- * @class SimulatedGame
- * @brief Simulates a game with two simulated players and a simulated shotgun.
+ * @brief Represents a simulated game state for expectiminimax search.
  *
- * This class maintains the state of a simulated game including two players,
- * a shotgun, and a flag to indicate whose turn it is.
+ * This class extends Game but overrides interactive methods (such as
+ * printShells() and runGame()) so that no output or user interaction occurs.
  */
-class SimulatedGame {
-public:
-  SimulatedPlayer playerOne; ///< The first simulated player.
-  SimulatedPlayer playerTwo; ///< The second simulated player.
-  SimulatedShotgun shotgun;  ///< The simulated shotgun used in the game.
-  bool isPlayerOneTurn; ///< True if it's player one's turn; false otherwise.
-
+class SimulatedGame : public Game {
 public:
   /**
-   * @brief Constructs a new SimulatedGame instance.
+   * @brief Constructs a simulated game instance.
    *
-   * @param playerOne The first simulated player.
-   * @param playerTwo The second simulated player.
-   * @param shotgun The simulated shotgun for the game.
-   * @param isPlayerTurn True if player one's turn; false if player two's turn.
+   * This constructor simply calls the base Game constructor.
+   *
+   * @param p1 Pointer to player one.
+   * @param p2 Pointer to player two.
    */
-  SimulatedGame(SimulatedPlayer playerOne, SimulatedPlayer playerTwo,
-                SimulatedShotgun shotgun, bool isPlayerTurn);
+  SimulatedGame(Player *p1, Player *p2, Shotgun *shotgun);
+
+  /**
+   * @brief Copy constructor for SimulatedGame.
+   * @param other The SimulatedGame instance to copy.
+   */
+  SimulatedGame(const SimulatedGame &other);
+
+  /**
+   * @brief Overrides printShells() to do nothing.
+   */
+  void printShells() override;
+
+  /**
+   * @brief Overrides runGame() to do nothing.
+   */
+  void runGame() override;
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_SIMULATEDGAME_H

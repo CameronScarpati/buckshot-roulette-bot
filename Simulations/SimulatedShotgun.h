@@ -2,83 +2,54 @@
 #define BUCKSHOT_ROULETTE_BOT_SIMULATEDSHOTGUN_H
 
 #include "Shotgun.h"
+#include <stdexcept>
 
 /**
- * @class SimulatedShotgun
- * @brief Simulates a shotgun containing live and blank shells.
+ * @brief Represents a simulated shotgun for use in expectiminimax search.
  *
- * This class manages the state of a simulated shotgun, including the counts of
- * total, live, and blank shells. It provides methods to retrieve shells, check
- * the remaining shell counts, and compute the probabilities of drawing a live
- * or blank shell.
+ * This class extends the Shotgun class but overrides getNextShell() to throw
+ * an error, since the simulation should use simulateLiveShell() or
+ * simulateBlankShell() to branch the game state without altering a real queue.
  */
-class SimulatedShotgun {
-private:
-  int totalShells; ///< The total number of shells in the shotgun.
-  int liveShells;  ///< The current count of live shells.
-  int blankShells; ///< The current count of blank shells.
-
+class SimulatedShotgun : public Shotgun {
 public:
   /**
-   * @brief Constructs a new SimulatedShotgun object.
+   * @brief Constructs a simulated shotgun from the given state.
    *
-   * @param shells The total number of shells.
-   * @param lives The initial number of live shells.
-   * @param blanks The initial number of blank shells.
+   * @param total The total number of shells.
+   * @param live The number of live shells.
+   * @param blank The number of blank shells.
    */
-  SimulatedShotgun(int shells, int lives, int blanks);
+  SimulatedShotgun(int total, int live, int blank);
 
   /**
-   * @brief Retrieves a live shell from the shotgun.
+   * @brief Overrides getNextShell() to prevent its use in simulation.
    *
-   * This function simulates drawing a live shell, updating the live shell count
-   * accordingly.
+   * @throws std::logic_error always.
    */
-  void getLiveShell();
+  [[nodiscard("SimulatedShotgun::getNextShell() should not be called in "
+              "simulation.")]] ShellType
+  getNextShell() override;
 
   /**
-   * @brief Retrieves a blank shell from the shotgun.
+   * @brief Simulates drawing a live shell.
    *
-   * This function simulates drawing a blank shell, updating the blank shell
-   * count accordingly.
+   * Decrements the live shell count and the total shell count.
+   *
+   * @return ShellType::LIVE_SHELL.
+   * @throws std::logic_error if no live shells remain.
    */
-  void getBlankShell();
+  ShellType simulateLiveShell();
 
   /**
-   * @brief Gets the number of remaining live shells.
-   * @return The current count of live shells.
+   * @brief Simulates drawing a blank shell.
+   *
+   * Decrements the blank shell count and the total shell count.
+   *
+   * @return ShellType::BLANK_SHELL.
+   * @throws std::logic_error if no blank shells remain.
    */
-  int getLiveShellCount() const;
-
-  /**
-   * @brief Gets the number of remaining blank shells.
-   * @return The current count of blank shells.
-   */
-  int getBlankShellCount() const;
-
-  /**
-   * @brief Gets the total number of shells.
-   * @return The total shell count.
-   */
-  int getTotalShellCount() const;
-
-  /**
-   * @brief Calculates the probability of drawing a live shell.
-   * @return The probability of a live shell as a float.
-   */
-  float getLiveShellProbability() const;
-
-  /**
-   * @brief Calculates the probability of drawing a blank shell.
-   * @return The probability of a blank shell as a float.
-   */
-  float getBlankShellProbability() const;
-
-  /**
-   * @brief Checks if the shotgun is empty.
-   * @return true if there are no shells left; false otherwise.
-   */
-  bool isEmpty() const;
+  ShellType simulateBlankShell();
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_SIMULATEDSHOTGUN_H

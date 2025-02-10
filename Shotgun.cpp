@@ -2,8 +2,6 @@
 #include <iostream>
 #include <random>
 
-Shotgun::Shotgun() { loadShells(); }
-
 void Shotgun::loadShells() {
   std::random_device rd;
   std::mt19937 gen(rd());

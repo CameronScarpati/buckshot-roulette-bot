@@ -3,6 +3,8 @@
 
 #include "Player.h"
 #include "Simulations/SimulatedGame.h"
+#include "Simulations/SimulatedPlayer.h"
+#include "Simulations/SimulatedShotgun.h"
 
 /**
  * @brief A BotPlayer uses expectiminimax search to decide its action in
@@ -16,7 +18,7 @@ private:
    * @param state The game state to evaluate.
    * @return A float representing how favorable the state is for the bot.
    */
-  static float evaluateState(const SimulatedGame &state);
+  static float evaluateState(SimulatedGame *state);
 
   /**
    * @brief Executes an action on the provided game state components.
@@ -33,9 +35,8 @@ private:
    * @return The updated turn indicator after performing the action.
    */
   static bool performAction(Action action, bool isPlayerOneTurn,
-                            SimulatedPlayer &playerOne,
-                            SimulatedPlayer &playerTwo,
-                            SimulatedShotgun &shotgun, ShellType shell);
+                            Player *playerOne, Player *playerTwo,
+                            Shotgun *shotgun, ShellType shell);
 
   /**
    * @brief Simulates the outcome of an action when a live shell is drawn.
@@ -43,8 +44,7 @@ private:
    * @param action The action to simulate.
    * @return The new simulated game state after the live shell outcome.
    */
-  static SimulatedGame simulateLiveAction(const SimulatedGame &state,
-                                          Action action);
+  static SimulatedGame *simulateLiveAction(SimulatedGame *state, Action action);
 
   /**
    * @brief Simulates the outcome of an action when a blank shell is drawn.
@@ -52,8 +52,8 @@ private:
    * @param action The action to simulate.
    * @return The new simulated game state after the blank shell outcome.
    */
-  static SimulatedGame simulateBlankAction(const SimulatedGame &state,
-                                           Action action);
+  static SimulatedGame *simulateBlankAction(SimulatedGame *state,
+                                            Action action);
 
   /**
    * @brief Simulates an action by generating both possible outcomes: live and
@@ -62,8 +62,8 @@ private:
    * @param action The action to simulate.
    * @return A pair of simulated game states: { stateIfLive, stateIfBlank }.
    */
-  static std::pair<SimulatedGame, SimulatedGame>
-  simulateAction(const SimulatedGame &state, Action action);
+  static std::pair<SimulatedGame *, SimulatedGame *>
+  simulateAction(SimulatedGame *state, Action action);
 
   /**
    * @brief The expectiminimax search algorithm.
@@ -76,8 +76,7 @@ private:
    * player.
    * @return The expected value of the state from the bot's perspective.
    */
-  float expectiMiniMax(const SimulatedGame &state, int depth,
-                       bool maximizingPlayer);
+  float expectiMiniMax(SimulatedGame *state, int depth, bool maximizingPlayer);
 
 public:
   /**

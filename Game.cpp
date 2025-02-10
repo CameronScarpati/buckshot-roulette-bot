@@ -10,11 +10,7 @@
 
 Game::Game(Player *pOne, Player *pTwo)
     : playerOne(pOne), playerTwo(pTwo), shotgun(new Shotgun()), currentRound(1),
-      playerOneWins(0), playerTwoWins(0), isPlayerOneTurn(true) {
-  std::cout << "Buckshot Roulette game starting. Good luck!" << std::endl;
-  printShells();
-  distributeItems();
-}
+      playerOneWins(0), playerTwoWins(0), isPlayerOneTurn(true) {}
 
 void Game::distributeItems() {
   std::random_device rd;
@@ -138,6 +134,11 @@ void Game::performAction(Action action) {
 }
 
 void Game::runGame() {
+  std::cout << "Buckshot Roulette game starting. Good luck!" << std::endl;
+  distributeItems();
+  shotgun->loadShells();
+  printShells();
+
   while (true) {
     if (checkRoundEnd()) {
       if (!playerTwo->isAlive()) {
@@ -184,7 +185,6 @@ void Game::runGame() {
     std::cout << playerTwo->getName() << " has " << playerTwo->getHealth()
               << " health." << std::endl;
 
-    // NEW: Print the current player's items.
     currentPlayer->printItems();
 
     if (!currentPlayer->areHandcuffsApplied()) {
@@ -202,3 +202,9 @@ void Game::runGame() {
 bool Game::checkRoundEnd() {
   return !playerOne->isAlive() || !playerTwo->isAlive();
 }
+
+Player *Game::getPlayerOne() { return playerOne; }
+
+Player *Game::getPlayerTwo() { return playerTwo; }
+
+Shotgun *Game::getShotgun() { return shotgun; }

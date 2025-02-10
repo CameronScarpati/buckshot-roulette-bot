@@ -11,14 +11,13 @@
  * Supports Human vs. Bot and Bot vs. Bot modes.
  */
 class Game {
-private:
-  Player *playerOne;    ///< Pointer to player one.
-  Player *playerTwo;    ///< Pointer to player two.
-  Shotgun *shotgun;     ///< Game's shotgun instance.
-  int currentRound;     ///< Current round number.
-  int playerOneWins;    ///< Player one's win count.
-  int playerTwoWins;    ///< Player two's win count.
-  bool isPlayerOneTurn; ///< Tracks whose turn it is.
+protected:
+  Player *playerOne; ///< Pointer to player one.
+  Player *playerTwo; ///< Pointer to player two.
+  Shotgun *shotgun;  ///< Game's shotgun instance.
+  int currentRound;  ///< Current round number.
+  int playerOneWins; ///< Player one's win count.
+  int playerTwoWins; ///< Player two's win count.
 
   /**
    * @brief Checks if the round has ended.
@@ -27,6 +26,8 @@ private:
   bool checkRoundEnd();
 
 public:
+  bool isPlayerOneTurn; ///< Tracks whose turn it is.
+
   /**
    * @brief Initializes a new game instance.
    * @param p1 Pointer to player one.
@@ -48,12 +49,30 @@ public:
   /**
    * @brief Displays the current shotgun shell status.
    */
-  void printShells();
+  virtual void printShells();
 
   /**
    * @brief Runs the game loop until a player loses.
    */
   virtual void runGame();
+
+  /**
+   * @brief Retrieves the first player.
+   * @return Pointer to player one.
+   */
+  Player *getPlayerOne();
+
+  /**
+   * @brief Retrieves the second player.
+   * @return Pointer to player two.
+   */
+  Player *getPlayerTwo();
+
+  /**
+   * @brief Retrieves the shotgun instance.
+   * @return Pointer to the shotgun.
+   */
+  Shotgun *getShotgun();
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_GAME_H

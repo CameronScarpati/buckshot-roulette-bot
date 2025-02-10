@@ -1,15 +1,14 @@
 #include "SimulatedPlayer.h"
+#include <iostream>
 
-SimulatedPlayer::SimulatedPlayer() : SimulatedPlayer(0) {}
+SimulatedPlayer::SimulatedPlayer(const std::string &name, int health)
+    : Player(name, health) {}
 
-SimulatedPlayer::SimulatedPlayer(int health) : health(health) {}
+SimulatedPlayer::SimulatedPlayer(const std::string &name, int health,
+                                 Player *opponent)
+    : Player(name, health, opponent) {}
 
-void SimulatedPlayer::loseHealth(bool sawUsed) {
-  if (sawUsed)
-    --health;
-  --health;
+Action SimulatedPlayer::chooseAction(const Shotgun * /*currentShotgun*/) {
+  throw std::logic_error(
+      "chooseAction() should not be called on a SimulatedPlayer!");
 }
-
-int SimulatedPlayer::getHealth() const { return health; }
-
-bool SimulatedPlayer::isDead() const { return health <= 0; }
