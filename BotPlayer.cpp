@@ -41,6 +41,16 @@ bool BotPlayer::performAction(Action action, bool isPlayerOneTurn,
       otherPlayer.loseHealth(false);
 
     return !isPlayerOneTurn;
+  case Action::SMOKE_CIGARETTE:
+    break;
+  case Action::USE_HANDCUFFS:
+    break;
+  case Action::USE_MAGNIFYING_GLASS:
+    break;
+  case Action::DRINK_BEER:
+    break;
+  case Action::USE_HANDSAW:
+    break;
   }
   return !isPlayerOneTurn;
 }

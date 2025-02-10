@@ -40,6 +40,32 @@ void Shotgun::loadShells() {
   return nextShell;
 }
 
+void Shotgun::revealNextShell() {
+  std::cout << "The next shell in the chamber is a " << loadedShells.front()
+            << "." << std::endl;
+}
+
+void Shotgun::rackShell() {
+  if (!isEmpty()) {
+    ShellType nextShell = loadedShells.front();
+    loadedShells.pop_front();
+
+    std::cout << "The racked shell is a " << nextShell << "." << std::endl;
+
+    if (nextShell == ShellType::LIVE_SHELL) {
+      --liveShells;
+    } else
+      --blankShells;
+    --totalShells;
+  }
+}
+
+void Shotgun::useHandsaw() { sawUsed = true; }
+
+void Shotgun::resetSawUsed() { sawUsed = false; }
+
+bool Shotgun::getSawUsed() const { return sawUsed; }
+
 bool Shotgun::isEmpty() const { return totalShells == 0; }
 
 int Shotgun::getLiveShellCount() const { return liveShells; }

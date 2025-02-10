@@ -1,19 +1,25 @@
 #include "Player.h"
-
+#include <iostream>
+#include <stdexcept>
 #include <utility>
 
-int Player::maxHealth;
+int Player::maxHealth = 0;
 
 Player::Player(std::string name, int health)
-    : Player(std::move(name), health, nullptr) {}
-
-Player::Player(std::string name, int health, Player *opp)
-    : name(std::move(name)), health(health), opponent(opp) {
-  if (maxHealth == 0)
-    maxHealth = health;
+    : Player(std::move(name), health, nullptr) {
+  itemCount = 0;
+  items.fill(nullptr);
 }
 
-void Player::setOpponent(Player *opp) { this->opponent = opp; }
+Player::Player(std::string name, int health, Player *opp)
+    : name(std::move(name)), health(health), opponent(opp), itemCount(0),
+      handcuffsApplied(false) {
+  if (maxHealth == 0)
+    maxHealth = health;
+  items.fill(nullptr);
+}
+
+void Player::setOpponent(Player *opp) { opponent = opp; }
 
 void Player::loseHealth(bool sawUsed) {
   if (!isAlive())
@@ -21,7 +27,10 @@ void Player::loseHealth(bool sawUsed) {
   health -= (sawUsed) ? 2 : 1;
 }
 
-void Player::useStimulant() { ++health; }
+void Player::smokeCigarette() {
+  if (health < maxHealth)
+    ++health;
+}
 
 void Player::resetHealth(int newHealth) {
   maxHealth = newHealth;
@@ -35,3 +44,76 @@ bool Player::isAlive() const { return health > 0; }
 std::string Player::getName() const { return name; }
 
 int Player::getHealth() const { return health; }
+
+void Player::applyHandcuffs() { handcuffsApplied = true; }
+
+void Player::removeHandcuffs() { handcuffsApplied = false; }
+
+bool Player::areHandcuffsApplied() const { return handcuffsApplied; }
+
+bool Player::addItem(Item *newItem) {
+  if (itemCount >= MAX_ITEMS)
+    return false;
+  items[itemCount++] = newItem;
+  return true;
+}
+
+void Player::useItem(int index) {
+  if (index < 0 || index >= itemCount)
+    return;
+  if (items[index])
+    items[index]->use(this, opponent);
+  for (int i = index; i < itemCount - 1; i++) {
+    items[i] = items[i + 1];
+  }
+  items[itemCount - 1] = nullptr;
+  itemCount--;
+}
+
+void Player::useItem(int index, Shotgun *shotgun) {
+  if (index < 0 || index >= itemCount)
+    return;
+  if (items[index])
+    items[index]->use(this, opponent, shotgun);
+  for (int i = index; i < itemCount - 1; i++) {
+    items[i] = items[i + 1];
+  }
+  items[itemCount - 1] = nullptr;
+  itemCount--;
+}
+
+int Player::getItemCount() const { return itemCount; }
+
+bool Player::useItemByName(const std::string &itemName, Shotgun *shotgun) {
+  for (int i = 0; i < itemCount; i++) {
+    if (items[i] && items[i]->getName() == itemName) {
+      if (shotgun)
+        useItem(i, shotgun);
+      else
+        useItem(i);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Player::hasItem(const std::string &itemName) const {
+  for (int i = 0; i < itemCount; i++) {
+    if (items[i] && items[i]->getName() == itemName)
+      return true;
+  }
+  return false;
+}
+
+void Player::printItems() const {
+  std::cout << getName() << "'s items: ";
+  if (itemCount == 0) {
+    std::cout << "None";
+  } else {
+    for (int i = 0; i < itemCount; i++) {
+      if (items[i])
+        std::cout << items[i]->getName() << (i < itemCount - 1 ? ", " : "");
+    }
+  }
+  std::cout << std::endl;
+}

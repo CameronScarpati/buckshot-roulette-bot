@@ -6,51 +6,52 @@
 #include <iostream>
 
 /**
- * @brief Manages the overall game loop, rounds, and turn order.
+ * @brief Manages the game loop, rounds, and turn order.
  *
- * Inspired by the Steam guide for Buckshot Roulette, this class supports both
- * Human vs. Bot and Bot vs. Bot modes.
+ * Supports Human vs. Bot and Bot vs. Bot modes.
  */
 class Game {
 private:
-  Player *playerOne;
-  Player *playerTwo;
-  Shotgun *shotgun;
-  int currentRound;
-  int playerOneWins;
-  int playerTwoWins;
-  bool isPlayerOneTurn;
+  Player *playerOne;    ///< Pointer to player one.
+  Player *playerTwo;    ///< Pointer to player two.
+  Shotgun *shotgun;     ///< Game's shotgun instance.
+  int currentRound;     ///< Current round number.
+  int playerOneWins;    ///< Player one's win count.
+  int playerTwoWins;    ///< Player two's win count.
+  bool isPlayerOneTurn; ///< Tracks whose turn it is.
 
   /**
-   * @brief Checks if the current round is over.
-   *
-   * @return true if the round is over, false otherwise.
+   * @brief Checks if the round has ended.
+   * @return True if the round is over.
    */
   bool checkRoundEnd();
 
 public:
   /**
-   * @brief Constructs a new Game instance.
-   *
-   * @param p1 Pointer to player one (human or first bot).
-   * @param p2 Pointer to player two (dealer or second bot).
+   * @brief Initializes a new game instance.
+   * @param p1 Pointer to player one.
+   * @param p2 Pointer to player two.
    */
   Game(Player *p1, Player *p2);
 
   /**
-   * @brief Performs an action and updates the game state accordingly.
-   *
+   * @brief Distributes items to players at the start of the game.
+   */
+  void distributeItems();
+
+  /**
+   * @brief Executes the given action and updates the game state.
    * @param action The action to perform.
    */
   void performAction(Action action);
 
   /**
-   * @brief Prints the current shell status of the shotgun.
+   * @brief Displays the current shotgun shell status.
    */
   void printShells();
 
   /**
-   * @brief Runs the main game loop until one player loses.
+   * @brief Runs the game loop until a player loses.
    */
   virtual void runGame();
 };
