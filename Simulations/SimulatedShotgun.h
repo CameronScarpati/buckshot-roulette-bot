@@ -5,11 +5,10 @@
 #include <stdexcept>
 
 /**
- * @brief Represents a simulated shotgun for use in expectiminimax search.
+ * @class SimulatedShotgun
+ * @brief A non-interactive shotgun for game simulations.
  *
- * This class extends the Shotgun class but overrides getNextShell() to throw
- * an error, since the simulation should use simulateLiveShell() or
- * simulateBlankShell() to branch the game state without altering a real queue.
+ * Overrides `getNextShell()` to prevent altering real game state.
  */
 class SimulatedShotgun : public Shotgun {
 private:
@@ -18,49 +17,55 @@ private:
 
 public:
   /**
-   * @brief Constructs a simulated shotgun from the given state.
-   *
-   * @param total The total number of shells.
-   * @param live The number of live shells.
-   * @param blank The number of blank shells.
+   * @brief Constructs a simulated shotgun.
+   * @param total Total shells.
+   * @param live Live shells.
+   * @param blank Blank shells.
    */
   SimulatedShotgun(int total, int live, int blank);
 
   /**
-   * @brief Overrides getNextShell() to prevent its use in simulation.
-   *
-   * @throws std::logic_error always.
+   * @brief Prevents real shell retrieval in simulations.
+   * @throws std::logic_error Always.
    */
-  [[nodiscard("SimulatedShotgun::getNextShell() should not be called in "
-              "simulation.")]] ShellType
-  getNextShell() override;
+  [[nodiscard]] ShellType getNextShell() override;
 
   /**
    * @brief Simulates drawing a live shell.
-   *
-   * Decrements the live shell count and the total shell count.
-   *
    * @return ShellType::LIVE_SHELL.
-   * @throws std::logic_error if no live shells remain.
+   * @throws std::logic_error If no live shells remain.
    */
   ShellType simulateLiveShell();
 
   /**
    * @brief Simulates drawing a blank shell.
-   *
-   * Decrements the blank shell count and the total shell count.
-   *
    * @return ShellType::BLANK_SHELL.
-   * @throws std::logic_error if no blank shells remain.
+   * @throws std::logic_error If no blank shells remain.
    */
   ShellType simulateBlankShell();
 
+  /**
+   * @brief Checks if the next shell has been revealed.
+   * @return True if revealed, false otherwise.
+   */
   bool isNextShellRevealed() const;
 
+  /**
+   * @brief Gets the revealed next shell.
+   * @return The revealed shell.
+   * @throws std::logic_error If the shell hasn't been revealed.
+   */
   ShellType getRevealedNextShell() const;
 
+  /**
+   * @brief Sets the revealed next shell.
+   * @param shell The shell type to reveal.
+   */
   void setRevealedNextShell(ShellType shell);
 
+  /**
+   * @brief Resets the revealed shell status.
+   */
   void resetNextShellRevealed();
 };
 

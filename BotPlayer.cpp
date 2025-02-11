@@ -3,35 +3,65 @@
 #include <limits>
 
 float BotPlayer::evaluateState(SimulatedGame *state) {
-  // If we're simulating from the bot's perspective, assume Bot is Player One.
-  // If your code has Bot as Player Two, invert references appropriately.
-
-  // Quick check for terminal states:
   if (!state->getPlayerOne()->isAlive())
-    return -50.0f; // Bot is dead
+    return -10000.0f;
   if (!state->getPlayerTwo()->isAlive())
-    return 50.0f; // Opponent is dead
+    return +10000.0f;
 
-  // Increase the base healthWeight to discourage self-harm
-  float healthWeight = 12.0f;
+  float score = 0.0f;
 
-  // Health difference: (Bot's HP) - (Opponent's HP), times a weighting factor.
-  float healthDiff = static_cast<float>(state->getPlayerOne()->getHealth() -
-                                        state->getPlayerTwo()->getHealth()) *
-                     healthWeight;
+  float healthWeight = 70.0f;
+  float hpDifference =
+      state->getPlayerOne()->getHealth() - state->getPlayerTwo()->getHealth();
+  score += hpDifference * healthWeight;
 
-  // Extra penalty if bot is at 1 HP => strongly discourage self-shooting
-  float lowHealthPenalty = 0.0f;
-  if (state->getPlayerOne()->getHealth() == 1) {
-    lowHealthPenalty -= 30.0f;
+  float shellsWeight = 15.0f;
+  float liveRounds = state->getShotgun()->getLiveShellCount();
+  float blankRounds = state->getShotgun()->getBlankShellCount();
+  score += (blankRounds - liveRounds) * shellsWeight;
+
+  bool myTurn = state->isPlayerOneTurn;
+  auto *currentPlayer =
+      (myTurn) ? state->getPlayerOne() : state->getPlayerTwo();
+
+  if (currentPlayer->isNextShellRevealed()) {
+    if (currentPlayer->returnKnownNextShell() == ShellType::BLANK_SHELL) {
+      if (myTurn)
+        score += 50.0f;
+      else
+        score += 15.0f;
+    } else {
+      if (myTurn)
+        score -= 25.0f;
+      else
+        score -= 50.0f;
+    }
   }
 
-  // Slight bonus if it is currently the bot’s turn
-  // (i.e., can act right now, possibly with new items).
-  float turnBonus = (state->isPlayerOneTurn) ? 5.0f : 0.0f;
+  if (myTurn && !currentPlayer->isNextShellRevealed() &&
+      currentPlayer->hasItem("Magnifying Glass")) {
+    float pLive = state->getShotgun()->getLiveShellProbability();
+    float pBlank = 1.0f - pLive;
 
-  // Sum them up for final evaluation
-  return healthDiff + lowHealthPenalty + turnBonus;
+    float uncertainty = pLive * pBlank;
+    score += 25.0f * uncertainty;
+
+    if (state->getPlayerOne()->getHealth() == 1)
+      score += 10.0f;
+  }
+
+  if (state->getPlayerOne()->getHealth() == 1)
+    score -= 40.0f;
+
+  if (myTurn) {
+    float pBlank = state->getShotgun()->getBlankShellProbability();
+    int myHP = state->getPlayerOne()->getHealth();
+
+    if (myHP > 1 && pBlank > 0.6f)
+      score += 10.0f;
+  }
+
+  return score;
 }
 
 bool BotPlayer::performAction(Action action, SimulatedGame *state,
@@ -40,10 +70,10 @@ bool BotPlayer::performAction(Action action, SimulatedGame *state,
   if (!simShotgun)
     throw std::logic_error("Shotgun instance is not a SimulatedShotgun!");
 
-  auto *currentPlayer = dynamic_cast<SimulatedPlayer *>(
-      state->isPlayerOneTurn ? state->getPlayerOne() : state->getPlayerTwo());
-  auto *otherPlayer = dynamic_cast<SimulatedPlayer *>(
-      state->isPlayerOneTurn ? state->getPlayerTwo() : state->getPlayerOne());
+  auto *currentPlayer =
+      (state->isPlayerOneTurn) ? state->getPlayerOne() : state->getPlayerTwo();
+  auto *otherPlayer =
+      (!state->isPlayerOneTurn) ? state->getPlayerOne() : state->getPlayerTwo();
 
   switch (action) {
   case Action::SHOOT_SELF:
@@ -68,11 +98,6 @@ bool BotPlayer::performAction(Action action, SimulatedGame *state,
   case Action::USE_MAGNIFYING_GLASS:
     if (!currentPlayer->hasItem("Magnifying Glass"))
       return state->isPlayerOneTurn;
-    currentPlayer->useItemByName("Magnifying Glass", simShotgun);
-
-    if (!simShotgun->isNextShellRevealed())
-      simShotgun->setRevealedNextShell(shell);
-
     return state->isPlayerOneTurn;
 
     // TODO: Implement other items (cigarettes, handcuffs, beer, handsaw).
@@ -130,9 +155,8 @@ BotPlayer::simulateAction(SimulatedGame *state, Action action) {
 float BotPlayer::expectiMiniMax(SimulatedGame *state, int depth,
                                 bool maximizingPlayer) {
   if (depth == 0 || !state->getPlayerOne()->isAlive() ||
-      !state->getPlayerTwo()->isAlive() || state->getShotgun()->isEmpty()) {
+      !state->getPlayerTwo()->isAlive() || state->getShotgun()->isEmpty())
     return evaluateState(state);
-  }
 
   float pLive = state->getShotgun()->getLiveShellProbability();
   float pBlank = state->getShotgun()->getBlankShellProbability();
@@ -140,8 +164,7 @@ float BotPlayer::expectiMiniMax(SimulatedGame *state, int depth,
   if (maximizingPlayer) {
     float bestValue = -std::numeric_limits<float>::infinity();
 
-    Action actionsToTry[3] = {Action::SHOOT_SELF, Action::SHOOT_OPPONENT,
-                              Action::USE_MAGNIFYING_GLASS};
+    std::vector<Action> actionsToTry = determineFeasibleActions(state);
 
     for (auto action : actionsToTry) {
       if (pLive == 1.0f) {
@@ -173,8 +196,7 @@ float BotPlayer::expectiMiniMax(SimulatedGame *state, int depth,
   } else {
     float bestValue = std::numeric_limits<float>::infinity();
 
-    Action actionsToTry[3] = {Action::SHOOT_SELF, Action::SHOOT_OPPONENT,
-                              Action::USE_MAGNIFYING_GLASS};
+    std::vector<Action> actionsToTry = determineFeasibleActions(state);
 
     for (auto action : actionsToTry) {
       if (pLive == 1.0f) {
@@ -207,19 +229,17 @@ float BotPlayer::expectiMiniMax(SimulatedGame *state, int depth,
 }
 
 BotPlayer::BotPlayer(const std::string &name, int health)
-    : Player(name, health), nextShellRevealed(false),
-      knownNextShell(ShellType::BLANK_SHELL) {}
+    : Player(name, health) {}
 
 BotPlayer::BotPlayer(const std::string &name, int health, Player *opponent)
-    : Player(name, health, opponent), nextShellRevealed(false),
-      knownNextShell(ShellType::BLANK_SHELL) {}
+    : Player(name, health, opponent) {}
 
 Action BotPlayer::chooseAction(const Shotgun *currentShotgun) {
-  if (nextShellRevealed) {
+  if (isNextShellRevealed()) {
     nextShellRevealed = false;
-    if (knownNextShell == ShellType::LIVE_SHELL) {
+    if (returnKnownNextShell() == ShellType::LIVE_SHELL)
       return Action::SHOOT_OPPONENT;
-    } else
+    else
       return Action::SHOOT_SELF;
   }
 
@@ -234,22 +254,23 @@ Action BotPlayer::chooseAction(const Shotgun *currentShotgun) {
   auto *simShotgun = new SimulatedShotgun(currentShotgun->getTotalShellCount(),
                                           currentShotgun->getLiveShellCount(),
                                           currentShotgun->getBlankShellCount());
-  auto *simPlayerOne = new SimulatedPlayer(this->getName(), this->getHealth());
-  auto *simPlayerTwo = new SimulatedPlayer(
-      this->opponent->getName(), this->opponent->getHealth(), simPlayerOne);
+  auto *simPlayerOne = this;
+  auto *simPlayerTwo = this->opponent;
   simPlayerOne->setOpponent(simPlayerTwo);
-  auto *initState = new SimulatedGame(simPlayerOne, simPlayerTwo, simShotgun);
+
+  auto *simP1 = new SimulatedPlayer(*this);
+  auto *simP2 = new SimulatedPlayer(*this->opponent);
+  simP1->setOpponent(simP2);
+  simP2->setOpponent(simP1);
+
+  auto *initState = new SimulatedGame(simP1, simP2, simShotgun);
   initState->isPlayerOneTurn = true;
 
-  int searchDepth = 5;
+  int searchDepth = 8;
   float bestValue = -std::numeric_limits<float>::infinity();
   Action bestAction = Action::SHOOT_OPPONENT;
 
-  std::vector<Action> actionsToTry = {Action::SHOOT_SELF,
-                                      Action::SHOOT_OPPONENT};
-
-  if (this->hasItem("Magnifying Glass"))
-    actionsToTry.push_back(Action::USE_MAGNIFYING_GLASS);
+  std::vector<Action> actionsToTry = determineFeasibleActions(initState);
 
   for (auto action : actionsToTry) {
     auto nextStates = simulateAction(initState, action);
@@ -271,11 +292,13 @@ Action BotPlayer::chooseAction(const Shotgun *currentShotgun) {
   return bestAction;
 }
 
-void BotPlayer::setKnownNextShell(ShellType nextShell) {
-  knownNextShell = nextShell;
-  nextShellRevealed = true;
+std::vector<Action> BotPlayer::determineFeasibleActions(SimulatedGame *state) {
+  auto *actingPlayer =
+      state->isPlayerOneTurn ? state->getPlayerOne() : state->getPlayerTwo();
+  std::vector<Action> feasible = {Action::SHOOT_SELF, Action::SHOOT_OPPONENT};
+
+  if (actingPlayer && actingPlayer->hasItem("Magnifying Glass"))
+    feasible.push_back(Action::USE_MAGNIFYING_GLASS);
+
+  return feasible;
 }
-
-bool BotPlayer::isNextShellRevealed() const { return nextShellRevealed; }
-
-ShellType BotPlayer::returnKnownNextShell() const { return knownNextShell; }

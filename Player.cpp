@@ -6,17 +6,61 @@
 int Player::maxHealth = 0;
 
 Player::Player(std::string name, int health)
-    : Player(std::move(name), health, nullptr) {
-  itemCount = 0;
-  items.fill(nullptr);
-}
+    : Player(std::move(name), health, nullptr) {}
 
 Player::Player(std::string name, int health, Player *opp)
     : name(std::move(name)), health(health), opponent(opp), itemCount(0),
       handcuffsApplied(false) {
+  itemCount = 0;
   if (maxHealth == 0)
     maxHealth = health;
   items.fill(nullptr);
+}
+
+Player::Player(const Player &other) {
+  if (this == &other)
+    return;
+
+  itemCount = 0;
+
+  this->name = other.name;
+  this->health = other.health;
+  this->handcuffsApplied = other.handcuffsApplied;
+  this->nextShellRevealed = other.nextShellRevealed;
+  this->knownNextShell = other.knownNextShell;
+
+  this->opponent = other.opponent;
+
+  for (int i = 0; i < other.itemCount; ++i) {
+    if (other.items[i]) {
+      this->items[i] = other.items[i];
+      itemCount++;
+    }
+  }
+}
+
+Player &Player::operator=(const Player &other) {
+  if (this == &other)
+    return *this;
+
+  itemCount = 0;
+
+  this->name = other.name;
+  this->health = other.health;
+  this->handcuffsApplied = other.handcuffsApplied;
+  this->nextShellRevealed = other.nextShellRevealed;
+  this->knownNextShell = other.knownNextShell;
+
+  this->opponent = other.opponent;
+
+  for (int i = 0; i < other.itemCount; ++i) {
+    if (other.items[i]) {
+      this->items[i] = other.items[i];
+      itemCount++;
+    }
+  }
+
+  return *this;
 }
 
 void Player::setOpponent(Player *opp) { opponent = opp; }
@@ -50,6 +94,15 @@ void Player::applyHandcuffs() { handcuffsApplied = true; }
 void Player::removeHandcuffs() { handcuffsApplied = false; }
 
 bool Player::areHandcuffsApplied() const { return handcuffsApplied; }
+
+void Player::setKnownNextShell(ShellType nextShell) {
+  nextShellRevealed = true;
+  knownNextShell = nextShell;
+}
+
+bool Player::isNextShellRevealed() const { return nextShellRevealed; };
+
+ShellType Player::returnKnownNextShell() const { return knownNextShell; }
 
 bool Player::addItem(Item *newItem) {
   if (itemCount >= MAX_ITEMS)

@@ -7,6 +7,7 @@
 #include <string>
 
 /**
+ * @enum Action
  * @brief Defines possible player actions.
  */
 enum class Action : int {
@@ -22,9 +23,8 @@ enum class Action : int {
 static const int MAX_ITEMS = 8;
 
 /**
- * @brief Represents a player in the game.
- *
- * Manages player health, inventory, and interactions.
+ * @class Player
+ * @brief Represents a player with health, inventory, and game actions.
  */
 class Player {
 protected:
@@ -32,48 +32,64 @@ protected:
   int health;                          ///< Current health.
   static int maxHealth;                ///< Maximum player health.
   Player *opponent;                    ///< Pointer to opponent.
-  std::array<Item *, MAX_ITEMS> items; ///< Fixed-size inventory.
+  std::array<Item *, MAX_ITEMS> items; ///< Inventory.
   int itemCount;                       ///< Number of items held.
-  bool handcuffsApplied;               ///< Tracks if handcuffs are applied.
+  bool handcuffsApplied;               ///< Whether handcuffs are applied.
+  bool nextShellRevealed =
+      false; ///< Indicates if the next shell has been revealed.
+  ShellType knownNextShell =
+      ShellType::BLANK_SHELL; ///< Stores the revealed shell type.
 
 public:
   /**
-   * @brief Constructs a player with a name and health.
-   * @param name The player's name.
-   * @param health The player's starting health.
+   * @brief Constructs a player.
+   * @param name Player's name.
+   * @param health Starting health.
    */
   Player(std::string name, int health);
 
   /**
-   * @brief Constructs a player with a name, health, and opponent.
-   * @param name The player's name.
-   * @param health The player's starting health.
-   * @param opponent Pointer to the opponent player.
+   * @brief Constructs a player with an assigned opponent.
+   * @param name Player's name.
+   * @param health Starting health.
+   * @param opponent Pointer to the opponent.
    */
   Player(std::string name, int health, Player *opponent);
 
   /**
+   * @brief Copy constructor.
+   * @param other The player to copy.
+   */
+  Player(const Player &other);
+
+  /**
+   * @brief Copy assignment operator.
+   * @param other The player to copy.
+   * @return A reference to this instance.
+   */
+  Player &operator=(const Player &other);
+
+  /**
    * @brief Sets the player's opponent.
-   * @param opp Pointer to the opponent player.
+   * @param opp Pointer to the opponent.
    */
   void setOpponent(Player *opp);
 
   /**
    * @brief Determines the player's next action.
-   * @param currentShotgun Pointer to the current shotgun state.
-   * @return The selected action.
+   * @param currentShotgun Pointer to the current shotgun.
+   * @return The chosen action.
    */
-  [[nodiscard("Action needs to be performed.")]] virtual Action
-  chooseAction(const Shotgun *currentShotgun) = 0;
+  [[nodiscard]] virtual Action chooseAction(const Shotgun *currentShotgun) = 0;
 
   /**
-   * @brief Reduces player health, considering saw usage.
-   * @param sawUsed Whether a saw was used (causes extra damage).
+   * @brief Reduces player health.
+   * @param sawUsed If true, deals extra damage.
    */
   void loseHealth(bool sawUsed);
 
   /**
-   * @brief Restores 1 HP by smoking a cigarette.
+   * @brief Restores 1 HP.
    */
   void smokeCigarette();
 
@@ -84,82 +100,100 @@ public:
   void resetHealth(int newHealth);
 
   /**
-   * @brief Resets player health to the default max health.
+   * @brief Resets player health to the default max.
    */
   void resetHealth();
 
   /**
-   * @brief Checks if the player is still alive.
-   * @return True if the player has health remaining.
+   * @brief Checks if the player is alive.
+   * @return True if health is above 0.
    */
   bool isAlive() const;
 
   /**
    * @brief Gets the player's name.
-   * @return The player's name as a string.
+   * @return Player's name.
    */
   std::string getName() const;
 
   /**
    * @brief Gets the player's current health.
-   * @return The player's health value.
+   * @return Player's health.
    */
   int getHealth() const;
 
   /**
-   * @brief Applies handcuffs to restrict the opponent's next turn.
+   * @brief Applies handcuffs to the opponent.
    */
   void applyHandcuffs();
 
   /**
-   * @brief Removes handcuffs from the opponent.
+   * @brief Removes handcuffs.
    */
   void removeHandcuffs();
 
   /**
-   * @brief Checks if handcuffs are currently applied.
-   * @return True if handcuffs are active.
+   * @brief Checks if handcuffs are applied.
+   * @return True if active.
    */
   bool areHandcuffsApplied() const;
 
   /**
-   * @brief Adds an item to the player's inventory.
+   * @brief Sets the known next shell type.
+   * @param nextShell The shell type revealed.
+   */
+  void setKnownNextShell(ShellType nextShell);
+
+  /**
+   * @brief Checks if the next shell has been revealed.
+   * @return True if revealed, false otherwise.
+   */
+  bool isNextShellRevealed() const;
+
+  /**
+   * @brief Returns the known next shell type.
+   * @return The revealed shell type.
+   */
+  ShellType returnKnownNextShell() const;
+
+  /**
+   * @brief Adds an item to the inventory.
    * @param newItem Pointer to the item.
-   * @return True if the item was added, false if inventory is full.
+   * @return True if added, false if full.
    */
   bool addItem(Item *newItem);
 
   /**
-   * @brief Uses an item from the inventory.
-   * @param index The index of the item to use.
+   * @brief Uses an item by index.
+   * @param index The item index.
    */
   void useItem(int index);
 
   /**
    * @brief Uses an item with shotgun interaction.
-   * @param index The index of the item to use.
-   * @param shotgun Pointer to the current shotgun.
+   * @param index The item index.
+   * @param shotgun Pointer to the shotgun.
    */
   void useItem(int index, Shotgun *shotgun);
 
   /**
-   * @brief Gets the number of items in the inventory.
-   * @return The count of held items.
+   * @brief Gets the number of held items.
+   * @return Item count.
    */
   int getItemCount() const;
 
   /**
-   * @brief Uses an item by name, if found.
-   * @param itemName The name of the item.
-   * @param shotgun Optional pointer to the shotgun.
-   * @return True if the item was found and used.
+   * @brief Uses an item by name.
+   * @param itemName The item name.
+   * @param shotgun Optional shotgun pointer.
+   * @return True if used.
    */
   bool useItemByName(const std::string &itemName, Shotgun *shotgun = nullptr);
 
   /**
-   * @brief Checks if the player has an item by name.
-   * @param itemName The item name to search for.
-   * @return True if the item is found.
+   * @brief Checks if the player has a specific item.
+   * @param itemName The item name.
+   * @return True if found.
    */
   bool hasItem(const std::string &itemName) const;
 

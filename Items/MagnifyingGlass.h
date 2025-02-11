@@ -4,23 +4,26 @@
 #include "Item.h"
 
 /**
- * @brief Represents a Magnifying Glass item.
- *
- * Reveals the next shell in the shotgun when used.
+ * @class MagnifyingGlass
+ * @brief An item that reveals the next shell in the shotgun.
  */
 class MagnifyingGlass : public Item {
 public:
   /**
-   * @brief Uses the magnifying glass to reveal the next shell.
+   * @brief Reveals the next shell in the shotgun.
+   *
+   * Displays the shell type to all players and updates bot players' internal
+   * knowledge.
+   *
    * @param user The player using the item.
    * @param target Unused parameter.
-   * @param shotgun Pointer to the shotgun.
+   * @param shotgun The shotgun to inspect.
    */
   void use(Player *user, Player *, Shotgun *shotgun) override;
 
   /**
-   * @brief Retrieves the item's name.
-   * @return The string "Magnifying Glass".
+   * @brief Returns the item's name.
+   * @return "Magnifying Glass".
    */
   std::string getName() const override;
 };

@@ -2,7 +2,8 @@
 #include "SimulatedPlayer.h"
 #include "SimulatedShotgun.h"
 
-SimulatedGame::SimulatedGame(Player *p1, Player *p2, Shotgun *shotgun)
+SimulatedGame::SimulatedGame(SimulatedPlayer *p1, SimulatedPlayer *p2,
+                             Shotgun *shotgun)
     : Game(p1, p2) {
   this->shotgun = shotgun;
 }
@@ -18,19 +19,15 @@ SimulatedGame::SimulatedGame(const SimulatedGame &other)
                                        simShotgun->getLiveShellCount(),
                                        simShotgun->getBlankShellCount());
 
-  auto *p1 = dynamic_cast<SimulatedPlayer *>(other.playerOne);
-  auto *p2 = dynamic_cast<SimulatedPlayer *>(other.playerTwo);
+  this->playerOne = new SimulatedPlayer(*other.playerOne);
+  this->playerTwo = new SimulatedPlayer(*other.playerTwo);
 
-  if (!p1 || !p2)
-    throw std::logic_error(
-        "SimulatedGame copy: players must be SimulatedPlayers!");
+  this->isPlayerOneTurn = other.isPlayerOneTurn;
 
-  auto *newP1 = new SimulatedPlayer(p1->getName(), p1->getHealth());
-  auto *newP2 = new SimulatedPlayer(p2->getName(), p2->getHealth(), newP1);
-  newP1->setOpponent(newP2);
-
-  this->playerOne = newP1;
-  this->playerTwo = newP2;
+  if (this->playerOne && this->playerTwo) {
+    this->playerOne->setOpponent(this->playerTwo);
+    this->playerTwo->setOpponent(this->playerOne);
+  }
 
   this->isPlayerOneTurn = other.isPlayerOneTurn;
 }

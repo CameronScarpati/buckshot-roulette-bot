@@ -4,44 +4,46 @@
 #include "Player.h"
 
 /**
- * @brief Represents a simulated player in the game.
- *
- * This class extends the Player class and implements an automated decision
- * process for simulation purposes.
+ * @class SimulatedPlayer
+ * @brief A non-interactive player used for game simulations.
  */
 class SimulatedPlayer : public Player {
 public:
   /**
-   * @brief Constructs a SimulatedPlayer with a given name and health.
+   * @brief Constructs a simulated player.
    * @param name The player's name.
-   * @param health The player's starting health.
+   * @param health Initial health.
    */
   SimulatedPlayer(const std::string &name, int health);
 
   /**
-   * @brief Constructs a SimulatedPlayer with a given name, health, and
-   * opponent.
+   * @brief Constructs a simulated player with an assigned opponent.
    * @param name The player's name.
-   * @param health The player's starting health.
+   * @param health Initial health.
    * @param opponent Pointer to the opponent player.
    */
   SimulatedPlayer(const std::string &name, int health, Player *opponent);
 
   /**
-   * @brief Automatically chooses an action based on a simple simulation
-   * heuristic.
+   * @brief Copy constructor.
+   * @param other The player to copy.
+   */
+  SimulatedPlayer(const SimulatedPlayer &other);
+
+  /**
+   * @brief Constructs a simulated player from a general Player instance.
+   * @param other The player to copy.
+   */
+  explicit SimulatedPlayer(const Player &other);
+
+  /**
+   * @brief Automatically selects an action using a simple heuristic.
    *
-   * This implementation uses a basic heuristic:
-   * - If health is below maximum and a Cigarette is available, use it.
-   * - Otherwise, if all shells are live (pLive == 1.0), shoot the opponent.
-   * - Otherwise, if all shells are blank (pLive == 0.0), shoot self.
-   * - Otherwise, default to shooting the opponent.
+   * Chooses an action based on health and shell probabilities.
+   * This is a placeholder for more advanced AI logic.
    *
-   * This method can later be replaced by a more sophisticated simulation-based
-   * algorithm.
-   *
-   * @param currentShotgun Pointer to the current shotgun state.
-   * @return The selected action.
+   * @param currentShotgun The current shotgun state.
+   * @return The chosen action.
    */
   Action chooseAction(const Shotgun *currentShotgun) override;
 };

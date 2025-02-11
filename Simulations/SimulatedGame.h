@@ -2,38 +2,37 @@
 #define BUCKSHOT_ROULETTE_BOT_SIMULATEDGAME_H
 
 #include "Game.h"
+#include "SimulatedPlayer.h"
 
 /**
- * @brief Represents a simulated game state for expectiminimax search.
+ * @class SimulatedGame
+ * @brief A game simulation used for expectiminimax search.
  *
- * This class extends Game but overrides interactive methods (such as
- * printShells() and runGame()) so that no output or user interaction occurs.
+ * This class extends Game but disables interactive elements.
  */
 class SimulatedGame : public Game {
 public:
   /**
-   * @brief Constructs a simulated game instance.
-   *
-   * This constructor simply calls the base Game constructor.
-   *
+   * @brief Constructs a simulated game.
    * @param p1 Pointer to player one.
    * @param p2 Pointer to player two.
+   * @param shotgun Pointer to the shotgun.
    */
-  SimulatedGame(Player *p1, Player *p2, Shotgun *shotgun);
+  SimulatedGame(SimulatedPlayer *p1, SimulatedPlayer *p2, Shotgun *shotgun);
 
   /**
-   * @brief Copy constructor for SimulatedGame.
+   * @brief Copy constructor.
    * @param other The SimulatedGame instance to copy.
    */
   SimulatedGame(const SimulatedGame &other);
 
   /**
-   * @brief Overrides printShells() to do nothing.
+   * @brief Disables shell printing.
    */
   void printShells() override;
 
   /**
-   * @brief Overrides runGame() to do nothing.
+   * @brief Disables game execution.
    */
   void runGame() override;
 };

@@ -6,9 +6,13 @@
 #include <system_error>
 
 /**
+ * @enum ShellType
  * @brief Defines the possible types of shotgun shells.
  */
-enum class ShellType : int { BLANK_SHELL = 0, LIVE_SHELL = 1 };
+enum class ShellType : int {
+  BLANK_SHELL = 0, ///< A non-lethal shell.
+  LIVE_SHELL = 1   ///< A lethal shell.
+};
 
 /**
  * @brief Overloads the stream output operator for ShellType.
@@ -32,9 +36,8 @@ inline std::ostream &operator<<(std::ostream &os, const ShellType &shell) {
 }
 
 /**
- * @brief Represents the shotgun's functionality in the game.
- *
- * Manages shell loading, tracking, and probability calculations.
+ * @class Shotgun
+ * @brief Manages shell loading, tracking, and probability calculations.
  */
 class Shotgun {
 protected:
@@ -42,7 +45,7 @@ protected:
   int liveShells{};                   ///< Live shells remaining.
   int blankShells{};                  ///< Blank shells remaining.
   std::deque<ShellType> loadedShells; ///< Queue of loaded shells.
-  bool sawUsed{};                     ///< Indicates if the saw has been used.
+  bool sawUsed{};                     ///< Indicates if the handsaw was used.
 
 public:
   /**
@@ -51,23 +54,27 @@ public:
   void loadShells();
 
   /**
-   * @brief Retrieves the next shell.
+   * @brief Retrieves and removes the next shell.
    * @return The next shell type.
+   * @throws std::runtime_error if the shotgun is empty.
    */
   [[nodiscard("The shell needs to be used.")]] virtual ShellType getNextShell();
 
   /**
-   * @brief Reveals the next shell in the queue.
+   * @brief Reveals the next shell without removing it.
+   * @return The next shell type.
    */
   ShellType revealNextShell() const;
 
   /**
    * @brief Moves the current shell to the back.
+   *
+   * Decrements the corresponding shell count.
    */
   void rackShell();
 
   /**
-   * @brief Uses the handsaw to modify the shotgun.
+   * @brief Uses the handsaw, modifying shotgun behavior.
    */
   void useHandsaw();
 

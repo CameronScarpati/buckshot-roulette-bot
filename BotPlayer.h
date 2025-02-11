@@ -7,108 +7,92 @@
 #include "Simulations/SimulatedShotgun.h"
 
 /**
- * @brief A BotPlayer uses expectiminimax search to decide its action in
- * Buckshot Roulette.
+ * @class BotPlayer
+ * @brief AI-controlled player using expectiminimax for decision-making.
  */
 class BotPlayer : public Player {
 private:
   /**
-   * @brief Evaluates the value of a simulated game state from the bot's
-   * perspective.
+   * @brief Evaluates the favorability of a game state.
    * @param state The game state to evaluate.
-   * @return A float representing how favorable the state is for the bot.
+   * @return A score representing how advantageous the state is for the bot.
    */
   static float evaluateState(SimulatedGame *state);
 
   /**
-   * @brief Executes an action on the provided game state components.
-   *
-   * Mutates playerOne, playerTwo, and shotgun based on the action and shell
-   * type.
-   *
+   * @brief Simulates the result of an action.
    * @param action The action to perform.
-   * @param isPlayerOneTurn Indicates if it is currently Player One's turn.
-   * @param playerOne Reference to Player One's state.
-   * @param playerTwo Reference to Player Two's state.
-   * @param shotgun Reference to the shotgun state.
-   * @param shell The type of shell drawn (live or blank).
-   * @return The updated turn indicator after performing the action.
+   * @param state The current game state.
+   * @param shell The drawn shell type.
+   * @return Whether the turn switches.
    */
   static bool performAction(Action action, SimulatedGame *state,
                             ShellType shell);
 
   /**
-   * @brief Simulates the outcome of an action when a live shell is drawn.
+   * @brief Simulates an action with a live shell outcome.
    * @param state The current game state.
    * @param action The action to simulate.
-   * @return The new simulated game state after the live shell outcome.
+   * @return The resulting game state.
    */
   static SimulatedGame *simulateLiveAction(SimulatedGame *state, Action action);
 
   /**
-   * @brief Simulates the outcome of an action when a blank shell is drawn.
+   * @brief Simulates an action with a blank shell outcome.
    * @param state The current game state.
    * @param action The action to simulate.
-   * @return The new simulated game state after the blank shell outcome.
+   * @return The resulting game state.
    */
   static SimulatedGame *simulateBlankAction(SimulatedGame *state,
                                             Action action);
 
   /**
-   * @brief Simulates an action by generating both possible outcomes: live and
-   * blank shell.
+   * @brief Simulates an action with both possible shell outcomes.
    * @param state The current game state.
    * @param action The action to simulate.
-   * @return A pair of simulated game states: { stateIfLive, stateIfBlank }.
+   * @return A pair of game states: { stateIfLive, stateIfBlank }.
    */
   static std::pair<SimulatedGame *, SimulatedGame *>
   simulateAction(SimulatedGame *state, Action action);
 
   /**
-   * @brief The expectiminimax search algorithm.
-   *
-   * Recursively explores game states to compute the expected value for the bot.
-   *
+   * @brief Expectiminimax search algorithm.
    * @param state The current game state.
-   * @param depth The depth limit for the search.
-   * @param maximizingPlayer True if the current turn is for the maximizing
-   * player.
-   * @return The expected value of the state from the bot's perspective.
+   * @param depth Search depth.
+   * @param maximizingPlayer True if the bot is maximizing.
+   * @return The expected value of the state.
    */
   float expectiMiniMax(SimulatedGame *state, int depth, bool maximizingPlayer);
 
-  bool nextShellRevealed = false;
-  ShellType knownNextShell = ShellType::BLANK_SHELL;
-
 public:
   /**
-   * @brief Constructs a BotPlayer with a given name and health.
+   * @brief Constructs a bot player.
    * @param name The bot's name.
-   * @param health The bot's health.
+   * @param health Initial health.
    */
   BotPlayer(const std::string &name, int health);
 
   /**
-   * @brief Constructs a BotPlayer with a given name, health, and opponent.
+   * @brief Constructs a bot player with an opponent.
    * @param name The bot's name.
-   * @param health The bot's health.
-   * @param opponent Pointer to the opponent player.
+   * @param health Initial health.
+   * @param opponent Pointer to the opponent.
    */
   BotPlayer(const std::string &name, int health, Player *opponent);
 
   /**
-   * @brief Chooses an action based on expectiminimax search using the current
-   * shotgun state.
-   * @param currentShotgun The real shotgun state to simulate from.
-   * @return The selected action (e.g., SHOOT_SELF or SHOOT_OPPONENT).
+   * @brief Chooses an action using expectiminimax search.
+   * @param currentShotgun The shotgun state.
+   * @return The chosen action.
    */
   Action chooseAction(const Shotgun *currentShotgun) override;
 
-  void setKnownNextShell(ShellType nextShell);
-
-  bool isNextShellRevealed() const;
-
-  ShellType returnKnownNextShell() const;
+  /**
+   * @brief Determines feasible actions based on the current game state.
+   * @param state The simulated game state.
+   * @return A list of possible actions.
+   */
+  std::vector<Action> determineFeasibleActions(SimulatedGame *state);
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_BOTPLAYER_H
