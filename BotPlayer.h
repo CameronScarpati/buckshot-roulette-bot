@@ -56,6 +56,15 @@ private:
   simulateAction(SimulatedGame *state, Action action);
 
   /**
+   * @brief Computes the expected value for a given action.
+   * @param state The current game state.
+   * @param action The action to evaluate.
+   * @param depth The remaining search depth.
+   * @return The expected value of performing the action on the state.
+   */
+  float expectedValueForAction(SimulatedGame *state, Action action, int depth);
+
+  /**
    * @brief Expectiminimax search algorithm.
    * @param state The current game state.
    * @param depth Search depth.
@@ -85,14 +94,14 @@ public:
    * @param currentShotgun The shotgun state.
    * @return The chosen action.
    */
-  Action chooseAction(const Shotgun *currentShotgun) override;
+  Action chooseAction(Shotgun *currentShotgun) override;
 
   /**
    * @brief Determines feasible actions based on the current game state.
    * @param state The simulated game state.
    * @return A list of possible actions.
    */
-  std::vector<Action> determineFeasibleActions(SimulatedGame *state);
+  static std::vector<Action> determineFeasibleActions(SimulatedGame *state);
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_BOTPLAYER_H

@@ -104,6 +104,8 @@ bool Player::isNextShellRevealed() const { return nextShellRevealed; };
 
 ShellType Player::returnKnownNextShell() const { return knownNextShell; }
 
+void Player::resetKnownNextShell() { nextShellRevealed = false; }
+
 bool Player::addItem(Item *newItem) {
   if (itemCount >= MAX_ITEMS)
     return false;

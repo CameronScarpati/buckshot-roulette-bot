@@ -3,6 +3,7 @@
 
 #include "Game.h"
 #include "SimulatedPlayer.h"
+#include "SimulatedShotgun.h"
 
 /**
  * @class SimulatedGame
@@ -18,7 +19,8 @@ public:
    * @param p2 Pointer to player two.
    * @param shotgun Pointer to the shotgun.
    */
-  SimulatedGame(SimulatedPlayer *p1, SimulatedPlayer *p2, Shotgun *shotgun);
+  SimulatedGame(SimulatedPlayer *p1, SimulatedPlayer *p2,
+                SimulatedShotgun *shotgun);
 
   /**
    * @brief Copy constructor.

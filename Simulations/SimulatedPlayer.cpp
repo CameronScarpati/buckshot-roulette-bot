@@ -20,7 +20,7 @@ SimulatedPlayer::SimulatedPlayer(const SimulatedPlayer &other)
 
 SimulatedPlayer::SimulatedPlayer(const Player &other) : Player(other) {}
 
-Action SimulatedPlayer::chooseAction(const Shotgun * /*currentShotgun*/) {
+Action SimulatedPlayer::chooseAction(Shotgun * /*currentShotgun*/) {
   throw std::logic_error(
       "chooseAction() should not be called on a SimulatedPlayer!");
 }

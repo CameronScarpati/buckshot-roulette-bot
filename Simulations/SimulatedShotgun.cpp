@@ -1,14 +1,15 @@
 #include "SimulatedShotgun.h"
 #include <stdexcept>
 
-SimulatedShotgun::SimulatedShotgun(int total, int live, int blank) {
+SimulatedShotgun::SimulatedShotgun(int total, int live, int blank,
+                                   bool sawUsed) {
   if (live + blank != total)
     throw std::invalid_argument(
         "Total shells must equal live shells + blank shells");
   totalShells = total;
   liveShells = live;
   blankShells = blank;
-  sawUsed = false;
+  this->sawUsed = sawUsed;
 }
 
 ShellType SimulatedShotgun::getNextShell() {
@@ -30,22 +31,4 @@ ShellType SimulatedShotgun::simulateBlankShell() {
   --blankShells;
   --totalShells;
   return ShellType::BLANK_SHELL;
-}
-
-bool SimulatedShotgun::isNextShellRevealed() const { return nextShellRevealed; }
-
-ShellType SimulatedShotgun::getRevealedNextShell() const {
-  if (!nextShellRevealed)
-    throw std::logic_error("Next shell has not been revealed yet!");
-  return revealedShell;
-}
-
-void SimulatedShotgun::setRevealedNextShell(ShellType shell) {
-  nextShellRevealed = true;
-  revealedShell = shell;
-}
-
-void SimulatedShotgun::resetNextShellRevealed() {
-  nextShellRevealed = false;
-  revealedShell = ShellType::BLANK_SHELL;
 }

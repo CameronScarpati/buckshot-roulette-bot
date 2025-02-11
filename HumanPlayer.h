@@ -31,7 +31,7 @@ public:
    * @param currentShotgun Pointer to the current shotgun state.
    * @return The selected action.
    */
-  Action chooseAction(const Shotgun *currentShotgun) override;
+  Action chooseAction(Shotgun *currentShotgun) override;
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_HUMANPLAYER_H

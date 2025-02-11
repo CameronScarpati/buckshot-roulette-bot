@@ -80,7 +80,7 @@ public:
    * @param currentShotgun Pointer to the current shotgun.
    * @return The chosen action.
    */
-  [[nodiscard]] virtual Action chooseAction(const Shotgun *currentShotgun) = 0;
+  [[nodiscard]] virtual Action chooseAction(Shotgun *currentShotgun) = 0;
 
   /**
    * @brief Reduces player health.
@@ -155,6 +155,11 @@ public:
    * @return The revealed shell type.
    */
   ShellType returnKnownNextShell() const;
+
+  /**
+   * @brief Resets the known next shell type.
+   */
+  void resetKnownNextShell();
 
   /**
    * @brief Adds an item to the inventory.

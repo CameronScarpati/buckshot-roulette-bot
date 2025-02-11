@@ -7,7 +7,7 @@ HumanPlayer::HumanPlayer(const std::string &name, int health)
 HumanPlayer::HumanPlayer(const std::string &name, int health, Player *opponent)
     : Player(name, health, opponent) {}
 
-Action HumanPlayer::chooseAction(const Shotgun *currentShotgun) {
+Action HumanPlayer::chooseAction(Shotgun *currentShotgun) {
   int input;
   while (true) {
     std::cout << "Enter action:" << std::endl;

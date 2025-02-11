@@ -11,18 +11,15 @@
  * Overrides `getNextShell()` to prevent altering real game state.
  */
 class SimulatedShotgun : public Shotgun {
-private:
-  bool nextShellRevealed = false;
-  ShellType revealedShell = ShellType::BLANK_SHELL;
-
 public:
   /**
    * @brief Constructs a simulated shotgun.
    * @param total Total shells.
    * @param live Live shells.
    * @param blank Blank shells.
+   * @param sawUsed Is saw applied?
    */
-  SimulatedShotgun(int total, int live, int blank);
+  SimulatedShotgun(int total, int live, int blank, bool sawUsed);
 
   /**
    * @brief Prevents real shell retrieval in simulations.
@@ -43,30 +40,6 @@ public:
    * @throws std::logic_error If no blank shells remain.
    */
   ShellType simulateBlankShell();
-
-  /**
-   * @brief Checks if the next shell has been revealed.
-   * @return True if revealed, false otherwise.
-   */
-  bool isNextShellRevealed() const;
-
-  /**
-   * @brief Gets the revealed next shell.
-   * @return The revealed shell.
-   * @throws std::logic_error If the shell hasn't been revealed.
-   */
-  ShellType getRevealedNextShell() const;
-
-  /**
-   * @brief Sets the revealed next shell.
-   * @param shell The shell type to reveal.
-   */
-  void setRevealedNextShell(ShellType shell);
-
-  /**
-   * @brief Resets the revealed shell status.
-   */
-  void resetNextShellRevealed();
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_SIMULATEDSHOTGUN_H

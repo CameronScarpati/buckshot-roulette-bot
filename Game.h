@@ -2,7 +2,7 @@
 #define BUCKSHOT_ROULETTE_BOT_GAME_H
 
 #include "Player.h"
-#include "Shotgun.h"
+#include "Simulations/SimulatedShotgun.h"
 #include <iostream>
 
 /**

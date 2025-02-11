@@ -3,7 +3,7 @@
 #include "SimulatedShotgun.h"
 
 SimulatedGame::SimulatedGame(SimulatedPlayer *p1, SimulatedPlayer *p2,
-                             Shotgun *shotgun)
+                             SimulatedShotgun *shotgun)
     : Game(p1, p2) {
   this->shotgun = shotgun;
 }
@@ -15,9 +15,9 @@ SimulatedGame::SimulatedGame(const SimulatedGame &other)
     throw std::logic_error("Trying to copy a SimulatedGame whose shotgun is "
                            "not SimulatedShotgun!");
 
-  this->shotgun = new SimulatedShotgun(simShotgun->getTotalShellCount(),
-                                       simShotgun->getLiveShellCount(),
-                                       simShotgun->getBlankShellCount());
+  this->shotgun = new SimulatedShotgun(
+      simShotgun->getTotalShellCount(), simShotgun->getLiveShellCount(),
+      simShotgun->getBlankShellCount(), simShotgun->getSawUsed());
 
   this->playerOne = new SimulatedPlayer(*other.playerOne);
   this->playerTwo = new SimulatedPlayer(*other.playerTwo);
