@@ -38,9 +38,10 @@ void Shotgun::loadShells() {
   return nextShell;
 }
 
-void Shotgun::revealNextShell() {
+ShellType Shotgun::revealNextShell() const {
   std::cout << "The next shell in the chamber is a " << loadedShells.front()
             << "." << std::endl;
+  return loadedShells.front();
 }
 
 void Shotgun::rackShell() {

@@ -60,6 +60,8 @@ public:
   ShellType getRevealedNextShell() const;
 
   void setRevealedNextShell(ShellType shell);
+
+  void resetNextShellRevealed();
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_SIMULATEDSHOTGUN_H

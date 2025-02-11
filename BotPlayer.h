@@ -77,6 +77,9 @@ private:
    */
   float expectiMiniMax(SimulatedGame *state, int depth, bool maximizingPlayer);
 
+  bool nextShellRevealed = false;
+  ShellType knownNextShell = ShellType::BLANK_SHELL;
+
 public:
   /**
    * @brief Constructs a BotPlayer with a given name and health.
@@ -100,6 +103,12 @@ public:
    * @return The selected action (e.g., SHOOT_SELF or SHOOT_OPPONENT).
    */
   Action chooseAction(const Shotgun *currentShotgun) override;
+
+  void setKnownNextShell(ShellType nextShell);
+
+  bool isNextShellRevealed() const;
+
+  ShellType returnKnownNextShell() const;
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_BOTPLAYER_H

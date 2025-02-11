@@ -44,3 +44,8 @@ void SimulatedShotgun::setRevealedNextShell(ShellType shell) {
   nextShellRevealed = true;
   revealedShell = shell;
 }
+
+void SimulatedShotgun::resetNextShellRevealed() {
+  nextShellRevealed = false;
+  revealedShell = ShellType::BLANK_SHELL;
+}

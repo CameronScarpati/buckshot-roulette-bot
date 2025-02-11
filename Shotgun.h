@@ -59,7 +59,7 @@ public:
   /**
    * @brief Reveals the next shell in the queue.
    */
-  void revealNextShell();
+  ShellType revealNextShell() const;
 
   /**
    * @brief Moves the current shell to the back.

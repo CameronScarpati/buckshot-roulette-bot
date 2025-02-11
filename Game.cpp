@@ -1,4 +1,5 @@
 #include "Game.h"
+#include "BotPlayer.h"
 #include "Items/Beer.h"
 #include "Items/Cigarette.h"
 #include "Items/Handcuffs.h"
@@ -16,10 +17,8 @@ void Game::distributeItems() {
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<int> itemCountDist(2, 5);
-  // Each player gets an independent random count.
   int itemCount = itemCountDist(gen);
 
-  // Create a list of item factory lambdas.
   std::vector<std::function<Item *()>> itemFactories = {
       []() -> Item * { return new Cigarette(); },
       []() -> Item * { return new Handcuffs(); },
@@ -28,7 +27,6 @@ void Game::distributeItems() {
       []() -> Item * { return new Handsaw(); }};
   std::uniform_int_distribution<int> factoryDist(0, itemFactories.size() - 1);
 
-  // Distribute items to player one.
   for (int i = 0; i < itemCount; i++) {
     if (playerOne->getItemCount() < MAX_ITEMS) {
       int index = factoryDist(gen);
@@ -40,7 +38,6 @@ void Game::distributeItems() {
     }
   }
 
-  // Distribute items to player two.
   for (int i = 0; i < itemCount; i++) {
     if (playerTwo->getItemCount() < MAX_ITEMS) {
       int index = factoryDist(gen);
@@ -64,10 +61,11 @@ void Game::performAction(Action action) {
   Player *currentPlayer = isPlayerOneTurn ? playerOne : playerTwo;
   Player *otherPlayer = isPlayerOneTurn ? playerTwo : playerOne;
 
+  auto *maybeBot = dynamic_cast<BotPlayer *>(currentPlayer);
+
   switch (action) {
   case Action::SHOOT_SELF: {
     ShellType currentShell = shotgun->getNextShell();
-
     std::cout << currentPlayer->getName() + " shoots themself." << std::endl;
 
     if (currentShell == ShellType::LIVE_SHELL) {
@@ -75,15 +73,15 @@ void Game::performAction(Action action) {
       std::cout << "The shell was live. " << currentPlayer->getName()
                 << " lost health." << std::endl;
       isPlayerOneTurn = !isPlayerOneTurn;
-    } else
+    } else {
       std::cout << "The shell was blank. An extra turn was gained."
                 << std::endl;
+    }
     shotgun->resetSawUsed();
     break;
   }
   case Action::SHOOT_OPPONENT: {
     ShellType currentShell = shotgun->getNextShell();
-
     std::cout << currentPlayer->getName() + " shoots " + otherPlayer->getName()
               << std::endl;
 
@@ -115,6 +113,8 @@ void Game::performAction(Action action) {
     break;
   }
   case Action::USE_MAGNIFYING_GLASS: {
+    if (maybeBot)
+      maybeBot->setKnownNextShell(shotgun->revealNextShell());
     if (!currentPlayer->useItemByName("Magnifying Glass", shotgun))
       std::cout << currentPlayer->getName() << " has no Magnifying Glass."
                 << std::endl;
