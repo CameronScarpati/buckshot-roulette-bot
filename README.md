@@ -153,6 +153,7 @@ Link: [https://github.com/CameronScarpati/buckshot-roulette-bot](https://github.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- MARKDOWN LINKS & IMAGES -->
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 
 [contributors-shield]: https://img.shields.io/github/contributors/CameronScarpati/buckshot-roulette-bot.svg?style=for-the-badge
 
@@ -169,6 +170,8 @@ Link: [https://github.com/CameronScarpati/buckshot-roulette-bot](https://github.
 [issues-shield]: https://img.shields.io/github/issues/CameronScarpati/buckshot-roulette-bot.svg?style=for-the-badge
 
 [issues-url]: https://github.com/CameronScarpati
+
+[license-shield]: https://img.shields.io/github/license/CameronScarpati/buckshot-roulette-bot?style=for-the-badge
 
 [license-url]: https://github.com/CameronScarpati/buckshot-roulette-bot/blob/main/LICENSE
 
