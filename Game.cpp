@@ -214,8 +214,8 @@ void Game::runGame() {
 
     std::cout << std::endl;
     printHeader("Player Status", 60);
-    std::cout << playerOne << std::endl;
-    std::cout << playerTwo << std::endl;
+    std::cout << *playerOne << std::endl;
+    std::cout << *playerTwo << std::endl;
     printDivider(60);
 
     Player *currentPlayer = (isPlayerOneTurn) ? playerOne : playerTwo;
