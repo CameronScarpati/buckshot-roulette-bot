@@ -12,7 +12,7 @@
   <h3 align="center">Buckshot Roulette Bot</h3>
 
   <p align="center">
-    An optimal bot designed to master the game of Buckshot Roulette.
+    An optimal bot designed to win the game of Buckshot Roulette.
     <br />
     <a href="https://github.com/CameronScarpati/buckshot-roulette-bot"><strong>Explore the docs »</strong></a>
     <br />
@@ -31,7 +31,7 @@ This project aims to develop an optimal bot to
 play [Buckshot Roulette](https://steamcommunity.com/sharedfiles/filedetails/?id=3218902482), a
 strategic game that challenges players' decision-making skills.
 The bot is implemented in C++ and
-focuses on advanced strategies.
+utilizes an Expectiminimax algorithm.
 Future enhancements include the integration of "double or nothing" items and creating a way for you
 to use this bot in game.
 
@@ -94,20 +94,19 @@ After building the project, you can run the bot executable to see it in action:
 ./buckshot_roulette_bot
 ```
 
-The bot will simulate games of Buckshot Roulette, applying optimal strategies to demonstrate its
-decision-making process.
+
+You can play against the bot, play against another human player, or have the bot compete against itself.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Roadmap
 
-- [x] Implement basic game mechanics
-- [x] Develop initial bot strategy
-- [ ] Integrate handcuff functionality (usable once per player turn)
-- [ ] Optimize decision-making with alpha-beta pruning
-- [ ] Add support for "double or nothing" items
-- [ ] Enhance user interface for better visualization
-- [ ] Allow for someone to use the bot to make decisions in game.
+- [x] Implement basic game mechanics.
+- [x] Develop initial bot strategy.
+- [ ] Integrate handcuff functionality (usable once per player turn--which is currently bugged).
+- [ ] Optimize decision-making with alpha-beta pruning and looking at an optimal human strategy.
+- [ ] Add support for "double or nothing" items.
+- [ ] Allow for someone to use the bot to make decisions in game (chooseNextMove function and setup current game state).
 
 See the [open issues](https://github.com/CameronScarpati/buckshot-roulette-bot/issues) for a full
 list
