@@ -265,8 +265,9 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   if (health < maxHealth && hasItem("Cigarette"))
     return Action::SMOKE_CIGARETTE;
 
-  if (currentShotgun->getTotalShellCount() == 1 && hasItem("Beer") &&
-      (opponent->getHealth() - health) >= 2) {
+  if (currentShotgun->getTotalShellCount() == 1 &&
+      currentShotgun->getLiveShellCount() == 1 && hasItem("Beer") &&
+      (opponent->getHealth() - health) >= 2 && !isNextShellRevealed()) {
     resetKnownNextShell();
     return Action::DRINK_BEER;
   }
