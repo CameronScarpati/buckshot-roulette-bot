@@ -123,6 +123,7 @@ void Game::performAction(Action action) {
   case Action::DRINK_BEER: {
     if (!currentPlayer->useItemByName("Beer", shotgun))
       std::cout << currentPlayer->getName() << " has no Beer." << std::endl;
+    shotgun->resetSawUsed();
     break;
   }
   case Action::USE_HANDSAW: {

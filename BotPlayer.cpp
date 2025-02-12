@@ -47,7 +47,7 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
   if (myTurn && !currentPlayer->isNextShellRevealed() &&
       currentPlayer->hasItem("Magnifying Glass")) {
     float pLive = state->getShotgun()->getLiveShellProbability();
-    float pBlank = 1.0f - pLive;
+    float pBlank = state->getShotgun()->getBlankShellProbability();
 
     float uncertainty = pLive * pBlank;
     score += 25.0f * uncertainty;
@@ -63,7 +63,7 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
     float pBlank = state->getShotgun()->getBlankShellProbability();
     int myHP = state->getPlayerOne()->getHealth();
 
-    if (myHP > 1 && pBlank > 0.6f)
+    if (myHP > 1 && pBlank > 0.7f)
       score += 10.0f;
   }
 
@@ -265,17 +265,11 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   if (health < maxHealth && hasItem("Cigarette"))
     return Action::SMOKE_CIGARETTE;
 
-  if (currentShotgun->getTotalShellCount() == 1 &&
-      currentShotgun->getLiveShellCount() == 1 && hasItem("Beer") &&
-      (opponent->getHealth() - health) >= 2 && !isNextShellRevealed()) {
-    resetKnownNextShell();
-    return Action::DRINK_BEER;
-  }
-
   if (isNextShellRevealed()) {
     resetKnownNextShell();
     if (returnKnownNextShell() == ShellType::LIVE_SHELL) {
-      if (currentShotgun->getSawUsed() || !hasItem("Handsaw"))
+      if (currentShotgun->getSawUsed() || !hasItem("Handsaw") ||
+          opponent->getHealth() == 1)
         return Action::SHOOT_OPPONENT;
       return Action::USE_HANDSAW;
     } else
@@ -288,7 +282,8 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   if (pLive == 0.0f)
     return Action::SHOOT_SELF;
   else if (pLive == 1.0f) {
-    if (currentShotgun->getSawUsed() || !hasItem("Handsaw"))
+    if (currentShotgun->getSawUsed() || !hasItem("Handsaw") ||
+        opponent->getHealth() == 1)
       return Action::SHOOT_OPPONENT;
     return Action::USE_HANDSAW;
   }
@@ -308,7 +303,7 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   auto *initState = new SimulatedGame(simP1, simP2, simShotgun);
   initState->isPlayerOneTurn = true;
 
-  int searchDepth = 8;
+  int searchDepth = 6;
   float bestValue = -std::numeric_limits<float>::infinity();
   Action bestAction = Action::SHOOT_OPPONENT;
 
