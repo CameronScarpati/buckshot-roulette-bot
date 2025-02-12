@@ -4,9 +4,9 @@
 
 float BotPlayer::evaluateState(SimulatedGame *state) {
   if (!state->getPlayerOne()->isAlive())
-    return -10000.0f;
+    return -1000.0f;
   if (!state->getPlayerTwo()->isAlive())
-    return +10000.0f;
+    return +1000.0f;
 
   float score = 0.0f;
 
