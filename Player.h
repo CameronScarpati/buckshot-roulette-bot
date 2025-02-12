@@ -4,6 +4,8 @@
 #include "Item.h"
 #include "Shotgun.h"
 #include <array>
+#include <iomanip>
+#include <iostream> // Needed for std::ostream
 #include <string>
 
 /**
@@ -207,5 +209,22 @@ public:
    */
   void printItems() const;
 };
+
+/**
+ * @brief Overloads the << operator to provide formatted output for a Player.
+ *
+ * This operator outputs the player's name (left-justified, with a field width
+ * of 15) followed by the player's current health (with a field width of 3) in a
+ * formatted style.
+ *
+ * @param os The output stream.
+ * @param player The Player object to output.
+ * @return std::ostream& The output stream.
+ */
+inline std::ostream &operator<<(std::ostream &os, const Player &player) {
+  os << std::left << std::setw(15) << player.getName()
+     << " | Health: " << std::setw(3) << player.getHealth();
+  return os;
+}
 
 #endif // BUCKSHOT_ROULETTE_BOT_PLAYER_H

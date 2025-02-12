@@ -3,6 +3,7 @@
 
 #include "Player.h"
 #include "Simulations/SimulatedShotgun.h"
+#include <iomanip>
 #include <iostream>
 
 /**
@@ -51,6 +52,19 @@ public:
    */
   virtual void printShells();
 
+  /**
+   * @brief Prints a divider line.
+   * @param width The width of the divider line.
+   */
+  void printDivider(int width);
+
+  /**
+   * @brief Prints a centered header with divider lines above and below.
+   * @param title The header title.
+   * @param width The width of the header.
+   */
+  void printHeader(const std::string &title, int width);
+  
   /**
    * @brief Runs the game loop until a player loses.
    */

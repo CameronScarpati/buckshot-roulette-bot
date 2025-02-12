@@ -4,9 +4,9 @@
 
 float BotPlayer::evaluateState(SimulatedGame *state) {
   if (!state->getPlayerOne()->isAlive())
-    return -1000.0f;
+    return -10000.0f;
   if (!state->getPlayerTwo()->isAlive())
-    return +1000.0f;
+    return +10000.0f;
 
   float score = 0.0f;
 
@@ -15,13 +15,6 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
                       static_cast<float>(state->getPlayerTwo()->getHealth());
   score += hpDifference * healthWeight;
 
-  float shellsWeight = 15.0f;
-  auto liveRounds =
-      static_cast<float>(state->getShotgun()->getLiveShellCount());
-  auto blankRounds =
-      static_cast<float>(state->getShotgun()->getBlankShellCount());
-  score += (blankRounds - liveRounds) * shellsWeight;
-
   bool myTurn = state->isPlayerOneTurn;
   auto *currentPlayer =
       (myTurn) ? state->getPlayerOne() : state->getPlayerTwo();
@@ -29,7 +22,7 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
   if (currentPlayer->isNextShellRevealed()) {
     float handSawMultiplier = 1.0f;
     if (currentPlayer->hasItem("Handsaw"))
-      handSawMultiplier *= 2;
+      handSawMultiplier *= 3;
 
     if (currentPlayer->returnKnownNextShell() == ShellType::LIVE_SHELL) {
       if (myTurn)
