@@ -205,6 +205,13 @@ public:
   bool hasItem(const std::string &itemName) const;
 
   /**
+   * @brief Returns the amount of items a player has.
+   * @param itemName The item name.
+   * @return Number of items.
+   */
+  int countItem(const std::string &itemName) const;
+
+  /**
    * @brief Prints the player's inventory.
    */
   void printItems() const;

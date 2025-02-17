@@ -5,6 +5,10 @@
 #include "Simulations/SimulatedShotgun.h"
 #include <iomanip>
 #include <iostream>
+#include <random>
+
+inline std::random_device rd;
+inline std::mt19937 gen(rd());
 
 /**
  * @brief Manages the game loop, rounds, and turn order.
@@ -64,7 +68,7 @@ public:
    * @param width The width of the header.
    */
   void printHeader(const std::string &title, int width);
-  
+
   /**
    * @brief Runs the game loop until a player loses.
    */

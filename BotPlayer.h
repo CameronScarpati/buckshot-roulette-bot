@@ -90,6 +90,12 @@ public:
   BotPlayer(const std::string &name, int health, Player *opponent);
 
   /**
+   * @brief Guaranteed live shell choices.
+   * @return Optimal action given guaranteed live shell.
+   */
+  Action liveShellAction(Shotgun *currentShotgun);
+
+  /**
    * @brief Chooses an action using expectiminimax search.
    * @param currentShotgun The shotgun state.
    * @return The chosen action.

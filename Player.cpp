@@ -152,11 +152,18 @@ bool Player::useItemByName(const std::string &itemName, Shotgun *shotgun) {
 }
 
 bool Player::hasItem(const std::string &itemName) const {
-  for (int i = 0; i < itemCount; i++) {
+  for (int i = 0; i < itemCount; i++)
     if (items[i] && items[i]->getName() == itemName)
       return true;
-  }
   return false;
+}
+
+int Player::countItem(const std::string &itemName) const {
+  int sum = 0;
+  for (int i = 0; i < itemCount; i++)
+    if (items[i] && items[i]->getName() == itemName)
+      ++sum;
+  return sum;
 }
 
 void Player::printItems() const {

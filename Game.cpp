@@ -7,7 +7,6 @@
 #include "Items/MagnifyingGlass.h"
 #include <chrono>
 #include <iostream>
-#include <random>
 #include <thread>
 #include <vector>
 
@@ -24,8 +23,6 @@ Game::Game(Player *pOne, Player *pTwo)
       playerOneWins(0), playerTwoWins(0), isPlayerOneTurn(true) {}
 
 void Game::distributeItems() {
-  std::random_device rd;
-  std::mt19937 gen(rd());
   std::uniform_int_distribution<int> itemCountDist(2, 5);
   int itemCount = itemCountDist(gen);
 

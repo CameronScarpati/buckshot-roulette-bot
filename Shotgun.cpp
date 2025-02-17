@@ -1,10 +1,8 @@
 #include "Shotgun.h"
+#include "Game.h"
 #include <iostream>
-#include <random>
 
 void Shotgun::loadShells() {
-  std::random_device rd;
-  std::mt19937 gen(rd());
   std::uniform_int_distribution<int> dist(2, 8);
 
   totalShells = dist(gen);
