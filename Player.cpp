@@ -151,6 +151,19 @@ bool Player::useItemByName(const std::string &itemName, Shotgun *shotgun) {
   return false;
 }
 
+void Player::removeItemByName(const std::string &itemName) {
+  for (int i = 0; i < itemCount; ++i) {
+    if (items[i] && items[i]->getName() == itemName) {
+      for (int j = i; j < itemCount - 1; ++j)
+        items[j] = items[j + 1];
+      
+      items[itemCount - 1] = nullptr;
+      itemCount--;
+      return;
+    }
+  }
+}
+
 bool Player::hasItem(const std::string &itemName) const {
   for (int i = 0; i < itemCount; i++)
     if (items[i] && items[i]->getName() == itemName)

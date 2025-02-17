@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <limits>
 
+const int SEARCH_DEPTH = 8;
+
 float BotPlayer::evaluateState(SimulatedGame *state) {
   // Terminal states.
   if (!state->getPlayerOne()->isAlive())
@@ -21,13 +23,17 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
   auto *botPlayer = state->getPlayerOne();
   auto *oppPlayer = state->getPlayerTwo();
 
-  // If it's our turn and we have a magnifying glass with an unrevealed shell.
+  // Bonus for a favorable shotgun state (more live rounds is better).
+  score +=
+      ((myTurn) ? 1 : -1) * 10.0f * state->getShotgun()->getLiveShellCount();
+
+  // If it's our turn, and we have a magnifying glass with an unrevealed shell.
   if (myTurn && !botPlayer->isNextShellRevealed() &&
       botPlayer->hasItem("Magnifying Glass")) {
     float pLive = state->getShotgun()->getLiveShellProbability();
     float pBlank = state->getShotgun()->getBlankShellProbability();
     float uncertainty = pLive * pBlank;
-    score += 25.0f * uncertainty;
+    score += 40.0f * uncertainty;
     if (botPlayer->getHealth() == 1)
       score += 10.0f;
   }
@@ -38,7 +44,7 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
 
   // Factor in if the next shell is revealed (applied only once).
   if (botPlayer->isNextShellRevealed()) {
-    float handSawMultiplier = (botPlayer->hasItem("Handsaw")) ? 3.0f : 1.0f;
+    float handSawMultiplier = (botPlayer->hasItem("Handsaw")) ? 2.25f : 1.0f;
     if (botPlayer->returnKnownNextShell() == ShellType::LIVE_SHELL) {
       // Increase bonus when the opponent is vulnerable.
       float bonus = (oppPlayer->getHealth() <= 2) ? 100.0f : 50.0f;
@@ -53,8 +59,6 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
 bool BotPlayer::performAction(Action action, SimulatedGame *state,
                               ShellType shell) {
   auto *simShotgun = dynamic_cast<SimulatedShotgun *>(state->getShotgun());
-  if (!simShotgun)
-    throw std::runtime_error("This is not a simulated shotgun.");
 
   auto *currentPlayer =
       (state->isPlayerOneTurn) ? state->getPlayerOne() : state->getPlayerTwo();
@@ -73,7 +77,6 @@ bool BotPlayer::performAction(Action action, SimulatedGame *state,
       simShotgun->simulateBlankShell();
       return state->isPlayerOneTurn;
     }
-
   case Action::SHOOT_OPPONENT:
     currentPlayer->resetKnownNextShell();
     state->getShotgun()->resetSawUsed();
@@ -83,38 +86,25 @@ bool BotPlayer::performAction(Action action, SimulatedGame *state,
     } else
       simShotgun->simulateBlankShell();
     return !state->isPlayerOneTurn;
-
   case Action::USE_MAGNIFYING_GLASS:
-    if (!currentPlayer->hasItem("Magnifying Glass"))
-      return state->isPlayerOneTurn;
-
     currentPlayer->setKnownNextShell(shell);
+    currentPlayer->removeItemByName("Magnifying Glass");
     return state->isPlayerOneTurn;
-
   case Action::SMOKE_CIGARETTE:
-    if (!currentPlayer->hasItem("Cigarette"))
-      return state->isPlayerOneTurn;
-
     currentPlayer->smokeCigarette();
+    currentPlayer->removeItemByName("Cigarette");
     return state->isPlayerOneTurn;
-
   case Action::DRINK_BEER:
     currentPlayer->resetKnownNextShell();
-    state->getShotgun()->resetSawUsed();
-    if (!currentPlayer->hasItem("Beer"))
-      return state->isPlayerOneTurn;
+    currentPlayer->removeItemByName("Beer");
     return state->isPlayerOneTurn;
-
   case Action::USE_HANDSAW:
-    if (!currentPlayer->hasItem("Handsaw"))
-      return state->isPlayerOneTurn;
-
     state->getShotgun()->useHandsaw();
+    currentPlayer->removeItemByName("Handsaw");
     return state->isPlayerOneTurn;
 
     // TODO: Implement handcuffs.
   }
-
   return !state->isPlayerOneTurn;
 }
 
@@ -157,15 +147,13 @@ BotPlayer::simulateAction(SimulatedGame *state, Action action) {
 
     return {liveReveal, blankReveal};
   } else if (action == Action::DRINK_BEER) {
-    auto *simShotgun = dynamic_cast<SimulatedShotgun *>(state->getShotgun());
-    if (!simShotgun)
-      throw std::runtime_error("This is not a simulated shotgun.");
-
     auto *liveBranch = new SimulatedGame(*state);
     auto *liveShotgun =
         dynamic_cast<SimulatedShotgun *>(liveBranch->getShotgun());
+
     if (liveShotgun->getLiveShellCount() > 0)
       liveShotgun->simulateLiveShell();
+
     bool turnAfterLive =
         performAction(Action::DRINK_BEER, liveBranch, ShellType::LIVE_SHELL);
     liveBranch->isPlayerOneTurn = turnAfterLive;
@@ -192,12 +180,27 @@ float BotPlayer::expectedValueForAction(SimulatedGame *state, Action action,
   float pLive = state->getShotgun()->getLiveShellProbability();
   float pBlank = state->getShotgun()->getBlankShellProbability();
 
-  if (action == Action::SMOKE_CIGARETTE || action == Action::USE_HANDSAW) {
+  if (action == Action::SMOKE_CIGARETTE) {
     auto *newState = new SimulatedGame(*state);
     bool turnAfterAction =
         performAction(action, newState, ShellType::LIVE_SHELL);
     newState->isPlayerOneTurn = turnAfterAction;
     return expectiMiniMax(newState, depth - 1, newState->isPlayerOneTurn);
+  } else if (action == Action::USE_HANDSAW) {
+    auto *newState = new SimulatedGame(*state);
+    bool turnAfterAction =
+        performAction(action, newState, ShellType::LIVE_SHELL);
+    newState->isPlayerOneTurn = turnAfterAction;
+    float value =
+        expectiMiniMax(newState, depth - 1, newState->isPlayerOneTurn);
+    // If the bot still has a Magnifying Glass, and hasn't revealed the next
+    // shell, penalize the value of using the handsaw so that the bot will
+    // prefer to reveal first.
+    if (state->getPlayerOne()->hasItem("Magnifying Glass") &&
+        !state->getPlayerOne()->isNextShellRevealed()) {
+      value *= 0.3f;
+    }
+    return value;
   } else if (action == Action::DRINK_BEER) {
     auto nextStates = simulateAction(state, action);
     SimulatedGame *liveState = nextStates.first;
@@ -206,7 +209,26 @@ float BotPlayer::expectedValueForAction(SimulatedGame *state, Action action,
         expectiMiniMax(liveState, depth - 1, liveState->isPlayerOneTurn);
     float blankVal =
         expectiMiniMax(blankState, depth - 1, blankState->isPlayerOneTurn);
-    return -100.0f + pLive * liveVal + pBlank * blankVal;
+    float baseValue = -100.0f + pLive * liveVal + pBlank * blankVal;
+
+    auto *current = state->getPlayerOne(); // our bot in simulation
+    auto *opp = state->getPlayerTwo();
+    float reloadBonus = 0.0f;
+    // Bonus for having room for more items.
+    if (current->getItemCount() < MAX_ITEMS)
+      reloadBonus += 50.0f;
+    // Bonus if we're vulnerable compared to the opponent.
+    if (current->getHealth() < opp->getHealth())
+      reloadBonus += 30.0f;
+    // Extra bonus when our health is very low.
+    if (current->getHealth() <= 2) {
+      reloadBonus += 75.0f;
+      // Further bonus if we lack healing items.
+      if (!current->hasItem("Cigarette"))
+        reloadBonus += 25.0f;
+    }
+
+    return baseValue + reloadBonus;
   } else if (pLive == 1.0f) {
     SimulatedGame *liveState = simulateLiveAction(state, action);
     return expectiMiniMax(liveState, depth - 1, liveState->isPlayerOneTurn);
@@ -289,6 +311,9 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   else if (pLive == 1.0f)
     return liveShellAction(currentShotgun);
 
+  if (health < maxHealth && hasItem("Cigarette"))
+    return Action::SMOKE_CIGARETTE;
+
   auto *simShotgun = new SimulatedShotgun(
       currentShotgun->getTotalShellCount(), currentShotgun->getLiveShellCount(),
       currentShotgun->getBlankShellCount(), currentShotgun->getSawUsed());
@@ -304,7 +329,6 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   auto *initState = new SimulatedGame(simP1, simP2, simShotgun);
   initState->isPlayerOneTurn = true;
 
-  int searchDepth = 6;
   float bestValue = -std::numeric_limits<float>::infinity();
   Action bestAction = Action::SHOOT_OPPONENT;
 
@@ -320,14 +344,14 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
       newState->isPlayerOneTurn = turnAfterAction;
 
       actionValue =
-          expectiMiniMax(newState, searchDepth - 1, newState->isPlayerOneTurn);
+          expectiMiniMax(newState, SEARCH_DEPTH - 1, newState->isPlayerOneTurn);
     } else {
       auto nextStates = simulateAction(initState, action);
       SimulatedGame *liveState = nextStates.first;
       SimulatedGame *blankState = nextStates.second;
-      float liveVal = expectiMiniMax(liveState, searchDepth - 1,
+      float liveVal = expectiMiniMax(liveState, SEARCH_DEPTH - 1,
                                      liveState->isPlayerOneTurn);
-      float blankVal = expectiMiniMax(blankState, searchDepth - 1,
+      float blankVal = expectiMiniMax(blankState, SEARCH_DEPTH - 1,
                                       blankState->isPlayerOneTurn);
       actionValue = pLive * liveVal + pBlank * blankVal;
     }
@@ -346,32 +370,30 @@ std::vector<Action> BotPlayer::determineFeasibleActions(SimulatedGame *state) {
       state->isPlayerOneTurn ? state->getPlayerOne() : state->getPlayerTwo();
   std::vector<Action> feasible;
 
+  // If we can gain reliable information, do it first.
+  if (actingPlayer && actingPlayer->hasItem("Magnifying Glass") &&
+      !actingPlayer->isNextShellRevealed())
+    feasible.push_back(Action::USE_MAGNIFYING_GLASS);
+
+  // Prefer to use Handsaw (if available and not already used) early.
+  if (actingPlayer && actingPlayer->hasItem("Handsaw") &&
+      !state->getShotgun()->getSawUsed())
+    feasible.push_back(Action::USE_HANDSAW);
+
   // Always consider shooting the opponent.
   feasible.push_back(Action::SHOOT_OPPONENT);
 
   // If the next shell is revealed as blank, SHOOT_SELF is safe.
   if (actingPlayer && actingPlayer->isNextShellRevealed() &&
-      actingPlayer->returnKnownNextShell() == ShellType::BLANK_SHELL) {
+      actingPlayer->returnKnownNextShell() == ShellType::BLANK_SHELL)
     feasible.push_back(Action::SHOOT_SELF);
-  }
 
-  // Prefer using a Magnifying Glass if available and the shell is not already
-  // revealed.
-  if (actingPlayer && actingPlayer->hasItem("Magnifying Glass") &&
-      !actingPlayer->isNextShellRevealed()) {
-    feasible.push_back(Action::USE_MAGNIFYING_GLASS);
-  }
-  // Only add DRINK_BEER if no Magnifying Glass is available.
-  else if (actingPlayer && actingPlayer->hasItem("Beer")) {
+  if (actingPlayer && actingPlayer->hasItem("Beer") &&
+      ((actingPlayer->getHealth() <= 2) ||
+       (actingPlayer->getItemCount() < MAX_ITEMS)))
     feasible.push_back(Action::DRINK_BEER);
-  }
 
-  // Handsaw is an option if available and not already used.
-  if (actingPlayer && actingPlayer->hasItem("Handsaw") &&
-      !state->getShotgun()->getSawUsed())
-    feasible.push_back(Action::USE_HANDSAW);
-
-  // Add healing option if health is not full.
+  // Add the healing option if health is not full.
   if (actingPlayer && actingPlayer->hasItem("Cigarette") &&
       maxHealth > actingPlayer->getHealth())
     feasible.push_back(Action::SMOKE_CIGARETTE);

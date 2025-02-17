@@ -198,6 +198,12 @@ public:
   bool useItemByName(const std::string &itemName, Shotgun *shotgun = nullptr);
 
   /**
+   * @brief Removes an item by name.
+   * @param itemName The item name.
+   */
+  void removeItemByName(const std::string &itemName);
+
+  /**
    * @brief Checks if the player has a specific item.
    * @param itemName The item name.
    * @return True if found.
