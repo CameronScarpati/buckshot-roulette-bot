@@ -189,7 +189,7 @@ void Player::printItems() const {
         std::cout << items[i]->getName() << (i < itemCount - 1 ? ", " : "");
     }
   }
-  std::cout << std::endl;
+  std::cout << "\n";
 }
 
 void Player::resetHandcuffUsage() { handcuffsUsedThisTurn = false; }

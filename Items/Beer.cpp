@@ -5,7 +5,7 @@
 void Beer::use(Player *user, Player * /*target*/, Shotgun *shotgun) {
   std::cout << user->getName()
             << " uses Beer to eject the current shell from the shotgun."
-            << std::endl;
+            << "\n";
   shotgun->rackShell();
 }
 
