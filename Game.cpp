@@ -28,10 +28,10 @@ void Game::distributeItems() {
 
   std::vector<std::function<Item *()>> itemFactories = {
       []() -> Item * { return new Cigarette(); },
-      []() -> Item * { return new Handcuffs(); },
+      []() -> Item * { return new Handsaw(); },
       []() -> Item * { return new MagnifyingGlass(); },
       []() -> Item * { return new Beer(); },
-      []() -> Item * { return new Handsaw(); }};
+      []() -> Item * { return new Handcuffs(); }};
   std::uniform_int_distribution<int> factoryDist(0, itemFactories.size() - 1);
 
   for (int i = 0; i < itemCount; i++) {
@@ -149,7 +149,6 @@ void Game::performAction(Action action) {
     if (!currentPlayer->useItemByName("Beer", shotgun))
       std::cout << currentPlayer->getName() << " has no Beer."
                 << "\n";
-    shotgun->resetSawUsed();
     break;
   }
   case Action::USE_HANDSAW: {

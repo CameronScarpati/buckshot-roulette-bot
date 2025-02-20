@@ -9,7 +9,7 @@ Player::Player(std::string name, int health)
 
 Player::Player(std::string name, int health, Player *opp)
     : name(std::move(name)), health(health), opponent(opp), itemCount(0),
-      handcuffsApplied(false) {
+      handcuffsApplied(false), handcuffsUsedThisTurn(false) {
   itemCount = 0;
   if (maxHealth == 0)
     maxHealth = health;
@@ -27,6 +27,7 @@ Player::Player(const Player &other) {
   this->handcuffsApplied = other.handcuffsApplied;
   this->nextShellRevealed = other.nextShellRevealed;
   this->knownNextShell = other.knownNextShell;
+  this->handcuffsUsedThisTurn = other.handcuffsUsedThisTurn;
 
   this->opponent = other.opponent;
 
