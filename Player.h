@@ -41,6 +41,8 @@ protected:
       false; ///< Indicates if the next shell has been revealed.
   ShellType knownNextShell =
       ShellType::BLANK_SHELL; ///< Stores the revealed shell type.
+  bool handcuffsUsedThisTurn =
+      false; ///< Tracks if handcuffs were used this turn.
 
 public:
   /**
@@ -221,6 +223,22 @@ public:
    * @brief Prints the player's inventory.
    */
   void printItems() const;
+
+  /**
+   * @brief This function allows for a player to use handcuffs again
+   */
+  void resetHandcuffUsage();
+
+  /**
+   * This function prevents a player from using handcuffs again this turn.
+   */
+  void useHandcuffsThisTurn();
+
+  /**
+   * This function determines whether or not one can use handcuffs again.
+   * @return True if not allowed.
+   */
+  bool hasUsedHandcuffsThisTurn() const;
 };
 
 /**

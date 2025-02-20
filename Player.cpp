@@ -156,7 +156,7 @@ void Player::removeItemByName(const std::string &itemName) {
     if (items[i] && items[i]->getName() == itemName) {
       for (int j = i; j < itemCount - 1; ++j)
         items[j] = items[j + 1];
-      
+
       items[itemCount - 1] = nullptr;
       itemCount--;
       return;
@@ -191,3 +191,9 @@ void Player::printItems() const {
   }
   std::cout << std::endl;
 }
+
+void Player::resetHandcuffUsage() { handcuffsUsedThisTurn = false; }
+
+void Player::useHandcuffsThisTurn() { handcuffsUsedThisTurn = true; }
+
+bool Player::hasUsedHandcuffsThisTurn() const { return handcuffsUsedThisTurn; }

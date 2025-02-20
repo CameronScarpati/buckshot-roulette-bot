@@ -94,8 +94,8 @@ After building the project, you can run the bot executable to see it in action:
 ./buckshot_roulette_bot
 ```
 
-
-You can play against the bot, play against another human player, or have the bot compete against itself.
+You can play against the bot, play against another human player, or have the bot compete against
+itself.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -103,10 +103,11 @@ You can play against the bot, play against another human player, or have the bot
 
 - [x] Implement basic game mechanics.
 - [x] Develop initial bot strategy.
-- [ ] Integrate handcuff functionality (usable once per player turn--which is currently bugged).
+- [x] Integrate handcuff functionality (usable once per player turn--which is currently bugged).
 - [ ] Optimize decision-making with alpha-beta pruning and looking at an optimal human strategy.
 - [ ] Add support for "double or nothing" items.
-- [ ] Allow for someone to use the bot to make decisions in game (chooseNextMove function and setup current game state).
+- [ ] Allow for someone to use the bot to make decisions in game (chooseNextMove function and setup
+  current game state).
 
 See the [open issues](https://github.com/CameronScarpati/buckshot-roulette-bot/issues) for a full
 list

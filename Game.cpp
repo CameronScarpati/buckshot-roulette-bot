@@ -25,10 +25,11 @@ Game::Game(Player *pOne, Player *pTwo)
 void Game::distributeItems() {
   std::uniform_int_distribution<int> itemCountDist(2, 5);
   int itemCount = itemCountDist(gen);
+  itemCount = 8;
 
   std::vector<std::function<Item *()>> itemFactories = {
       []() -> Item * { return new Cigarette(); },
-      //      []() -> Item * { return new Handcuffs(); },
+      []() -> Item * { return new Handcuffs(); },
       []() -> Item * { return new MagnifyingGlass(); },
       []() -> Item * { return new Beer(); },
       []() -> Item * { return new Handsaw(); }};
@@ -90,11 +91,13 @@ void Game::performAction(Action action) {
       currentPlayer->loseHealth(shotgun->getSawUsed());
       std::cout << "The shell was live. " << currentPlayer->getName()
                 << " lost health." << std::endl;
-      isPlayerOneTurn = !isPlayerOneTurn;
-    } else {
+      if (otherPlayer->areHandcuffsApplied()) {
+        otherPlayer->removeHandcuffs();
+      } else
+        isPlayerOneTurn = !isPlayerOneTurn;
+    } else
       std::cout << "The shell was blank. An extra turn was gained."
                 << std::endl;
-    }
     shotgun->resetSawUsed();
     break;
   }
@@ -110,7 +113,11 @@ void Game::performAction(Action action) {
     } else
       std::cout << "The shell was blank." << std::endl;
 
-    isPlayerOneTurn = !isPlayerOneTurn;
+    if (otherPlayer->areHandcuffsApplied()) {
+      otherPlayer->removeHandcuffs();
+    } else
+      isPlayerOneTurn = !isPlayerOneTurn;
+
     shotgun->resetSawUsed();
     break;
   }
@@ -123,10 +130,6 @@ void Game::performAction(Action action) {
   case Action::USE_HANDCUFFS: {
     if (!currentPlayer->useItemByName("Handcuffs"))
       std::cout << currentPlayer->getName() << " has no Handcuffs."
-                << std::endl;
-    else
-      std::cout << currentPlayer->getName() << " uses Handcuffs on "
-                << otherPlayer->getName() << ", skipping their turn."
                 << std::endl;
     break;
   }
@@ -167,12 +170,14 @@ void Game::runGame() {
     if (checkRoundEnd()) {
       printDivider(60);
       if (!playerTwo->isAlive()) {
-        std::cout << Color::green << playerOne->getName() << " wins the round!"
-                  << Color::reset << std::endl;
+        std::cout << playerOne->getName() << " wins the round!" << std::endl;
+        playerTwo->removeHandcuffs();
+        playerOne->resetHandcuffUsage();
         playerOneWins++;
       } else if (!playerOne->isAlive()) {
-        std::cout << Color::green << playerTwo->getName() << " wins the round!"
-                  << Color::reset << std::endl;
+        std::cout << playerTwo->getName() << " wins the round!" << std::endl;
+        playerOne->removeHandcuffs();
+        playerTwo->resetHandcuffUsage();
         playerTwoWins++;
       }
       playerOne->resetHealth();
@@ -216,15 +221,13 @@ void Game::runGame() {
     printDivider(60);
 
     Player *currentPlayer = (isPlayerOneTurn) ? playerOne : playerTwo;
+    Player *otherPlayer = (isPlayerOneTurn) ? playerTwo : playerOne;
+
     currentPlayer->printItems();
 
-    if (!currentPlayer->areHandcuffsApplied()) {
-      Action action = currentPlayer->chooseAction(shotgun);
-      performAction(action);
-    } else {
-      isPlayerOneTurn = !isPlayerOneTurn;
-      currentPlayer->removeHandcuffs();
-    }
+    Action action = currentPlayer->chooseAction(shotgun);
+    performAction(action);
+    otherPlayer->resetHandcuffUsage();
   }
 
   std::cout << std::endl;

@@ -33,11 +33,18 @@ Action HumanPlayer::chooseAction(Shotgun *currentShotgun) {
                 << std::endl;
       continue;
     }
-    if (chosen == Action::USE_HANDCUFFS && !hasItem("Handcuffs")) {
-      std::cout
-          << "You do not have any Handcuffs. Please choose a different action."
-          << std::endl;
-      continue;
+    if (chosen == Action::USE_HANDCUFFS) {
+      if (!hasItem("Handcuffs")) {
+        std::cout << "You do not have any Handcuffs. Please choose a different "
+                     "action."
+                  << std::endl;
+        continue;
+      } else if (handcuffsUsedThisTurn) {
+        std::cout << "You have already applied handcuffs this turn. Please "
+                     "choose a different action."
+                  << std::endl;
+        continue;
+      }
     }
     if (chosen == Action::USE_MAGNIFYING_GLASS &&
         !hasItem("Magnifying Glass")) {
