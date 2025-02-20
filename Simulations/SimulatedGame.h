@@ -18,9 +18,10 @@ public:
    * @param p1 Pointer to player one.
    * @param p2 Pointer to player two.
    * @param shotgun Pointer to the shotgun.
+   * @param isPlayerOneTurn Is it player one's turn?
    */
   SimulatedGame(SimulatedPlayer *p1, SimulatedPlayer *p2,
-                SimulatedShotgun *shotgun);
+                SimulatedShotgun *shotgun, bool isPlayerOneTurn);
 
   /**
    * @brief Copy constructor.

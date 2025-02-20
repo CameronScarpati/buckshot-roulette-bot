@@ -12,7 +12,6 @@ SimulatedPlayer::SimulatedPlayer(const SimulatedPlayer &other)
     : Player(other.getName(), other.getHealth(), nullptr) {
   this->handcuffsApplied = other.handcuffsApplied;
   this->itemCount = other.itemCount;
-  this->items.fill(nullptr);
 
   for (int i = 0; i < itemCount; i++)
     this->items[i] = other.items[i];

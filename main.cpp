@@ -9,7 +9,7 @@ int main() {
   auto *dealer = new BotPlayer("Dealer", initialHealth, human);
   human->setOpponent(dealer);
 
-  Game game(human, dealer);
+  Game game(human, dealer, true);
   game.runGame();
 
   return 0;

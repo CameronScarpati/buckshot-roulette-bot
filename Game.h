@@ -7,9 +7,6 @@
 #include <iostream>
 #include <random>
 
-inline std::random_device rd;
-inline std::mt19937 gen(rd());
-
 /**
  * @brief Manages the game loop, rounds, and turn order.
  *
@@ -37,8 +34,9 @@ public:
    * @brief Initializes a new game instance.
    * @param p1 Pointer to player one.
    * @param p2 Pointer to player two.
+   * @param isPlayerOneTurn Is it player one's turn?
    */
-  Game(Player *p1, Player *p2);
+  Game(Player *p1, Player *p2, bool isPlayerOneTurn);
 
   /**
    * @brief Distributes items to players at the start of the game.

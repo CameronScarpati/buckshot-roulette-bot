@@ -1,12 +1,13 @@
 #ifndef BUCKSHOT_ROULETTE_BOT_PLAYER_H
 #define BUCKSHOT_ROULETTE_BOT_PLAYER_H
 
-#include "Item.h"
+#include "Items/Item.h"
 #include "Shotgun.h"
 #include <array>
 #include <iomanip>
-#include <iostream> // Needed for std::ostream
+#include <iostream>
 #include <string>
+#include <vector>
 
 /**
  * @enum Action
@@ -30,19 +31,17 @@ static const int MAX_ITEMS = 8;
  */
 class Player {
 protected:
-  std::string name;                    ///< Player's name.
-  int health;                          ///< Current health.
-  static int maxHealth;                ///< Maximum player health.
-  Player *opponent;                    ///< Pointer to opponent.
-  std::array<Item *, MAX_ITEMS> items; ///< Inventory.
-  int itemCount;                       ///< Number of items held.
-  bool handcuffsApplied;               ///< Whether handcuffs are applied.
-  bool nextShellRevealed =
-      false; ///< Indicates if the next shell has been revealed.
+  std::string name;          ///< Player's name.
+  int health;                ///< Current health.
+  static int maxHealth;      ///< Maximum player health.
+  Player *opponent;          ///< Pointer to opponent.
+  std::vector<Item *> items; ///< Inventory.
+  int itemCount;             ///< Number of items held.
+  bool handcuffsApplied;     ///< Whether handcuffs are applied.
+  bool nextShellRevealed;    ///< Indicates if the next shell has been revealed.
   ShellType knownNextShell =
       ShellType::BLANK_SHELL; ///< Stores the revealed shell type.
-  bool handcuffsUsedThisTurn =
-      false; ///< Tracks if handcuffs were used this turn.
+  bool handcuffsUsedThisTurn; ///< Tracks if handcuffs were used this turn.
 
 public:
   /**
@@ -213,11 +212,18 @@ public:
   bool hasItem(const std::string &itemName) const;
 
   /**
-   * @brief Returns the amount of items a player has.
+   * @brief Returns the number of items matching a given name.
    * @param itemName The item name.
-   * @return Number of items.
+   * @return Number of matching items.
    */
   int countItem(const std::string &itemName) const;
+
+  /**
+   * @brief Gets the player's inventory as a vector of item pointers.
+   * @return A vector containing pointers to the items in the player's
+   * inventory.
+   */
+  std::vector<Item *> getItems() const;
 
   /**
    * @brief Prints the player's inventory.
@@ -225,18 +231,18 @@ public:
   void printItems() const;
 
   /**
-   * @brief This function allows for a player to use handcuffs again
+   * @brief Resets the flag allowing the player to use handcuffs again.
    */
   void resetHandcuffUsage();
 
   /**
-   * This function prevents a player from using handcuffs again this turn.
+   * @brief Prevents the player from using handcuffs again in the current turn.
    */
   void useHandcuffsThisTurn();
 
   /**
-   * This function determines whether or not one can use handcuffs again.
-   * @return True if not allowed.
+   * @brief Determines whether the player has already used handcuffs this turn.
+   * @return True if handcuffs have been used this turn, false otherwise.
    */
   bool hasUsedHandcuffsThisTurn() const;
 };
@@ -252,10 +258,6 @@ public:
  * @param player The Player object to output.
  * @return std::ostream& The output stream.
  */
-inline std::ostream &operator<<(std::ostream &os, const Player &player) {
-  os << std::left << std::setw(15) << player.getName()
-     << " | Health: " << std::setw(3) << player.getHealth();
-  return os;
-}
+std::ostream &operator<<(std::ostream &os, const Player &player);
 
 #endif // BUCKSHOT_ROULETTE_BOT_PLAYER_H

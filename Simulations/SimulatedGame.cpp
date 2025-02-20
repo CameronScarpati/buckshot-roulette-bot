@@ -3,13 +3,13 @@
 #include "SimulatedShotgun.h"
 
 SimulatedGame::SimulatedGame(SimulatedPlayer *p1, SimulatedPlayer *p2,
-                             SimulatedShotgun *shotgun)
-    : Game(p1, p2) {
+                             SimulatedShotgun *shotgun, bool isPlayerOneTurn)
+    : Game(p1, p2, isPlayerOneTurn) {
   this->shotgun = shotgun;
 }
 
 SimulatedGame::SimulatedGame(const SimulatedGame &other)
-    : Game(nullptr, nullptr) {
+    : Game(nullptr, nullptr, false) {
   auto *simShotgun = dynamic_cast<SimulatedShotgun *>(other.shotgun);
   if (!simShotgun)
     throw std::logic_error("Trying to copy a SimulatedGame whose shotgun is "
@@ -29,7 +29,7 @@ SimulatedGame::SimulatedGame(const SimulatedGame &other)
     this->playerTwo->setOpponent(this->playerOne);
   }
 
-  this->isPlayerOneTurn = other.isPlayerOneTurn;
+  this->isPlayerOneTurn = isPlayerOneTurn;
 }
 
 void SimulatedGame::printShells() {

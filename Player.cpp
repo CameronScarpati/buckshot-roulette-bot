@@ -8,19 +8,15 @@ Player::Player(std::string name, int health)
     : Player(std::move(name), health, nullptr) {}
 
 Player::Player(std::string name, int health, Player *opp)
-    : name(std::move(name)), health(health), opponent(opp), itemCount(0),
+    : name(std::move(name)), health(health), opponent(opp),
       handcuffsApplied(false), handcuffsUsedThisTurn(false) {
-  itemCount = 0;
   if (maxHealth == 0)
     maxHealth = health;
-  items.fill(nullptr);
 }
 
 Player::Player(const Player &other) {
   if (this == &other)
     return;
-
-  itemCount = 0;
 
   this->name = other.name;
   this->health = other.health;
@@ -28,38 +24,22 @@ Player::Player(const Player &other) {
   this->nextShellRevealed = other.nextShellRevealed;
   this->knownNextShell = other.knownNextShell;
   this->handcuffsUsedThisTurn = other.handcuffsUsedThisTurn;
-
   this->opponent = other.opponent;
-
-  for (int i = 0; i < other.itemCount; ++i) {
-    if (other.items[i]) {
-      this->items[i] = other.items[i];
-      itemCount++;
-    }
-  }
+  this->items = other.items; // std::vector copy
 }
 
 Player &Player::operator=(const Player &other) {
   if (this == &other)
     return *this;
 
-  itemCount = 0;
-
   this->name = other.name;
   this->health = other.health;
   this->handcuffsApplied = other.handcuffsApplied;
   this->nextShellRevealed = other.nextShellRevealed;
   this->knownNextShell = other.knownNextShell;
-
+  this->handcuffsUsedThisTurn = other.handcuffsUsedThisTurn;
   this->opponent = other.opponent;
-
-  for (int i = 0; i < other.itemCount; ++i) {
-    if (other.items[i]) {
-      this->items[i] = other.items[i];
-      itemCount++;
-    }
-  }
-
+  this->items = other.items;
   return *this;
 }
 
@@ -100,94 +80,83 @@ void Player::setKnownNextShell(ShellType nextShell) {
   knownNextShell = nextShell;
 }
 
-bool Player::isNextShellRevealed() const { return nextShellRevealed; };
+bool Player::isNextShellRevealed() const { return nextShellRevealed; }
 
 ShellType Player::returnKnownNextShell() const { return knownNextShell; }
 
 void Player::resetKnownNextShell() { nextShellRevealed = false; }
 
 bool Player::addItem(Item *newItem) {
-  if (itemCount >= MAX_ITEMS)
+  if (items.size() >= MAX_ITEMS)
     return false;
-  items[itemCount++] = newItem;
+  items.push_back(newItem);
   return true;
 }
 
 void Player::useItem(int index) {
-  if (index < 0 || index >= itemCount)
+  if (index < 0 || index >= static_cast<int>(items.size()))
     return;
   if (items[index])
     items[index]->use(this, opponent);
-  for (int i = index; i < itemCount - 1; i++) {
-    items[i] = items[i + 1];
-  }
-  items[itemCount - 1] = nullptr;
-  itemCount--;
+  items.erase(items.begin() + index);
 }
 
 void Player::useItem(int index, Shotgun *shotgun) {
-  if (index < 0 || index >= itemCount)
+  if (index < 0 || index >= static_cast<int>(items.size()))
     return;
   if (items[index])
     items[index]->use(this, opponent, shotgun);
-  for (int i = index; i < itemCount - 1; i++) {
-    items[i] = items[i + 1];
-  }
-  items[itemCount - 1] = nullptr;
-  itemCount--;
+  items.erase(items.begin() + index);
 }
 
-int Player::getItemCount() const { return itemCount; }
+int Player::getItemCount() const { return static_cast<int>(items.size()); }
 
 bool Player::useItemByName(const std::string &itemName, Shotgun *shotgun) {
-  for (int i = 0; i < itemCount; i++) {
-    if (items[i] && items[i]->getName() == itemName) {
-      if (shotgun)
-        useItem(i, shotgun);
-      else
-        useItem(i);
-      return true;
-    }
+  auto it = std::find_if(items.begin(), items.end(), [&](const Item *item) {
+    return item && item->getName() == itemName;
+  });
+  if (it != items.end()) {
+    size_t index = std::distance(items.begin(), it);
+    if (shotgun)
+      useItem(static_cast<int>(index), shotgun);
+    else
+      useItem(static_cast<int>(index));
+    return true;
   }
   return false;
 }
 
 void Player::removeItemByName(const std::string &itemName) {
-  for (int i = 0; i < itemCount; ++i) {
-    if (items[i] && items[i]->getName() == itemName) {
-      for (int j = i; j < itemCount - 1; ++j)
-        items[j] = items[j + 1];
-
-      items[itemCount - 1] = nullptr;
-      itemCount--;
-      return;
-    }
-  }
+  auto it = std::find_if(items.begin(), items.end(), [&](const Item *item) {
+    return item && item->getName() == itemName;
+  });
+  if (it != items.end())
+    items.erase(it);
 }
 
 bool Player::hasItem(const std::string &itemName) const {
-  for (int i = 0; i < itemCount; i++)
-    if (items[i] && items[i]->getName() == itemName)
-      return true;
-  return false;
+  return std::any_of(items.begin(), items.end(), [&](const Item *item) {
+    return item && item->getName() == itemName;
+  });
 }
 
 int Player::countItem(const std::string &itemName) const {
-  int sum = 0;
-  for (int i = 0; i < itemCount; i++)
-    if (items[i] && items[i]->getName() == itemName)
-      ++sum;
-  return sum;
+  return static_cast<int>(
+      std::count_if(items.begin(), items.end(), [&](const Item *item) {
+        return item && item->getName() == itemName;
+      }));
 }
+
+std::vector<Item *> Player::getItems() const { return items; }
 
 void Player::printItems() const {
   std::cout << getName() << "'s items: ";
-  if (itemCount == 0) {
+  if (items.empty()) {
     std::cout << "None";
   } else {
-    for (int i = 0; i < itemCount; i++) {
+    for (size_t i = 0; i < items.size(); i++) {
       if (items[i])
-        std::cout << items[i]->getName() << (i < itemCount - 1 ? ", " : "");
+        std::cout << items[i]->getName() << (i < items.size() - 1 ? ", " : "");
     }
   }
   std::cout << "\n";
@@ -198,3 +167,9 @@ void Player::resetHandcuffUsage() { handcuffsUsedThisTurn = false; }
 void Player::useHandcuffsThisTurn() { handcuffsUsedThisTurn = true; }
 
 bool Player::hasUsedHandcuffsThisTurn() const { return handcuffsUsedThisTurn; }
+
+std::ostream &operator<<(std::ostream &os, const Player &player) {
+  os << std::left << std::setw(15) << player.getName()
+     << " | Health: " << std::setw(3) << player.getHealth();
+  return os;
+}

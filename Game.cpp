@@ -18,11 +18,13 @@ const std::string yellow = "\033[33m";
 const std::string blue = "\033[34m";
 } // namespace Color
 
-Game::Game(Player *pOne, Player *pTwo)
+Game::Game(Player *pOne, Player *pTwo, bool isPlayerOneTurn)
     : playerOne(pOne), playerTwo(pTwo), shotgun(new Shotgun()), currentRound(1),
-      playerOneWins(0), playerTwoWins(0), isPlayerOneTurn(true) {}
+      playerOneWins(0), playerTwoWins(0), isPlayerOneTurn(isPlayerOneTurn) {}
 
 void Game::distributeItems() {
+  static std::random_device rd;
+  static std::mt19937 gen(rd());
   std::uniform_int_distribution<int> itemCountDist(2, 5);
   int itemCount = itemCountDist(gen);
 
@@ -177,14 +179,12 @@ void Game::runGame() {
       if (!playerTwo->isAlive()) {
         std::cout << playerOne->getName() << " wins the round!"
                   << "\n";
-        playerTwo->removeHandcuffs();
-        playerOne->resetHandcuffUsage();
+        playerTwo->removeHandcuffs(); // TODO Check in-game.
         playerOneWins++;
       } else if (!playerOne->isAlive()) {
         std::cout << playerTwo->getName() << " wins the round!"
                   << "\n";
-        playerOne->removeHandcuffs();
-        playerTwo->resetHandcuffUsage();
+        playerOne->removeHandcuffs(); // TODO Check in-game.
         playerTwoWins++;
       }
       playerOne->resetHealth();

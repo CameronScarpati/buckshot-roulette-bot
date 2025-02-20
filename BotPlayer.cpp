@@ -1,77 +1,73 @@
 #include "BotPlayer.h"
+#include "Items/Item.h"
 #include <algorithm>
 #include <limits>
 
-const int SEARCH_DEPTH = 10;
+float BotPlayer::valueOfItem(const Item *item) {
+  std::string name = item->getName();
+  if (name == "Beer")
+    return BEER_VALUE;
+  else if (name == "Cigarette")
+    return CIGARETTE_VALUE;
+  else if (name == "Handcuffs")
+    return HANDCUFFS_VALUE;
+  else if (name == "MagnifyingGlass")
+    return MAGNIFYING_GLASS_VALUE;
+  else if (name == "Handsaw")
+    return HANDSAW_VALUE;
+  return 0.0f;
+}
+
+float BotPlayer::evaluateItems(const std::vector<Item *> &items) {
+  float total = 0;
+  for (const auto &item : items)
+    total += valueOfItem(item);
+  return total;
+}
 
 float BotPlayer::evaluateState(SimulatedGame *state) {
-  // Terminal state checks.
+  // Terminal conditions: if one player's HP is zero, assign an extreme score.
   if (!state->getPlayerOne()->isAlive())
-    return -10000.0f;
+    return -std::numeric_limits<float>::infinity();
   if (!state->getPlayerTwo()->isAlive())
-    return +10000.0f;
+    return std::numeric_limits<float>::infinity();
 
-  float score = 0.0f;
-  float healthWeight = 70.0f;
+  // 1. Health Differential: normalized difference
+  float healthScore =
+      HEALTH_WEIGHT *
+      ((static_cast<float>(state->getPlayerOne()->getHealth()) / maxHealth) -
+       (static_cast<float>(state->getPlayerTwo()->getHealth()) / maxHealth));
 
-  // In simulation, player one is the bot.
-  auto *botPlayer = state->getPlayerOne();
-  auto *oppPlayer = state->getPlayerTwo();
-  bool myTurn = state->isPlayerOneTurn;
+  // 2. Item Utility: Evaluate both players' items.
+  float currentItemValue = evaluateItems(state->getPlayerOne()->getItems());
+  float opponentItemValue = evaluateItems(state->getPlayerTwo()->getItems());
+  float itemScore = ITEM_WEIGHT * (currentItemValue - opponentItemValue);
 
-  // Health difference bonus.
-  float hpDifference = static_cast<float>(botPlayer->getHealth()) -
-                       static_cast<float>(oppPlayer->getHealth());
-  score += hpDifference * healthWeight;
-
-  // Flat turn advantage bonus.
-  score += (myTurn ? 50.0f : -50.0f);
-
-  // Shell count bonus: more live rounds improve chances.
-  int liveCount = state->getShotgun()->getLiveShellCount();
-  score += (myTurn ? 10.0f : -10.0f) * liveCount;
-
-  // Magnifying Glass bonus: reduces uncertainty if next shell unrevealed.
-  if (myTurn && !botPlayer->isNextShellRevealed() &&
-      botPlayer->hasItem("Magnifying Glass")) {
-    float pLive = state->getShotgun()->getLiveShellProbability();
-    float pBlank = state->getShotgun()->getBlankShellProbability();
-    float uncertainty = pLive * pBlank; // Higher uncertainty = less confidence.
-    score += 40.0f * uncertainty;
-    if (botPlayer->getHealth() == 1)
-      score += 10.0f;
+  // 3. Shell Composition: If shells remain, evaluate based on live round
+  // probability.
+  float shellScore = 0.0;
+  if (state->getShotgun()->getTotalShellCount() > 0) {
+    auto liveProbability =
+        static_cast<float>(state->getShotgun()->getLiveShellProbability());
+    // A lower probability of drawing a live round is better.
+    shellScore = SHELL_WEIGHT * (1.0 - liveProbability);
   }
 
-  // Handcuff bonuses:
-  // Bonus if opponent is already handcuffed.
-  if (oppPlayer->areHandcuffsApplied())
-    score += 150.0f;
-  // Bonus for having a handcuff item available (and not used this turn).
-  if (botPlayer->hasItem("Handcuffs") && !botPlayer->hasUsedHandcuffsThisTurn())
-    score += 40.0f;
+  // 4. Status Effects: Handcuffs status (assuming booleans for whether the
+  // respective player is cuffed)
+  float statusScore = 0.0;
+  if (state->getPlayerTwo()->areHandcuffsApplied())
+    statusScore += HANDCUFF_WEIGHT;
+  if (state->getPlayerOne()->areHandcuffsApplied())
+    statusScore -= HANDCUFF_WEIGHT;
 
-  // Cigarette bonus: each missing HP (if it's our turn) increases score.
-  int missingHealth = Player::maxHealth - botPlayer->getHealth();
-  if (myTurn && botPlayer->hasItem("Cigarette"))
-    score += missingHealth * 20.0f;
+  // 5. Turn Advantage: Bonus if it's our turn.
+  float turnScore = (state->isPlayerOneTurn ? TURN_WEIGHT : -TURN_WEIGHT);
 
-  // Penalize very low health.
-  if (botPlayer->getHealth() == 1)
-    score -= 90.0f;
-
-  // If the next shell is revealed, adjust score based on its known type.
-  if (botPlayer->isNextShellRevealed()) {
-    float handSawMultiplier = (botPlayer->hasItem("Handsaw")) ? 2.25f : 1.0f;
-    if (botPlayer->returnKnownNextShell() == ShellType::LIVE_SHELL) {
-      // Larger bonus if opponent's health is low.
-      float bonus = (oppPlayer->getHealth() <= 2) ? 100.0f : 50.0f;
-      score += myTurn ? bonus * handSawMultiplier : -bonus * handSawMultiplier;
-    } else {
-      score += myTurn ? 25.0f * handSawMultiplier : -25.0f;
-    }
-  }
-
-  return score;
+  // Total evaluation: sum of weighted factors.
+  float totalScore =
+      healthScore + itemScore + shellScore + statusScore + turnScore;
+  return totalScore;
 }
 
 bool BotPlayer::performAction(Action action, SimulatedGame *state,
@@ -91,7 +87,7 @@ bool BotPlayer::performAction(Action action, SimulatedGame *state,
     if (shell == ShellType::LIVE_SHELL) {
       simShotgun->simulateLiveShell();
       currentPlayer->loseHealth(simShotgun->getSawUsed());
-      // If opponent is handcuffed, remove them and keep turn.
+      // If the opponent is handcuffed, remove them and keep turn.
       if (otherPlayer->areHandcuffsApplied()) {
         otherPlayer->removeHandcuffs();
         return state->isPlayerOneTurn;
@@ -113,7 +109,7 @@ bool BotPlayer::performAction(Action action, SimulatedGame *state,
     } else {
       simShotgun->simulateBlankShell();
     }
-    // If opponent is handcuffed, remove them and keep turn.
+    // If the opponent is handcuffed, remove them and keep turn.
     if (otherPlayer->areHandcuffsApplied()) {
       otherPlayer->removeHandcuffs();
       return state->isPlayerOneTurn;
@@ -227,38 +223,36 @@ float BotPlayer::expectedValueForAction(SimulatedGame *state, Action action,
       action == Action::USE_HANDCUFFS) {
     auto *newState = new SimulatedGame(*state);
     performAction(action, newState, ShellType::LIVE_SHELL);
-    return expectiMiniMax(newState, depth - 1, newState->isPlayerOneTurn);
+    return expectiMiniMax(newState, depth - 1);
   } else if (pLive == 1.0f) {
     SimulatedGame *liveState = simulateLiveAction(state, action);
-    return expectiMiniMax(liveState, depth - 1, liveState->isPlayerOneTurn);
+    return expectiMiniMax(liveState, depth - 1);
   } else if (pBlank == 1.0f) {
     SimulatedGame *blankState = simulateBlankAction(state, action);
-    return expectiMiniMax(blankState, depth - 1, blankState->isPlayerOneTurn);
+    return expectiMiniMax(blankState, depth - 1);
   }
   auto nextStates = simulateAction(state, action);
   SimulatedGame *liveState = nextStates.first;
   SimulatedGame *blankState = nextStates.second;
-  float liveVal =
-      expectiMiniMax(liveState, depth - 1, liveState->isPlayerOneTurn);
-  float blankVal =
-      expectiMiniMax(blankState, depth - 1, blankState->isPlayerOneTurn);
+  float liveVal = expectiMiniMax(liveState, depth - 1);
+  float blankVal = expectiMiniMax(blankState, depth - 1);
   return pLive * liveVal + pBlank * blankVal;
 }
 
-float BotPlayer::expectiMiniMax(SimulatedGame *state, int depth,
-                                bool maximizingPlayer) {
+float BotPlayer::expectiMiniMax(SimulatedGame *state, int depth) {
   if (depth == 0 || !state->getPlayerOne()->isAlive() ||
       !state->getPlayerTwo()->isAlive() || state->getShotgun()->isEmpty())
     return evaluateState(state);
 
   std::vector<Action> actionsToTry = determineFeasibleActions(state);
 
-  float bestValue = maximizingPlayer ? -std::numeric_limits<float>::infinity()
-                                     : std::numeric_limits<float>::infinity();
+  float bestValue = state->isPlayerOneTurn
+                        ? -std::numeric_limits<float>::infinity()
+                        : std::numeric_limits<float>::infinity();
 
   for (auto action : actionsToTry) {
     float value = expectedValueForAction(state, action, depth);
-    if (maximizingPlayer)
+    if (state->isPlayerOneTurn)
       bestValue = std::max(bestValue, value);
     else
       bestValue = std::min(bestValue, value);
@@ -318,7 +312,7 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   if (health < maxHealth && hasItem("Cigarette"))
     return Action::SMOKE_CIGARETTE;
 
-  // Build an initial simulated state.
+  // Build a starting simulated state.
   auto *simShotgun = new SimulatedShotgun(
       currentShotgun->getTotalShellCount(), currentShotgun->getLiveShellCount(),
       currentShotgun->getBlankShellCount(), currentShotgun->getSawUsed());
@@ -328,13 +322,12 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   simP1->setOpponent(simP2);
   simP2->setOpponent(simP1);
 
-  auto *initState = new SimulatedGame(simP1, simP2, simShotgun);
-  initState->isPlayerOneTurn = true;
+  auto *initState = new SimulatedGame(simP1, simP2, simShotgun, true);
 
   float bestValue = -std::numeric_limits<float>::infinity();
   Action bestAction = Action::SHOOT_OPPONENT;
 
-  // Determine all feasible actions from this state.
+  // Determine all possible actions from this state.
   std::vector<Action> actionsToTry = determineFeasibleActions(initState);
 
   // Evaluate each action using expectiminimax.
@@ -346,16 +339,13 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
       bool turnAfterAction =
           performAction(action, newState, ShellType::LIVE_SHELL);
       newState->isPlayerOneTurn = turnAfterAction;
-      actionValue =
-          expectiMiniMax(newState, SEARCH_DEPTH - 1, newState->isPlayerOneTurn);
+      actionValue = expectiMiniMax(newState, SEARCH_DEPTH - 1);
     } else {
       auto nextStates = simulateAction(initState, action);
       SimulatedGame *liveState = nextStates.first;
       SimulatedGame *blankState = nextStates.second;
-      float liveVal = expectiMiniMax(liveState, SEARCH_DEPTH - 1,
-                                     liveState->isPlayerOneTurn);
-      float blankVal = expectiMiniMax(blankState, SEARCH_DEPTH - 1,
-                                      blankState->isPlayerOneTurn);
+      float liveVal = expectiMiniMax(liveState, SEARCH_DEPTH - 1);
+      float blankVal = expectiMiniMax(blankState, SEARCH_DEPTH - 1);
       actionValue = pLive * liveVal + pBlank * blankVal;
     }
     if (actionValue > bestValue) {
@@ -387,7 +377,8 @@ std::vector<Action> BotPlayer::determineFeasibleActions(SimulatedGame *state) {
 
   // Prefer to use Handsaw if available and if the saw hasn't been applied.
   if (actingPlayer && actingPlayer->hasItem("Handsaw") &&
-      !state->getShotgun()->getSawUsed())
+      !state->getShotgun()->getSawUsed() &&
+      !actingPlayer->hasItem("Magnifying Glass"))
     feasible.push_back(Action::USE_HANDSAW);
 
   // If the next shell is revealed as blank, SHOOT_SELF is safe.
@@ -395,10 +386,8 @@ std::vector<Action> BotPlayer::determineFeasibleActions(SimulatedGame *state) {
       actingPlayer->returnKnownNextShell() == ShellType::BLANK_SHELL)
     feasible.push_back(Action::SHOOT_SELF);
 
-  // Consider drinking Beer if health is low or inventory is nearly full.
   if (actingPlayer && actingPlayer->hasItem("Beer") &&
-      ((actingPlayer->getHealth() <= 2) ||
-       (actingPlayer->getItemCount() < MAX_ITEMS)))
+      !state->getShotgun()->getSawUsed())
     feasible.push_back(Action::DRINK_BEER);
 
   // Consider healing if health is not full.

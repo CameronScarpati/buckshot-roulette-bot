@@ -1,10 +1,13 @@
 #ifndef BUCKSHOT_ROULETTE_BOT_BOTPLAYER_H
 #define BUCKSHOT_ROULETTE_BOT_BOTPLAYER_H
 
+#include "Items/Item.h"
 #include "Player.h"
 #include "Simulations/SimulatedGame.h"
 #include "Simulations/SimulatedPlayer.h"
 #include "Simulations/SimulatedShotgun.h"
+#include <utility>
+#include <vector>
 
 /**
  * @class BotPlayer
@@ -12,12 +15,22 @@
  */
 class BotPlayer : public Player {
 private:
+  // Returns a numerical value for an item (for evaluation purposes)
+  static float valueOfItem(const Item *item);
+
   /**
    * @brief Evaluates the favorability of a game state.
    * @param state The game state to evaluate.
    * @return A score representing how advantageous the state is for the bot.
    */
   static float evaluateState(SimulatedGame *state);
+
+  /**
+   * @brief Sums up the evaluation values of a collection of items.
+   * @param items A vector of item pointers.
+   * @return The total evaluation score for the items.
+   */
+  static float evaluateItems(const std::vector<Item *> &items);
 
   /**
    * @brief Simulates the result of an action.
@@ -68,10 +81,25 @@ private:
    * @brief Expectiminimax search algorithm.
    * @param state The current game state.
    * @param depth Search depth.
-   * @param maximizingPlayer True if the bot is maximizing.
    * @return The expected value of the state.
    */
-  float expectiMiniMax(SimulatedGame *state, int depth, bool maximizingPlayer);
+  float expectiMiniMax(SimulatedGame *state, int depth);
+
+  static constexpr int SEARCH_DEPTH = 8;
+
+  // State evaluation weights
+  static constexpr float HEALTH_WEIGHT = 100.0;
+  static constexpr float ITEM_WEIGHT = -5.0;
+  static constexpr float SHELL_WEIGHT = 25.0;
+  static constexpr float TURN_WEIGHT = 50.0;
+  static constexpr float HANDCUFF_WEIGHT = 75.0;
+
+  // State item values
+  static constexpr float BEER_VALUE = 2.5f;
+  static constexpr float CIGARETTE_VALUE = 7.5f;
+  static constexpr float HANDCUFFS_VALUE = 15.0f;
+  static constexpr float MAGNIFYING_GLASS_VALUE = 20.0f;
+  static constexpr float HANDSAW_VALUE = 10.0f;
 
 public:
   /**
