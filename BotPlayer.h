@@ -85,21 +85,21 @@ private:
    */
   float expectiMiniMax(SimulatedGame *state, int depth);
 
-  static constexpr int SEARCH_DEPTH = 8;
+  static constexpr int SEARCH_DEPTH = 10;
 
   // State evaluation weights
-  static constexpr float HEALTH_WEIGHT = 100.0;
-  static constexpr float ITEM_WEIGHT = -5.0;
-  static constexpr float SHELL_WEIGHT = 25.0;
-  static constexpr float TURN_WEIGHT = 50.0;
-  static constexpr float HANDCUFF_WEIGHT = 75.0;
+  static constexpr float HEALTH_WEIGHT = 120.0;
+  static constexpr float ITEM_WEIGHT = -10.0;
+  static constexpr float SHELL_WEIGHT = 30.0;
+  static constexpr float TURN_WEIGHT = 70.0;
+  static constexpr float HANDCUFF_WEIGHT = 110.0;
 
   // State item values
   static constexpr float BEER_VALUE = 2.5f;
   static constexpr float CIGARETTE_VALUE = 7.5f;
   static constexpr float HANDCUFFS_VALUE = 15.0f;
   static constexpr float MAGNIFYING_GLASS_VALUE = 20.0f;
-  static constexpr float HANDSAW_VALUE = 10.0f;
+  static constexpr float HANDSAW_VALUE = 15.0f;
 
 public:
   /**
