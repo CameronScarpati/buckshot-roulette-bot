@@ -28,43 +28,72 @@ float BotPlayer::evaluateItems(const std::vector<Item *> &items) {
 float BotPlayer::evaluateState(SimulatedGame *state) {
   // Terminal conditions: if one player's HP is zero, assign an extreme score.
   if (!state->getPlayerOne()->isAlive())
-    return -std::numeric_limits<float>::infinity();
+    return -1000.0f;
   if (!state->getPlayerTwo()->isAlive())
-    return std::numeric_limits<float>::infinity();
+    return +1000.0f;
 
-  // 1. Health Differential: normalized difference
+  // 1. Health Differential: normalized difference.
   float healthScore =
       HEALTH_WEIGHT *
       ((static_cast<float>(state->getPlayerOne()->getHealth()) / maxHealth) -
        (static_cast<float>(state->getPlayerTwo()->getHealth()) / maxHealth));
 
-  // 2. Item Utility: Evaluate both players' items.
-  float currentItemValue = evaluateItems(state->getPlayerOne()->getItems());
-  float opponentItemValue = evaluateItems(state->getPlayerTwo()->getItems());
-  float itemScore = ITEM_WEIGHT * (currentItemValue - opponentItemValue);
+  // 2. Actionable Item Bonus: use determineFeasibleActions to compute bonus.
+  // Here, we reward the current player for items they can use this turn.
+  std::vector<Action> feasible = determineFeasibleActions(state);
+  float actionableBonus = 0.0f;
+  for (auto action : feasible) {
+    switch (action) {
+    case Action::SMOKE_CIGARETTE:
+      actionableBonus += CIGARETTE_VALUE;
+      break;
+    case Action::DRINK_BEER:
+      actionableBonus += BEER_VALUE;
+      break;
+    case Action::USE_HANDCUFFS:
+      actionableBonus += HANDCUFFS_VALUE;
+      break;
+    case Action::USE_MAGNIFYING_GLASS:
+      actionableBonus += MAGNIFYING_GLASS_VALUE;
+      break;
+    case Action::USE_HANDSAW:
+      actionableBonus += HANDSAW_VALUE;
+      break;
+    default:
+      break;
+    }
+  }
+  // With ITEM_WEIGHT now positive (acting as a bonus), this rewards having
+  // actionable items.
+  float itemScore = ITEM_WEIGHT * actionableBonus;
 
-  // 3. Shell Composition: If shells remain, evaluate based on live round
-  // probability.
-  float shellScore = 0.0;
+  // 3. Shell Composition: lower live shell probability is better.
+  float shellScore = 0.0f;
   if (state->getShotgun()->getTotalShellCount() > 0) {
     auto liveProbability =
         static_cast<float>(state->getShotgun()->getLiveShellProbability());
-    // A lower probability of drawing a live round is better.
-    shellScore = SHELL_WEIGHT * (1.0 - liveProbability);
+    shellScore = SHELL_WEIGHT * (1.0f - liveProbability);
   }
 
-  // 4. Status Effects: Handcuffs status (assuming booleans for whether the
-  // respective player is cuffed)
-  float statusScore = 0.0;
+  // 4. Status Effects: Handcuffs, Handsaw, and Magnifying Glass statuses.
+  float statusScore = 0.0f;
   if (state->getPlayerTwo()->areHandcuffsApplied())
     statusScore += HANDCUFF_WEIGHT;
   if (state->getPlayerOne()->areHandcuffsApplied())
     statusScore -= HANDCUFF_WEIGHT;
+  if (state->getPlayerTwo()->isNextShellRevealed())
+    statusScore += MAGNIFYING_GLASS_WEIGHT;
+  if (state->getPlayerOne()->isNextShellRevealed())
+    statusScore -= MAGNIFYING_GLASS_WEIGHT;
+  if (state->isPlayerOneTurn && state->getShotgun()->getSawUsed())
+    statusScore += HANDSAW_WEIGHT;
+  if (!state->isPlayerOneTurn && state->getShotgun()->getSawUsed())
+    statusScore -= HANDSAW_WEIGHT;
 
-  // 5. Turn Advantage: Bonus if it's our turn.
+  // 5. Turn Advantage: bonus if it is our turn.
   float turnScore = (state->isPlayerOneTurn ? TURN_WEIGHT : -TURN_WEIGHT);
 
-  // Total evaluation: sum of weighted factors.
+  // Total evaluation: sum of all weighted components.
   float totalScore =
       healthScore + itemScore + shellScore + statusScore + turnScore;
   return totalScore;
@@ -303,10 +332,12 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   float pBlank = currentShotgun->getBlankShellProbability();
 
   // If only blanks remain, shoot self; if only lives, act accordingly.
-  if (pLive == 0.0f)
+  if (pBlank == 1.0f)
     return Action::SHOOT_SELF;
   else if (pLive == 1.0f)
     return liveShellAction(currentShotgun);
+  std::cout << "Live Probability: " << pLive << "\n";
+  std::cout << "Blank Probability: " << pBlank << "\n";
 
   // Prefer healing if needed.
   if (health < maxHealth && hasItem("Cigarette"))
@@ -333,6 +364,9 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   // Evaluate each action using expectiminimax.
   for (auto action : actionsToTry) {
     float actionValue;
+
+    std::cout << "Evaluating action: " << static_cast<int>(action) << "\n";
+
     if (action == Action::SMOKE_CIGARETTE || action == Action::USE_HANDSAW ||
         action == Action::USE_HANDCUFFS) {
       auto *newState = new SimulatedGame(*initState);
@@ -340,6 +374,8 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
           performAction(action, newState, ShellType::LIVE_SHELL);
       newState->isPlayerOneTurn = turnAfterAction;
       actionValue = expectiMiniMax(newState, SEARCH_DEPTH - 1);
+
+      std::cout << "  [Single outcome] Action value: " << actionValue << "\n";
     } else {
       auto nextStates = simulateAction(initState, action);
       SimulatedGame *liveState = nextStates.first;
@@ -347,7 +383,15 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
       float liveVal = expectiMiniMax(liveState, SEARCH_DEPTH - 1);
       float blankVal = expectiMiniMax(blankState, SEARCH_DEPTH - 1);
       actionValue = pLive * liveVal + pBlank * blankVal;
+
+      std::cout << "  [Dual outcome] liveVal: " << liveVal
+                << ", blankVal: " << blankVal
+                << ", action value: " << actionValue << "\n";
     }
+
+    std::cout << "Action " << static_cast<int>(action)
+              << " has overall value: " << actionValue << "\n";
+
     if (actionValue > bestValue) {
       bestValue = actionValue;
       bestAction = action;
@@ -378,7 +422,7 @@ std::vector<Action> BotPlayer::determineFeasibleActions(SimulatedGame *state) {
   // Prefer to use Handsaw if available and if the saw hasn't been applied.
   if (actingPlayer && actingPlayer->hasItem("Handsaw") &&
       !state->getShotgun()->getSawUsed() &&
-      !actingPlayer->hasItem("Magnifying Glass"))
+      !actingPlayer->hasItem("Magnifying Glass") 1)
     feasible.push_back(Action::USE_HANDSAW);
 
   // If the next shell is revealed as blank, SHOOT_SELF is safe.

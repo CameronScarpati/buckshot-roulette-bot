@@ -89,16 +89,18 @@ private:
 
   // State evaluation weights
   static constexpr float HEALTH_WEIGHT = 120.0;
-  static constexpr float ITEM_WEIGHT = -10.0;
-  static constexpr float SHELL_WEIGHT = 30.0;
-  static constexpr float TURN_WEIGHT = 70.0;
-  static constexpr float HANDCUFF_WEIGHT = 110.0;
+  static constexpr float ITEM_WEIGHT = 5.0;
+  static constexpr float SHELL_WEIGHT = 45.0;
+  static constexpr float TURN_WEIGHT = 85.0;
+  static constexpr float HANDCUFF_WEIGHT = 90.0;
+  static constexpr float MAGNIFYING_GLASS_WEIGHT = 115.0;
+  static constexpr float HANDSAW_WEIGHT = 70.0;
 
   // State item values
   static constexpr float BEER_VALUE = 2.5f;
   static constexpr float CIGARETTE_VALUE = 7.5f;
   static constexpr float HANDCUFFS_VALUE = 15.0f;
-  static constexpr float MAGNIFYING_GLASS_VALUE = 20.0f;
+  static constexpr float MAGNIFYING_GLASS_VALUE = 30.0f;
   static constexpr float HANDSAW_VALUE = 15.0f;
 
 public:
