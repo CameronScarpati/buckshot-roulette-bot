@@ -104,7 +104,7 @@ itself.
 - [x] Implement basic game mechanics.
 - [x] Develop initial bot strategy.
 - [x] Integrate handcuff functionality (usable once per player turn--which is currently bugged).
-- [ ] Optimize decision-making with alpha-beta pruning and looking at an optimal human strategy.
+- [ ] Check for memory leaks and optimize code.
 - [ ] Add support for "double or nothing" items.
 - [ ] Allow for someone to use the bot to make decisions in game (chooseNextMove function and setup
   current game state).
