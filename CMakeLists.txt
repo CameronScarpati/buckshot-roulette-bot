@@ -31,4 +31,5 @@ add_executable(buckshot_roulette_bot
         Items/Beer.cpp
         Items/Handsaw.h
         Items/Handsaw.cpp
-        Simulations/SimulatedShotgun.cpp)
+        Simulations/SimulatedShotgun.cpp
+        Items/Item.cpp)

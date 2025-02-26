@@ -1,20 +1,31 @@
 #include "SimulatedPlayer.h"
 #include <iostream>
+#include <stdexcept>
 
-SimulatedPlayer::SimulatedPlayer(const std::string &name, int health)
-    : Player(name, health) {}
+SimulatedPlayer::SimulatedPlayer(std::string name, int health)
+    : Player(std::move(name), health) {}
 
-SimulatedPlayer::SimulatedPlayer(const std::string &name, int health,
-                                 Player *opponent)
-    : Player(name, health, opponent) {}
+SimulatedPlayer::SimulatedPlayer(std::string name, int health, Player *opponent)
+    : Player(std::move(name), health, opponent) {}
 
 SimulatedPlayer::SimulatedPlayer(const SimulatedPlayer &other)
-    : Player(other.getName(), other.getHealth(), nullptr) {
-  this->handcuffsApplied = other.handcuffsApplied;
-  this->itemCount = other.itemCount;
+    : Player(other) {}
 
-  for (int i = 0; i < itemCount; i++)
-    this->items[i] = other.items[i];
+SimulatedPlayer::SimulatedPlayer(SimulatedPlayer &&other) noexcept
+    : Player(std::move(other)) {}
+
+SimulatedPlayer &SimulatedPlayer::operator=(const SimulatedPlayer &other) {
+  if (this != &other) {
+    Player::operator=(other);
+  }
+  return *this;
+}
+
+SimulatedPlayer &SimulatedPlayer::operator=(SimulatedPlayer &&other) noexcept {
+  if (this != &other) {
+    Player::operator=(std::move(other));
+  }
+  return *this;
 }
 
 SimulatedPlayer::SimulatedPlayer(const Player &other) : Player(other) {}

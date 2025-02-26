@@ -3,14 +3,15 @@
 
 #include "Items/Item.h"
 #include "Shotgun.h"
-#include <array>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 /**
- * @enum Action
+ * @enum class Action
  * @brief Defines possible player actions.
  */
 enum class Action : int {
@@ -23,7 +24,7 @@ enum class Action : int {
   USE_HANDSAW = 6           ///< Doubles live round damage.
 };
 
-static const int MAX_ITEMS = 8;
+static constexpr int MAX_ITEMS = 8;
 
 /**
  * @class Player
@@ -31,17 +32,18 @@ static const int MAX_ITEMS = 8;
  */
 class Player {
 protected:
-  std::string name;          ///< Player's name.
-  int health;                ///< Current health.
-  static int maxHealth;      ///< Maximum player health.
-  Player *opponent;          ///< Pointer to opponent.
-  std::vector<Item *> items; ///< Inventory.
-  int itemCount;             ///< Number of items held.
-  bool handcuffsApplied;     ///< Whether handcuffs are applied.
-  bool nextShellRevealed;    ///< Indicates if the next shell has been revealed.
+  std::string name;     ///< Player's name.
+  int health;           ///< Current health.
+  static int maxHealth; ///< Maximum player health.
+  Player *opponent;     ///< Pointer to opponent (non-owning).
+  std::vector<std::unique_ptr<Item>> items; ///< Inventory (owned).
+  bool handcuffsApplied = false;            ///< Whether handcuffs are applied.
+  bool nextShellRevealed =
+      false; ///< Indicates if the next shell has been revealed.
   ShellType knownNextShell =
       ShellType::BLANK_SHELL; ///< Stores the revealed shell type.
-  bool handcuffsUsedThisTurn; ///< Tracks if handcuffs were used this turn.
+  bool handcuffsUsedThisTurn =
+      false; ///< Tracks if handcuffs were used this turn.
 
 public:
   /**
@@ -55,9 +57,14 @@ public:
    * @brief Constructs a player with an assigned opponent.
    * @param name Player's name.
    * @param health Starting health.
-   * @param opponent Pointer to the opponent.
+   * @param opponent Pointer to the opponent (non-owning).
    */
   Player(std::string name, int health, Player *opponent);
+
+  /**
+   * @brief Virtual destructor for proper polymorphic destruction.
+   */
+  virtual ~Player() = default;
 
   /**
    * @brief Copy constructor.
@@ -73,10 +80,23 @@ public:
   Player &operator=(const Player &other);
 
   /**
-   * @brief Sets the player's opponent.
-   * @param opp Pointer to the opponent.
+   * @brief Move constructor.
+   * @param other The player to move from.
    */
-  void setOpponent(Player *opp);
+  Player(Player &&other) noexcept;
+
+  /**
+   * @brief Move assignment operator.
+   * @param other The player to move from.
+   * @return A reference to this instance.
+   */
+  Player &operator=(Player &&other) noexcept;
+
+  /**
+   * @brief Sets the player's opponent.
+   * @param opp Pointer to the opponent (non-owning).
+   */
+  void setOpponent(Player *opp) noexcept;
 
   /**
    * @brief Determines the player's next action.
@@ -88,107 +108,116 @@ public:
   /**
    * @brief Reduces player health.
    * @param sawUsed If true, deals extra damage.
+   * @throws std::runtime_error If the player is already dead.
    */
   void loseHealth(bool sawUsed);
 
   /**
-   * @brief Restores 1 HP.
+   * @brief Restores 1 HP if below maximum.
    */
-  void smokeCigarette();
+  void smokeCigarette() noexcept;
 
   /**
    * @brief Resets player health to a new value.
    * @param newHealth The new health value.
    */
-  void resetHealth(int newHealth);
+  static void resetMaxHealth(int newHealth) noexcept;
 
   /**
    * @brief Resets player health to the default max.
    */
-  void resetHealth();
+  void resetHealth() noexcept;
 
   /**
    * @brief Checks if the player is alive.
    * @return True if health is above 0.
    */
-  bool isAlive() const;
+  [[nodiscard]] bool isAlive() const noexcept;
 
   /**
    * @brief Gets the player's name.
    * @return Player's name.
    */
-  std::string getName() const;
+  [[nodiscard]] std::string_view getName() const noexcept;
 
   /**
    * @brief Gets the player's current health.
    * @return Player's health.
    */
-  int getHealth() const;
+  [[nodiscard]] int getHealth() const noexcept;
 
   /**
-   * @brief Applies handcuffs to the opponent.
+   * @brief Gets the maximum possible health.
+   * @return Maximum health.
    */
-  void applyHandcuffs();
+  [[nodiscard]] static int getMaxHealth() noexcept;
+
+  /**
+   * @brief Applies handcuffs to the player.
+   */
+  void applyHandcuffs() noexcept;
 
   /**
    * @brief Removes handcuffs.
    */
-  void removeHandcuffs();
+  void removeHandcuffs() noexcept;
 
   /**
    * @brief Checks if handcuffs are applied.
    * @return True if active.
    */
-  bool areHandcuffsApplied() const;
+  [[nodiscard]] bool areHandcuffsApplied() const noexcept;
 
   /**
    * @brief Sets the known next shell type.
    * @param nextShell The shell type revealed.
    */
-  void setKnownNextShell(ShellType nextShell);
+  void setKnownNextShell(ShellType nextShell) noexcept;
 
   /**
    * @brief Checks if the next shell has been revealed.
    * @return True if revealed, false otherwise.
    */
-  bool isNextShellRevealed() const;
+  [[nodiscard]] bool isNextShellRevealed() const noexcept;
 
   /**
    * @brief Returns the known next shell type.
    * @return The revealed shell type.
    */
-  ShellType returnKnownNextShell() const;
+  [[nodiscard]] ShellType returnKnownNextShell() const noexcept;
 
   /**
    * @brief Resets the known next shell type.
    */
-  void resetKnownNextShell();
+  void resetKnownNextShell() noexcept;
 
   /**
    * @brief Adds an item to the inventory.
-   * @param newItem Pointer to the item.
-   * @return True if added, false if full.
+   * @param newItem Pointer to the item (takes ownership).
+   * @return True if added, false if inventory is full.
    */
-  bool addItem(Item *newItem);
+  bool addItem(std::unique_ptr<Item> newItem);
 
   /**
    * @brief Uses an item by index.
    * @param index The item index.
+   * @return True if used successfully.
    */
-  void useItem(int index);
+  bool useItem(int index);
 
   /**
    * @brief Uses an item with shotgun interaction.
    * @param index The item index.
    * @param shotgun Pointer to the shotgun.
+   * @return True if used successfully.
    */
-  void useItem(int index, Shotgun *shotgun);
+  bool useItem(int index, Shotgun *shotgun);
 
   /**
    * @brief Gets the number of held items.
    * @return Item count.
    */
-  int getItemCount() const;
+  [[nodiscard]] int getItemCount() const noexcept;
 
   /**
    * @brief Uses an item by name.
@@ -196,34 +225,35 @@ public:
    * @param shotgun Optional shotgun pointer.
    * @return True if used.
    */
-  bool useItemByName(const std::string &itemName, Shotgun *shotgun = nullptr);
+  bool useItemByName(std::string_view itemName, Shotgun *shotgun = nullptr);
 
   /**
    * @brief Removes an item by name.
    * @param itemName The item name.
+   * @return True if removed.
    */
-  void removeItemByName(const std::string &itemName);
+  bool removeItemByName(std::string_view itemName);
 
   /**
    * @brief Checks if the player has a specific item.
    * @param itemName The item name.
    * @return True if found.
    */
-  bool hasItem(const std::string &itemName) const;
+  [[nodiscard]] bool hasItem(std::string_view itemName) const;
 
   /**
    * @brief Returns the number of items matching a given name.
    * @param itemName The item name.
    * @return Number of matching items.
    */
-  int countItem(const std::string &itemName) const;
+  [[nodiscard]] int countItem(std::string_view itemName) const;
 
   /**
-   * @brief Gets the player's inventory as a vector of item pointers.
-   * @return A vector containing pointers to the items in the player's
-   * inventory.
+   * @brief Gets a copy of the player's items as raw pointers for read-only
+   * operations.
+   * @return A vector of raw pointers to the items.
    */
-  std::vector<Item *> getItems() const;
+  [[nodiscard]] std::vector<Item *> getItemsView() const;
 
   /**
    * @brief Prints the player's inventory.
@@ -233,27 +263,22 @@ public:
   /**
    * @brief Resets the flag allowing the player to use handcuffs again.
    */
-  void resetHandcuffUsage();
+  void resetHandcuffUsage() noexcept;
 
   /**
    * @brief Prevents the player from using handcuffs again in the current turn.
    */
-  void useHandcuffsThisTurn();
+  void useHandcuffsThisTurn() noexcept;
 
   /**
    * @brief Determines whether the player has already used handcuffs this turn.
    * @return True if handcuffs have been used this turn, false otherwise.
    */
-  bool hasUsedHandcuffsThisTurn() const;
+  [[nodiscard]] bool hasUsedHandcuffsThisTurn() const noexcept;
 };
 
 /**
  * @brief Overloads the << operator to provide formatted output for a Player.
- *
- * This operator outputs the player's name (left-justified, with a field width
- * of 15) followed by the player's current health (with a field width of 3) in a
- * formatted style.
- *
  * @param os The output stream.
  * @param player The Player object to output.
  * @return std::ostream& The output stream.

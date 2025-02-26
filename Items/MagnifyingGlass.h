@@ -2,12 +2,14 @@
 #define BUCKSHOT_ROULETTE_BOT_MAGNIFYINGGLASS_H
 
 #include "Item.h"
+#include <memory>
+#include <string_view>
 
 /**
  * @class MagnifyingGlass
  * @brief An item that reveals the next shell in the shotgun.
  */
-class MagnifyingGlass : public Item {
+class MagnifyingGlass final : public Item {
 public:
   /**
    * @brief Reveals the next shell in the shotgun.
@@ -19,13 +21,19 @@ public:
    * @param target Unused parameter.
    * @param shotgun The shotgun to inspect.
    */
-  void use(Player *user, Player *, Shotgun *shotgun) override;
+  void use(Player *user, Player *target, Shotgun *shotgun) override;
 
   /**
    * @brief Returns the item's name.
    * @return "Magnifying Glass".
    */
-  std::string getName() const override;
+  [[nodiscard]] std::string_view getName() const override;
+
+  /**
+   * @brief Creates a deep copy of this magnifying glass item.
+   * @return Unique pointer to a new magnifying glass instance.
+   */
+  [[nodiscard]] std::unique_ptr<Item> clone() const override;
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_MAGNIFYINGGLASS_H

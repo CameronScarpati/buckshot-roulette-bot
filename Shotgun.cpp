@@ -1,6 +1,22 @@
 #include "Shotgun.h"
-#include "Game.h"
+#include <algorithm>
 #include <iostream>
+#include <stdexcept>
+
+std::ostream &operator<<(std::ostream &os, const ShellType &shell) {
+  switch (shell) {
+  case ShellType::BLANK_SHELL:
+    os << "BLANK_SHELL";
+    break;
+  case ShellType::LIVE_SHELL:
+    os << "LIVE_SHELL";
+    break;
+  default:
+    os << "UNKNOWN_SHELL";
+    break;
+  }
+  return os;
+}
 
 void Shotgun::loadShells() {
   static std::random_device rd;
@@ -9,6 +25,7 @@ void Shotgun::loadShells() {
 
   totalShells = dist(gen);
 
+  // Distribute shells evenly, with one extra live shell if odd number
   if (totalShells % 2 == 0) {
     liveShells = totalShells / 2;
     blankShells = totalShells / 2;
@@ -17,62 +34,78 @@ void Shotgun::loadShells() {
     blankShells = totalShells / 2;
   }
 
-  loadedShells = std::deque<ShellType>(liveShells, ShellType::LIVE_SHELL);
-  loadedShells.insert(loadedShells.end(), blankShells, ShellType::BLANK_SHELL);
+  // Create and shuffle the shells
+  loadedShells.clear();
+  loadedShells.resize(liveShells, ShellType::LIVE_SHELL);
+  loadedShells.resize(totalShells, ShellType::BLANK_SHELL);
   std::shuffle(loadedShells.begin(), loadedShells.end(), gen);
 }
 
-[[nodiscard]] ShellType Shotgun::getNextShell() {
-  if (isEmpty())
+ShellType Shotgun::getNextShell() {
+  if (isEmpty()) {
     throw std::runtime_error("The Shotgun is empty.");
+  }
 
   ShellType nextShell = loadedShells.front();
   loadedShells.pop_front();
 
   if (nextShell == ShellType::LIVE_SHELL) {
     --liveShells;
-  } else
+  } else {
     --blankShells;
+  }
   --totalShells;
 
   return nextShell;
 }
 
-ShellType Shotgun::revealNextShell() const { return loadedShells.front(); }
+ShellType Shotgun::revealNextShell() const {
+  if (isEmpty()) {
+    throw std::runtime_error("The Shotgun is empty.");
+  }
+  return loadedShells.front();
+}
 
 void Shotgun::rackShell() {
-  if (!isEmpty()) {
-    ShellType nextShell = loadedShells.front();
-    loadedShells.pop_front();
-
-    std::cout << "The racked shell is a " << nextShell << "." << std::endl;
-
-    if (nextShell == ShellType::LIVE_SHELL) {
-      --liveShells;
-    } else
-      --blankShells;
-    --totalShells;
+  if (isEmpty()) {
+    throw std::runtime_error("The Shotgun is empty.");
   }
+
+  ShellType nextShell = loadedShells.front();
+  loadedShells.pop_front();
+
+  std::cout << "The racked shell is a " << nextShell << "." << std::endl;
+
+  if (nextShell == ShellType::LIVE_SHELL) {
+    --liveShells;
+  } else {
+    --blankShells;
+  }
+  --totalShells;
 }
 
-void Shotgun::useHandsaw() { sawUsed = true; }
+void Shotgun::useHandsaw() noexcept { sawUsed = true; }
 
-void Shotgun::resetSawUsed() { sawUsed = false; }
+void Shotgun::resetSawUsed() noexcept { sawUsed = false; }
 
-bool Shotgun::getSawUsed() const { return sawUsed; }
+bool Shotgun::getSawUsed() const noexcept { return sawUsed; }
 
-bool Shotgun::isEmpty() const { return totalShells == 0; }
+bool Shotgun::isEmpty() const noexcept { return totalShells == 0; }
 
-int Shotgun::getLiveShellCount() const { return liveShells; }
+int Shotgun::getLiveShellCount() const noexcept { return liveShells; }
 
-int Shotgun::getBlankShellCount() const { return blankShells; }
+int Shotgun::getBlankShellCount() const noexcept { return blankShells; }
 
-int Shotgun::getTotalShellCount() const { return totalShells; }
+int Shotgun::getTotalShellCount() const noexcept { return totalShells; }
 
-float Shotgun::getLiveShellProbability() const {
-  return static_cast<float>(liveShells) / static_cast<float>(totalShells);
+float Shotgun::getLiveShellProbability() const noexcept {
+  return (totalShells > 0)
+             ? static_cast<float>(liveShells) / static_cast<float>(totalShells)
+             : 0.0f;
 }
 
-float Shotgun::getBlankShellProbability() const {
-  return 1 - getLiveShellProbability();
+float Shotgun::getBlankShellProbability() const noexcept {
+  return (totalShells > 0)
+             ? static_cast<float>(blankShells) / static_cast<float>(totalShells)
+             : 0.0f;
 }

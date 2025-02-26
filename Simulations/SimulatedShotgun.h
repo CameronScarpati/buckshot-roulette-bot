@@ -10,7 +10,7 @@
  *
  * Overrides `getNextShell()` to prevent altering real game state.
  */
-class SimulatedShotgun : public Shotgun {
+class SimulatedShotgun final : public Shotgun {
 public:
   /**
    * @brief Constructs a simulated shotgun.
@@ -18,6 +18,7 @@ public:
    * @param live Live shells.
    * @param blank Blank shells.
    * @param sawUsed Is saw applied?
+   * @throws std::invalid_argument If total != live + blank
    */
   SimulatedShotgun(int total, int live, int blank, bool sawUsed);
 

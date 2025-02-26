@@ -3,10 +3,11 @@
 
 #include <deque>
 #include <ostream>
-#include <system_error>
+#include <random>
+#include <string_view>
 
 /**
- * @enum ShellType
+ * @enum class ShellType
  * @brief Defines the possible types of shotgun shells.
  */
 enum class ShellType : int {
@@ -20,20 +21,7 @@ enum class ShellType : int {
  * @param shell The shell type to print.
  * @return The modified output stream.
  */
-inline std::ostream &operator<<(std::ostream &os, const ShellType &shell) {
-  switch (shell) {
-  case ShellType::BLANK_SHELL:
-    os << "BLANK_SHELL";
-    break;
-  case ShellType::LIVE_SHELL:
-    os << "LIVE_SHELL";
-    break;
-  default:
-    os << "UNKNOWN_SHELL";
-    break;
-  }
-  return os;
-}
+std::ostream &operator<<(std::ostream &os, const ShellType &shell);
 
 /**
  * @class Shotgun
@@ -41,13 +29,23 @@ inline std::ostream &operator<<(std::ostream &os, const ShellType &shell) {
  */
 class Shotgun {
 protected:
-  int totalShells{};                  ///< Total number of shells.
-  int liveShells{};                   ///< Live shells remaining.
-  int blankShells{};                  ///< Blank shells remaining.
+  int totalShells = 0;                ///< Total number of shells.
+  int liveShells = 0;                 ///< Live shells remaining.
+  int blankShells = 0;                ///< Blank shells remaining.
   std::deque<ShellType> loadedShells; ///< Queue of loaded shells.
-  bool sawUsed{};                     ///< Indicates if the handsaw was used.
+  bool sawUsed = false;               ///< Indicates if the handsaw was used.
 
 public:
+  /**
+   * @brief Default constructor.
+   */
+  Shotgun() = default;
+
+  /**
+   * @brief Virtual destructor for proper polymorphic destruction.
+   */
+  virtual ~Shotgun() = default;
+
   /**
    * @brief Loads shells into the shotgun.
    */
@@ -63,67 +61,67 @@ public:
   /**
    * @brief Reveals the next shell without removing it.
    * @return The next shell type.
+   * @throws std::runtime_error if the shotgun is empty.
    */
-  ShellType revealNextShell() const;
+  [[nodiscard]] ShellType revealNextShell() const;
 
   /**
    * @brief Moves the current shell to the back.
-   *
-   * Decrements the corresponding shell count.
+   * @throws std::runtime_error if the shotgun is empty.
    */
   void rackShell();
 
   /**
    * @brief Uses the handsaw, modifying shotgun behavior.
    */
-  void useHandsaw();
+  void useHandsaw() noexcept;
 
   /**
    * @brief Resets the saw usage flag.
    */
-  void resetSawUsed();
+  void resetSawUsed() noexcept;
 
   /**
    * @brief Checks if the handsaw was used.
    * @return True if used, false otherwise.
    */
-  bool getSawUsed() const;
+  [[nodiscard]] bool getSawUsed() const noexcept;
 
   /**
    * @brief Checks if the shotgun is empty.
    * @return True if no shells remain.
    */
-  bool isEmpty() const;
+  [[nodiscard]] bool isEmpty() const noexcept;
 
   /**
    * @brief Gets the count of live shells.
    * @return Number of live shells.
    */
-  int getLiveShellCount() const;
+  [[nodiscard]] int getLiveShellCount() const noexcept;
 
   /**
    * @brief Gets the count of blank shells.
    * @return Number of blank shells.
    */
-  int getBlankShellCount() const;
+  [[nodiscard]] int getBlankShellCount() const noexcept;
 
   /**
    * @brief Gets the total shell count.
    * @return Total number of shells.
    */
-  int getTotalShellCount() const;
+  [[nodiscard]] int getTotalShellCount() const noexcept;
 
   /**
    * @brief Calculates the probability of drawing a live shell.
-   * @return Probability as a float.
+   * @return Probability as a float between 0 and 1.
    */
-  float getLiveShellProbability() const;
+  [[nodiscard]] float getLiveShellProbability() const noexcept;
 
   /**
    * @brief Calculates the probability of drawing a blank shell.
-   * @return Probability as a float.
+   * @return Probability as a float between 0 and 1.
    */
-  float getBlankShellProbability() const;
+  [[nodiscard]] float getBlankShellProbability() const noexcept;
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_SHOTGUN_H
