@@ -1,5 +1,6 @@
 #include "HumanPlayer.h"
 #include <iostream>
+#include <limits>
 
 HumanPlayer::HumanPlayer(const std::string &name, int health)
     : Player(name, health) {}
@@ -27,12 +28,21 @@ Action HumanPlayer::chooseAction(Shotgun *currentShotgun) {
     std::cout << "  6: USE_HANDSAW"
               << "\n";
     std::cout << "Choice: ";
-    std::cin >> input;
+
+    if (!(std::cin >> input)) {
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      std::cout << "Invalid input. Please enter a number from 0 to 6."
+                << "\n";
+      continue;
+    }
+
     if (input < 0 || input > 6) {
       std::cout << "Invalid input. Please enter a number from 0 to 6."
                 << "\n";
       continue;
     }
+
     auto chosen = static_cast<Action>(input);
 
     if (chosen == Action::SMOKE_CIGARETTE && !hasItem("Cigarette")) {

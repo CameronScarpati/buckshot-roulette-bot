@@ -422,7 +422,7 @@ std::vector<Action> BotPlayer::determineFeasibleActions(SimulatedGame *state) {
   // Prefer to use Handsaw if available and if the saw hasn't been applied.
   if (actingPlayer && actingPlayer->hasItem("Handsaw") &&
       !state->getShotgun()->getSawUsed() &&
-      !actingPlayer->hasItem("Magnifying Glass") 1)
+      !actingPlayer->hasItem("Magnifying Glass"))
     feasible.push_back(Action::USE_HANDSAW);
 
   // If the next shell is revealed as blank, SHOOT_SELF is safe.
