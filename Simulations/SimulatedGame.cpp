@@ -11,6 +11,21 @@ SimulatedGame::SimulatedGame(SimulatedPlayer *p1, SimulatedPlayer *p2,
   this->shotgun.reset(shotgun);
 }
 
+SimulatedGame::~SimulatedGame() {
+  // Clean up player pointers if we own them
+  // Check if playerOne is a SimulatedPlayer created by us
+  SimulatedPlayer *simP1 = dynamic_cast<SimulatedPlayer *>(playerOne);
+  SimulatedPlayer *simP2 = dynamic_cast<SimulatedPlayer *>(playerTwo);
+
+  // Delete only if they're SimulatedPlayers we own
+  delete simP1;
+  delete simP2;
+
+  // Set to nullptr to prevent double-deletion if our parent tries to delete too
+  playerOne = nullptr;
+  playerTwo = nullptr;
+}
+
 SimulatedGame::SimulatedGame(const SimulatedGame &other)
     : Game(nullptr, nullptr, false) {
   // Check if the shotgun is of the correct type

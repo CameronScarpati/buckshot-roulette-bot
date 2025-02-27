@@ -52,6 +52,11 @@ public:
   SimulatedGame &operator=(SimulatedGame &&other) noexcept;
 
   /**
+   * @brief Destructor to clean up allocated memory.
+   */
+  ~SimulatedGame() override;
+
+  /**
    * @brief Disables shell printing for simulations.
    * @throws std::logic_error Always.
    */

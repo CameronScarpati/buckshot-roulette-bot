@@ -121,6 +121,7 @@ bool Game::performAction(Action action) {
       if (!otherPlayer->isAlive())
         std::cout << otherPlayer->getName() << " has been eliminated!"
                   << "\n";
+      turnEnds = true;
     } else
       std::cout << "The shell was blank."
                 << "\n";
@@ -205,12 +206,9 @@ void Game::determineTurnOrder(bool currentTurnEnded) {
   if (currentTurnEnded) {
     currentPlayer->resetHandcuffUsage();
 
-    if (otherPlayer->areHandcuffsApplied()) {
-      std::cout << otherPlayer->getName()
-                << " is handcuffed and skips their turn!"
-                << "\n";
+    if (otherPlayer->areHandcuffsApplied())
       otherPlayer->removeHandcuffs();
-    } else
+    else
       isPlayerOneTurn = !isPlayerOneTurn;
   }
 }
@@ -221,6 +219,7 @@ bool Game::checkRoundEnd() const noexcept {
 
 bool Game::handleRoundEnd() {
   printDivider(60);
+
   if (!playerTwo->isAlive()) {
     std::cout << playerOne->getName() << " wins the round!"
               << "\n";
@@ -252,6 +251,9 @@ bool Game::handleRoundEnd() {
   std::this_thread::sleep_for(std::chrono::milliseconds(750));
   printShells();
   currentRound++;
+
+  // Update turn order for the next round
+  isPlayerOneTurn = !isPlayerOneTurn;
 
   std::cout << "\n";
   printHeader("Round " + std::to_string(currentRound), 60);

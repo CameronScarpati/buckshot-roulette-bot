@@ -17,29 +17,29 @@
 class BotPlayer final : public Player {
 private:
   // State evaluation weights
-  static constexpr float HEALTH_WEIGHT = 120.0f;
-  static constexpr float ITEM_WEIGHT = 10.0f;
-  static constexpr float SHELL_WEIGHT = 45.0f;
+  static constexpr float HEALTH_WEIGHT = 150.0f;
+  static constexpr float ITEM_WEIGHT = 15.0f;
+  static constexpr float SHELL_WEIGHT = 60.0f;
   static constexpr float TURN_WEIGHT = 85.0f;
   static constexpr float HANDCUFF_WEIGHT = 90.0f;
-  static constexpr float MAGNIFYING_GLASS_WEIGHT = 115.0f;
+  static constexpr float MAGNIFYING_GLASS_WEIGHT = 180.0f;
   static constexpr float HANDSAW_WEIGHT = 70.0f;
   static constexpr float ITEM_COUNT_WEIGHT = 5.0f;
-  static constexpr float DANGEROUS_TURN_PENALTY = 30.0f;
+  static constexpr float DANGEROUS_TURN_PENALTY = 80.0f;
 
-  // State item values
-  static constexpr float BEER_VALUE = 2.5f;
-  static constexpr float CIGARETTE_VALUE = 7.5f;
-  static constexpr float HANDCUFFS_VALUE = 15.0f;
-  static constexpr float MAGNIFYING_GLASS_VALUE = 30.0f;
-  static constexpr float HANDSAW_VALUE = 15.0f;
+  // State item values - Adjusted
+  static constexpr float BEER_VALUE = 5.0f;
+  static constexpr float CIGARETTE_VALUE = 20.0f;
+  static constexpr float HANDCUFFS_VALUE = 25.0f;
+  static constexpr float MAGNIFYING_GLASS_VALUE = 50.0f;
+  static constexpr float HANDSAW_VALUE = 20.0f;
 
   // Search parameters
   static constexpr int MAX_SEARCH_DEPTH = 10;
-  static constexpr int MIN_SEARCH_DEPTH = 4;
-  static constexpr float EPSILON = 0.0001f; // For floating-point comparisons
+  static constexpr int MIN_SEARCH_DEPTH = 5;
+  static constexpr float EPSILON = 0.0001f;
   static constexpr std::chrono::milliseconds TIME_LIMIT{
-      500}; // 500ms time limit
+      1000}; // 1000ms time limit
 
   /**
    * @brief Returns a numerical value for an item (for evaluation purposes)
@@ -54,13 +54,6 @@ private:
    * @return A score representing how advantageous the state is for the bot.
    */
   [[nodiscard]] static float evaluateState(SimulatedGame *state);
-
-  /**
-   * @brief Sums up the evaluation values of a collection of items.
-   * @param items A vector of item pointers.
-   * @return The total evaluation score for the items.
-   */
-  [[nodiscard]] static float evaluateItems(const std::vector<Item *> &items);
 
   /**
    * @brief Simulates the result of an action.
