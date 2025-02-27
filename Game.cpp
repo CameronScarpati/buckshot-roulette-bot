@@ -1,10 +1,6 @@
 #include "Game.h"
 #include "BotPlayer.h"
 #include "Items/Beer.h"
-#include "Items/Cigarette.h"
-#include "Items/Handcuffs.h"
-#include "Items/Handsaw.h"
-#include "Items/MagnifyingGlass.h"
 #include <chrono>
 #include <iostream>
 #include <memory>
