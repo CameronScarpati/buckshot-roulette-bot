@@ -12,7 +12,7 @@
   <h3 align="center">Buckshot Roulette Bot</h3>
 
   <p align="center">
-    An optimal bot designed to win the game of Buckshot Roulette.
+    An optimal AI bot designed to win the game of Buckshot Roulette using Expectiminimax search.
     <br />
     <a href="https://github.com/CameronScarpati/buckshot-roulette-bot"><strong>Explore the docs »</strong></a>
     <br />
@@ -27,13 +27,21 @@
 
 ## About The Project
 
-This project aims to develop an optimal bot to
-play [Buckshot Roulette](https://steamcommunity.com/sharedfiles/filedetails/?id=3218902482), a
-strategic game that challenges players' decision-making skills.
-The bot is implemented in C++ and
-utilizes an Expectiminimax algorithm.
-Future enhancements include the integration of "double or nothing" items and creating a way for you
-to use this bot in game.
+This project implements an AI bot designed to
+play [Buckshot Roulette](https://steamcommunity.com/sharedfiles/filedetails/?id=3218902482)
+optimally. Buckshot Roulette is a strategic game that combines luck and decision-making, where
+players take turns using a shotgun loaded with both live and blank shells.
+
+The bot uses an Expectiminimax algorithm with alpha-beta pruning to evaluate possible game states
+and make optimal decisions. It considers probabilities, health states, and available items to
+determine the best action at each turn.
+
+Key features:
+
+- Strategic decision-making using lookahead search
+- Item usage optimization (Cigarettes, Handcuffs, Magnifying Glass, etc.)
+- Probabilistic reasoning for shell outcomes
+- Dynamic evaluation of game states
 
 ### Built With
 
@@ -88,45 +96,64 @@ Ensure you have the following installed:
 
 ## Usage
 
-After building the project, you can run the bot executable to see it in action:
+After building the project, you can run the executable to play against the AI:
 
 ```sh
 ./buckshot_roulette_bot
 ```
 
-You can play against the bot, play against another human player, or have the bot compete against
-itself.
+The game supports three modes:
+
+- Human vs. Bot: Test your skills against the AI
+- Human vs. Human: Play with a friend
+- Bot vs. Bot: Watch the AI play against itself
+
+### Game Rules
+
+- Each round starts with a shotgun loaded with live and blank shells
+- Players take turns either shooting themselves or their opponent
+- Live shells deal damage; blank shells grant an extra turn
+- Items can be used strategically:
+    - Cigarette: Restores 1 HP
+    - Magnifying Glass: Reveals the next shell
+    - Handcuffs: Makes opponent skip their next turn
+    - Beer: Ejects the current shell
+    - Handsaw: Doubles the damage to the next live round
+
+The first player to win three rounds is the victor.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Roadmap
 
-- [x] Implement basic game mechanics.
-- [x] Develop initial bot strategy.
-- [x] Integrate handcuff functionality (usable once per player turn--which is currently bugged).
-- [ ] Add an obvious move checker for bot.
-- [ ] Check for memory leaks and optimize code.
-- [ ] Add support for "double or nothing" items.
-- [ ] Allow for someone to use the bot to make decisions in game (chooseNextMove function and setup
-  current game state).
+- [x] Implement basic game mechanics
+- [x] Develop initial bot strategy using Expectiminimax
+- [ ] Support for "double or nothing" items
+- [ ] Create interface to use the bot as an advisor for real games
 
 See the [open issues](https://github.com/CameronScarpati/buckshot-roulette-bot/issues) for a full
-list
-of proposed features (and known issues).
+list of proposed features and known issues.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Contributing
 
 Contributions are welcome! If you have suggestions for improving the bot or adding new features,
-please fork the repository and create a pull request. You can also open an issue with the "
-enhancement" label.
+please fork the repository and create a pull request.
 
 1. Fork the Project
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
 3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+### Development Areas
+
+- **AI Improvements**: Enhance the decision-making capabilities of the bot
+- **UI Enhancements**: Improve the game's text-based interface
+- **Performance Optimization**: Reduce memory usage and increase search depth
+- **New Items**: Implement additional items from the original game
+- **Testing**: Create comprehensive test cases for game mechanics
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -147,7 +174,9 @@ Link: [https://github.com/CameronScarpati/buckshot-roulette-bot](https://github.
 
 ## Acknowledgments
 
-* [Buckshot Roulette Rules](https://steamcommunity.com/sharedfiles/filedetails/?id=3218902482)
+* [Buckshot Roulette](https://store.steampowered.com/app/2537590/BUCKSHOT_ROULETTE/) by Mike
+  Klubnika
+* [Expectiminimax Algorithm](https://en.wikipedia.org/wiki/Expectiminimax_tree)
 * [C++ Standard Library](https://en.cppreference.com/w/)
 * [CMake Documentation](https://cmake.org/documentation/)
 
@@ -170,7 +199,7 @@ Link: [https://github.com/CameronScarpati/buckshot-roulette-bot](https://github.
 
 [issues-shield]: https://img.shields.io/github/issues/CameronScarpati/buckshot-roulette-bot.svg?style=for-the-badge
 
-[issues-url]: https://github.com/CameronScarpati
+[issues-url]: https://github.com/CameronScarpati/buckshot-roulette-bot/issues
 
 [license-shield]: https://img.shields.io/github/license/CameronScarpati/buckshot-roulette-bot?style=for-the-badge
 
