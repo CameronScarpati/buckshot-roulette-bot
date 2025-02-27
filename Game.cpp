@@ -83,7 +83,7 @@ bool Game::performAction(Action action) {
   Player *currentPlayer = isPlayerOneTurn ? playerOne : playerTwo;
   Player *otherPlayer = isPlayerOneTurn ? playerTwo : playerOne;
 
-  bool turnEnds = true; // By default, actions end the turn
+  bool turnEnds = true;
   auto *maybeBot = dynamic_cast<BotPlayer *>(currentPlayer);
 
   switch (action) {
@@ -97,17 +97,10 @@ bool Game::performAction(Action action) {
       std::cout << "The shell was live. " << currentPlayer->getName()
                 << " lost health."
                 << "\n";
-
-      // Handcuffs logic: target gets uncuffed but turn still changes
-      if (otherPlayer->areHandcuffsApplied()) {
-        otherPlayer->removeHandcuffs();
-        std::cout << otherPlayer->getName() << " is freed from handcuffs."
-                  << "\n";
-      }
     } else {
       std::cout << "The shell was blank. An extra turn was gained."
                 << "\n";
-      turnEnds = false; // Blank shell = keep turn
+      turnEnds = false;
     }
     shotgun->resetSawUsed();
     currentPlayer->resetKnownNextShell();
@@ -125,30 +118,12 @@ bool Game::performAction(Action action) {
                 << "\n";
       otherPlayer->loseHealth(shotgun->getSawUsed());
 
-      // Check if opponent died before handling handcuffs
-      if (!otherPlayer->isAlive()) {
+      if (!otherPlayer->isAlive())
         std::cout << otherPlayer->getName() << " has been eliminated!"
                   << "\n";
-        // If opponent dies, no turn change needed - round will end
-        turnEnds = false;
-      }
-      // Handcuffs logic: target gets uncuffed but turn still changes
-      else if (otherPlayer->areHandcuffsApplied()) {
-        otherPlayer->removeHandcuffs();
-        std::cout << otherPlayer->getName() << " is freed from handcuffs."
-                  << "\n";
-      }
-    } else {
+    } else
       std::cout << "The shell was blank."
                 << "\n";
-
-      // Handcuffs logic for blank shell
-      if (otherPlayer->areHandcuffsApplied()) {
-        otherPlayer->removeHandcuffs();
-        std::cout << otherPlayer->getName() << " is freed from handcuffs."
-                  << "\n";
-      }
-    }
 
     shotgun->resetSawUsed();
     currentPlayer->resetKnownNextShell();
@@ -156,65 +131,65 @@ bool Game::performAction(Action action) {
   }
 
   case Action::SMOKE_CIGARETTE: {
-    if (currentPlayer->useItemByName("Cigarette")) {
-      turnEnds = false; // Using items doesn't end turn
-    } else {
+    if (currentPlayer->useItemByName("Cigarette"))
+      turnEnds = false;
+    else {
       std::cout << currentPlayer->getName() << " has no Cigarette to smoke."
                 << "\n";
-      turnEnds = false; // Failed action doesn't end turn
+      turnEnds = false;
     }
     break;
   }
 
   case Action::USE_HANDCUFFS: {
-    if (currentPlayer->useItemByName("Handcuffs")) {
+    if (!currentPlayer->hasUsedHandcuffsThisTurn() &&
+        currentPlayer->useItemByName("Handcuffs")) {
       otherPlayer->applyHandcuffs();
       currentPlayer->useHandcuffsThisTurn();
       std::cout << otherPlayer->getName() << " is now handcuffed."
                 << "\n";
-      turnEnds = false; // Using items doesn't end turn
+      turnEnds = false;
     } else {
       std::cout << currentPlayer->getName()
                 << " has no Handcuffs or has already used them this turn."
                 << "\n";
-      turnEnds = false; // Failed action doesn't end turn
+      turnEnds = false;
     }
     break;
   }
 
   case Action::USE_MAGNIFYING_GLASS: {
-    if (maybeBot) {
+    if (maybeBot)
       maybeBot->setKnownNextShell(shotgun->revealNextShell());
-    }
 
-    if (currentPlayer->useItemByName("Magnifying Glass", shotgun.get())) {
-      turnEnds = false; // Using items doesn't end turn
-    } else {
+    if (currentPlayer->useItemByName("Magnifying Glass", shotgun.get()))
+      turnEnds = false;
+    else {
       std::cout << currentPlayer->getName() << " has no Magnifying Glass."
                 << "\n";
-      turnEnds = false; // Failed action doesn't end turn
+      turnEnds = false;
     }
     break;
   }
 
   case Action::DRINK_BEER: {
     if (currentPlayer->useItemByName("Beer", shotgun.get())) {
-      turnEnds = false; // Using items doesn't end turn
+      turnEnds = false;
     } else {
       std::cout << currentPlayer->getName() << " has no Beer."
                 << "\n";
-      turnEnds = false; // Failed action doesn't end turn
+      turnEnds = false;
     }
     break;
   }
 
   case Action::USE_HANDSAW: {
     if (currentPlayer->useItemByName("Handsaw", shotgun.get())) {
-      turnEnds = false; // Using items doesn't end turn
+      turnEnds = false;
     } else {
       std::cout << currentPlayer->getName() << " has no Handsaw."
                 << "\n";
-      turnEnds = false; // Failed action doesn't end turn
+      turnEnds = false;
     }
     break;
   }
@@ -227,18 +202,14 @@ void Game::determineTurnOrder(bool currentTurnEnded) {
   Player *currentPlayer = isPlayerOneTurn ? playerOne : playerTwo;
   Player *otherPlayer = isPlayerOneTurn ? playerTwo : playerOne;
 
-  // If the current player's turn is ending
   if (currentTurnEnded) {
-    // Reset handcuffs usage for the current player
     currentPlayer->resetHandcuffUsage();
 
-    // Check if another player is handcuffed
     if (otherPlayer->areHandcuffsApplied()) {
-      // Skip the handcuffed player's turn - don't change isPlayerOneTurn
       std::cout << otherPlayer->getName()
                 << " is handcuffed and skips their turn!"
                 << "\n";
-      otherPlayer->removeHandcuffs(); // Remove handcuffs after skipping turn
+      otherPlayer->removeHandcuffs();
     } else
       isPlayerOneTurn = !isPlayerOneTurn;
   }
@@ -268,11 +239,11 @@ bool Game::handleRoundEnd() {
   if (playerOneWins >= 3) {
     std::cout << Color::yellow << playerOne->getName()
               << " wins the game by winning 3 rounds!" << Color::reset << "\n";
-    return true; // Game over
+    return true;
   } else if (playerTwoWins >= 3) {
     std::cout << Color::yellow << playerTwo->getName()
               << " wins the game by winning 3 rounds!" << Color::reset << "\n";
-    return true; // Game over
+    return true;
   }
 
   // Set up next round
@@ -306,15 +277,12 @@ void Game::runGame() {
   printShells();
 
   while (true) {
-    // Check for round end conditions
     if (checkRoundEnd()) {
-      if (handleRoundEnd()) {
-        break; // Game over
-      }
-      continue; // Start new round
+      if (handleRoundEnd())
+        break;
+      continue;
     }
 
-    // Check if the shotgun needs to be reloaded
     if (shotgun->isEmpty()) {
       std::cout << "\nShotgun is empty. Reloading...\n";
       distributeItems();
@@ -323,23 +291,19 @@ void Game::runGame() {
       printShells();
     }
 
-    // Display game status
     std::cout << "\n";
     printHeader("Player Status", 60);
     std::cout << *playerOne << "\n";
     std::cout << *playerTwo << "\n";
     printDivider(60);
 
-    // Get current player
     Player *currentPlayer = isPlayerOneTurn ? playerOne : playerTwo;
     currentPlayer->printItems();
 
-    // The Player chooses and performs an action
     std::cout << currentPlayer->getName() << "'s turn:\n";
     Action action = currentPlayer->chooseAction(shotgun.get());
     bool turnEnds = performAction(action);
 
-    // Determine the next player's turn
     determineTurnOrder(turnEnds);
   }
 

@@ -226,11 +226,9 @@ std::vector<Item *> Player::getItemsView() const {
   std::vector<Item *> itemPointers;
   itemPointers.reserve(items.size());
 
-  for (const auto &item : items) {
-    if (item) {
+  for (const auto &item : items)
+    if (item)
       itemPointers.push_back(item.get());
-    }
-  }
 
   return itemPointers;
 }

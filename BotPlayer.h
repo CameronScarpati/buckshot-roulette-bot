@@ -5,6 +5,7 @@
 #include "Simulations/SimulatedGame.h"
 #include "Simulations/SimulatedPlayer.h"
 #include "Simulations/SimulatedShotgun.h"
+#include <chrono>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -17,12 +18,14 @@ class BotPlayer final : public Player {
 private:
   // State evaluation weights
   static constexpr float HEALTH_WEIGHT = 120.0f;
-  static constexpr float ITEM_WEIGHT = 5.0f;
+  static constexpr float ITEM_WEIGHT = 10.0f;
   static constexpr float SHELL_WEIGHT = 45.0f;
   static constexpr float TURN_WEIGHT = 85.0f;
   static constexpr float HANDCUFF_WEIGHT = 90.0f;
   static constexpr float MAGNIFYING_GLASS_WEIGHT = 115.0f;
   static constexpr float HANDSAW_WEIGHT = 70.0f;
+  static constexpr float ITEM_COUNT_WEIGHT = 5.0f;
+  static constexpr float DANGEROUS_TURN_PENALTY = 30.0f;
 
   // State item values
   static constexpr float BEER_VALUE = 2.5f;
@@ -31,8 +34,12 @@ private:
   static constexpr float MAGNIFYING_GLASS_VALUE = 30.0f;
   static constexpr float HANDSAW_VALUE = 15.0f;
 
-  // Search depth for expectiminimax
-  static constexpr int SEARCH_DEPTH = 10;
+  // Search parameters
+  static constexpr int MAX_SEARCH_DEPTH = 10;
+  static constexpr int MIN_SEARCH_DEPTH = 4;
+  static constexpr float EPSILON = 0.0001f; // For floating-point comparisons
+  static constexpr std::chrono::milliseconds TIME_LIMIT{
+      500}; // 500ms time limit
 
   /**
    * @brief Returns a numerical value for an item (for evaluation purposes)
@@ -62,8 +69,8 @@ private:
    * @param shell The drawn shell type.
    * @return Whether the turn switches.
    */
-  [[nodiscard]] static bool performAction(Action action, SimulatedGame *state,
-                                          ShellType shell);
+  static bool performAction(Action action, SimulatedGame *state,
+                            ShellType shell);
 
   /**
    * @brief Simulates an action with a live shell outcome.
@@ -107,9 +114,39 @@ private:
    * @brief Expectiminimax search algorithm.
    * @param state The current game state.
    * @param depth Search depth.
+   * @param alpha Alpha value for pruning (best value for MAX)
+   * @param beta Beta value for pruning (best value for MIN)
+   * @param startTime Start time of the search for time-limited search
    * @return The expected value of the state.
    */
-  [[nodiscard]] float expectiMiniMax(SimulatedGame *state, int depth);
+  [[nodiscard]] float
+  expectiMiniMax(SimulatedGame *state, int depth,
+                 float alpha = -std::numeric_limits<float>::infinity(),
+                 float beta = std::numeric_limits<float>::infinity(),
+                 std::chrono::steady_clock::time_point startTime =
+                     std::chrono::steady_clock::now());
+
+  /**
+   * @brief Directly simulates actions that don't involve probabilistic shell
+   * outcomes.
+   * @param state The current game state.
+   * @param action The non-probabilistic action (item usage).
+   * @return The resulting game state.
+   */
+  [[nodiscard]] static std::unique_ptr<SimulatedGame>
+  simulateNonProbabilisticAction(SimulatedGame *state, Action action);
+
+  /**
+   * @brief Checks if the current search should be aborted due to time
+   * constraints.
+   * @param startTime The start time of the search.
+   * @return True if time limit has been reached.
+   */
+  [[nodiscard]] static bool
+  timeExpired(const std::chrono::steady_clock::time_point &startTime) {
+    auto elapsedTime = std::chrono::steady_clock::now() - startTime;
+    return elapsedTime > TIME_LIMIT;
+  }
 
 public:
   /**
@@ -148,6 +185,16 @@ public:
    */
   [[nodiscard]] static std::vector<Action>
   determineFeasibleActions(SimulatedGame *state);
+
+  /**
+   * @brief Prioritizes certain strategic actions for more effective play.
+   * @param actions Vector of feasible actions.
+   * @param state The current game state.
+   * @return The prioritized list of actions.
+   */
+  [[nodiscard]] static std::vector<Action>
+  prioritizeStrategicActions(const std::vector<Action> &actions,
+                             SimulatedGame *state);
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_BOTPLAYER_H
