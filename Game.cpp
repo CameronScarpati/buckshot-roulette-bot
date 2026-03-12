@@ -15,10 +15,10 @@ const std::string yellow = "\033[33m";
 const std::string blue = "\033[34m";
 } // namespace Color
 
-Game::Game(Player *pOne, Player *pTwo, bool isPlayerOneTurn)
+Game::Game(Player *pOne, Player *pTwo, bool playerOneTurn)
     : playerOne(pOne), playerTwo(pTwo), shotgun(std::make_unique<Shotgun>()),
       currentRound(1), playerOneWins(0), playerTwoWins(0),
-      isPlayerOneTurn(isPlayerOneTurn) {}
+      isPlayerOneTurn(playerOneTurn) {}
 
 void Game::distributeItems() {
   static std::random_device rd;
@@ -30,7 +30,8 @@ void Game::distributeItems() {
   std::vector<std::string_view> itemTypes = {
       "Cigarette", "Handsaw", "Magnifying Glass", "Beer", "Handcuffs"};
 
-  std::uniform_int_distribution<int> typeDist(0, itemTypes.size() - 1);
+  std::uniform_int_distribution<int> typeDist(
+      0, static_cast<int>(itemTypes.size()) - 1);
 
   // Distribute items to player one
   for (int i = 0; i < itemCount; i++) {
@@ -71,8 +72,9 @@ void Game::printDivider(int width) {
 
 void Game::printHeader(const std::string &title, int width) {
   printDivider(width);
-  int padding = (width - title.size()) / 2;
-  std::cout << std::setw(padding + title.size()) << title << "\n";
+  auto padding = (static_cast<size_t>(width) - title.size()) / 2;
+  std::cout << std::setw(static_cast<int>(padding + title.size())) << title
+            << "\n";
   printDivider(width);
 }
 

@@ -33,11 +33,12 @@ Action actionFromInput(int input) {
 }
 } // namespace
 
-HumanPlayer::HumanPlayer(std::string name, int health)
-    : Player(std::move(name), health) {}
+HumanPlayer::HumanPlayer(std::string playerName, int playerHealth)
+    : Player(std::move(playerName), playerHealth) {}
 
-HumanPlayer::HumanPlayer(std::string name, int health, Player *opponent)
-    : Player(std::move(name), health, opponent) {}
+HumanPlayer::HumanPlayer(std::string playerName, int playerHealth,
+                         Player *playerOpponent)
+    : Player(std::move(playerName), playerHealth, playerOpponent) {}
 
 Action HumanPlayer::chooseAction(Shotgun *currentShotgun) {
   int input;

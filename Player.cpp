@@ -5,8 +5,8 @@
 
 int Player::maxHealth = 0;
 
-Player::Player(std::string name, int health)
-    : name(std::move(name)), health(health), opponent(nullptr) {
+Player::Player(std::string playerName, int playerHealth)
+    : name(std::move(playerName)), health(playerHealth), opponent(nullptr) {
   if (health <= 0) {
     throw InvalidGameArgumentException(
         "Player health must be a positive value.");
@@ -16,8 +16,8 @@ Player::Player(std::string name, int health)
   }
 }
 
-Player::Player(std::string name, int health, Player *opp)
-    : name(std::move(name)), health(health), opponent(opp) {
+Player::Player(std::string playerName, int playerHealth, Player *opp)
+    : name(std::move(playerName)), health(playerHealth), opponent(opp) {
   if (health <= 0) {
     throw InvalidGameArgumentException(
         "Player health must be a positive value.");

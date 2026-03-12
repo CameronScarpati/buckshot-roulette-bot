@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "Exceptions.h"
 #include "Items/Beer.h"
 #include "Items/Cigarette.h"
 #include "Items/Handcuffs.h"
@@ -274,7 +275,7 @@ TEST_F(PlayerTestFixture, AddItemSuccess) {
 
 TEST_F(PlayerTestFixture, AddItemNullFails) {
   SimulatedPlayer p("Alice", 3);
-  EXPECT_FALSE(p.addItem(nullptr));
+  EXPECT_THROW(p.addItem(nullptr), InvalidItemException);
   EXPECT_EQ(p.getItemCount(), 0);
 }
 
@@ -567,12 +568,12 @@ TEST(SimulatedShotgunTest, ConstructorWithSaw) {
 }
 
 TEST(SimulatedShotgunTest, ConstructorMismatchThrows) {
-  EXPECT_THROW(SimulatedShotgun(5, 2, 2, false), std::invalid_argument);
+  EXPECT_THROW(SimulatedShotgun(5, 2, 2, false), InvalidGameArgumentException);
 }
 
 TEST(SimulatedShotgunTest, GetNextShellThrows) {
   SimulatedShotgun ss(4, 2, 2, false);
-  EXPECT_THROW(ss.getNextShell(), std::logic_error);
+  EXPECT_THROW(ss.getNextShell(), SimulationException);
 }
 
 TEST(SimulatedShotgunTest, SimulateLiveShell) {
@@ -593,12 +594,12 @@ TEST(SimulatedShotgunTest, SimulateBlankShell) {
 
 TEST(SimulatedShotgunTest, SimulateLiveShellNoLiveThrows) {
   SimulatedShotgun ss(2, 0, 2, false);
-  EXPECT_THROW(ss.simulateLiveShell(), std::logic_error);
+  EXPECT_THROW(ss.simulateLiveShell(), SimulationException);
 }
 
 TEST(SimulatedShotgunTest, SimulateBlankShellNoBlankThrows) {
   SimulatedShotgun ss(2, 2, 0, false);
-  EXPECT_THROW(ss.simulateBlankShell(), std::logic_error);
+  EXPECT_THROW(ss.simulateBlankShell(), SimulationException);
 }
 
 TEST(SimulatedShotgunTest, DrainAllSimulated) {
@@ -625,7 +626,7 @@ TEST(SimulatedShotgunTest, ProbabilityAfterSimulation) {
 TEST_F(PlayerTestFixture, SimulatedPlayerChooseActionThrows) {
   SimulatedPlayer sp("Alice", 3);
   Shotgun s;
-  EXPECT_THROW(sp.chooseAction(&s), std::logic_error);
+  EXPECT_THROW(sp.chooseAction(&s), SimulationException);
 }
 
 TEST_F(PlayerTestFixture, SimulatedPlayerCopyFromPlayer) {
@@ -783,7 +784,7 @@ TEST_F(PlayerTestFixture, SimulatedGamePrintShellsThrows) {
   auto *sg = new SimulatedShotgun(4, 2, 2, false);
 
   SimulatedGame game(p1, p2, sg, true);
-  EXPECT_THROW(game.printShells(), std::logic_error);
+  EXPECT_THROW(game.printShells(), SimulationException);
 }
 
 TEST_F(PlayerTestFixture, SimulatedGameRunGameThrows) {
@@ -792,7 +793,7 @@ TEST_F(PlayerTestFixture, SimulatedGameRunGameThrows) {
   auto *sg = new SimulatedShotgun(4, 2, 2, false);
 
   SimulatedGame game(p1, p2, sg, true);
-  EXPECT_THROW(game.runGame(), std::logic_error);
+  EXPECT_THROW(game.runGame(), SimulationException);
 }
 
 TEST_F(PlayerTestFixture, SimulatedGameChangePlayerTurn) {
