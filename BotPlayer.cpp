@@ -1,4 +1,5 @@
 #include "BotPlayer.h"
+#include "Exceptions.h"
 #include "Items/Item.h"
 #include <algorithm>
 #include <chrono>
@@ -107,7 +108,7 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
     statusScore -= HANDSAW_WEIGHT;
 
   // 5. Item count advantage
-  float itemCountScore;
+  float itemCountScore = 0.0f;
   try {
     int playerItemCount =
         static_cast<int>(currentPlayer->getItemsView().size());
@@ -115,8 +116,10 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
         static_cast<int>(otherPlayer->getItemsView().size());
     itemCountScore = ITEM_COUNT_WEIGHT *
                      static_cast<float>((playerItemCount - opponentItemCount));
-  } catch (...) {
-    // In case of any issues with item access, continue
+  } catch (const GameException &) {
+    // In case of any issues with item access, continue with default score
+  } catch (const std::exception &) {
+    // Handle any unexpected standard exceptions
   }
 
   // 6. Turn Advantage: bonus if it is our turn.
@@ -343,7 +346,9 @@ float BotPlayer::expectiMiniMax(
   try {
     actionsToTry =
         prioritizeStrategicActions(determineFeasibleActions(state), state);
-  } catch (...) {
+  } catch (const GameException &) {
+    return evaluateState(state);
+  } catch (const std::exception &) {
     return evaluateState(state);
   }
 
@@ -355,7 +360,9 @@ float BotPlayer::expectiMiniMax(
     float value;
     try {
       value = expectedValueForAction(state, action, depth);
-    } catch (...) {
+    } catch (const GameException &) {
+      continue; // Skip this action if it causes a game exception
+    } catch (const std::exception &) {
       continue; // Skip this action if it causes an exception
     }
 
@@ -548,7 +555,10 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
     try {
       actionsToTry = prioritizeStrategicActions(
           determineFeasibleActions(initState.get()), initState.get());
-    } catch (...) {
+    } catch (const GameException &) {
+      // Fallback to a basic set of actions if there's a game error
+      actionsToTry = {Action::SHOOT_OPPONENT, Action::SHOOT_SELF};
+    } catch (const std::exception &) {
       // Fallback to a basic set of actions if there's an error
       actionsToTry = {Action::SHOOT_OPPONENT, Action::SHOOT_SELF};
     }
@@ -603,7 +613,10 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
                     : 0.0f;
             actionValue = pLive * liveVal + pBlank * blankVal;
           }
-        } catch (...) {
+        } catch (const GameException &) {
+          // Skip this action if it caused a game exception
+          continue;
+        } catch (const std::exception &) {
           // Skip this action if it caused an exception
           continue;
         }
@@ -645,8 +658,8 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
               << " with value " << bestValue << "\n";
 
     return bestAction;
-  } catch (const std::exception &e) {
-    std::cerr << "Exception in search: " << e.what() << std::endl;
+  } catch (const GameException &e) {
+    std::cerr << "Game exception in search: " << e.what() << std::endl;
     // Fallback to a reasonable default strategy
     if (hasItem("Magnifying Glass")) {
       return Action::USE_MAGNIFYING_GLASS;
@@ -655,8 +668,8 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
     } else {
       return Action::SHOOT_OPPONENT;
     }
-  } catch (...) {
-    std::cerr << "Unknown exception in search" << std::endl;
+  } catch (const std::exception &e) {
+    std::cerr << "Exception in search: " << e.what() << std::endl;
     return Action::SHOOT_OPPONENT;
   }
 }

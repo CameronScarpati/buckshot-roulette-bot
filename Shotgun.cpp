@@ -1,7 +1,7 @@
 #include "Shotgun.h"
+#include "Exceptions.h"
 #include <algorithm>
 #include <iostream>
-#include <stdexcept>
 
 std::ostream &operator<<(std::ostream &os, const ShellType &shell) {
   switch (shell) {
@@ -43,7 +43,7 @@ void Shotgun::loadShells() {
 
 ShellType Shotgun::getNextShell() {
   if (isEmpty()) {
-    throw std::runtime_error("The Shotgun is empty.");
+    throw EmptyShotgunException("The Shotgun is empty.");
   }
 
   ShellType nextShell = loadedShells.front();
@@ -61,14 +61,14 @@ ShellType Shotgun::getNextShell() {
 
 ShellType Shotgun::revealNextShell() const {
   if (isEmpty()) {
-    throw std::runtime_error("The Shotgun is empty.");
+    throw EmptyShotgunException("The Shotgun is empty.");
   }
   return loadedShells.front();
 }
 
 void Shotgun::rackShell() {
   if (isEmpty()) {
-    throw std::runtime_error("The Shotgun is empty.");
+    throw EmptyShotgunException("The Shotgun is empty.");
   }
 
   ShellType nextShell = loadedShells.front();
