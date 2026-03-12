@@ -38,7 +38,11 @@ private:
   // Bonus/penalty for whose turn it is (tempo advantage).
   static constexpr float TURN_WEIGHT = 50.0f;
   // Bonus when the opponent is handcuffed (they lose a turn).
-  static constexpr float HANDCUFF_WEIGHT = 100.0f;
+  // Kept moderate so that HP damage (HEALTH_WEIGHT/maxHP ≈ 200) clearly
+  // dominates cuff preservation.  This prevents the bot from shooting itself
+  // just to avoid consuming an active handcuff effect, especially when it
+  // holds spare handcuffs for re-cuffing.
+  static constexpr float HANDCUFF_WEIGHT = 50.0f;
   // Bonus when we know the next shell (information advantage).
   // High value because knowing the shell enables perfect play: shoot self on
   // blank (free turn), shoot opponent on live (guaranteed damage).

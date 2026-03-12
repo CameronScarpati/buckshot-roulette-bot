@@ -175,6 +175,9 @@ bool Game::performAction(Action action) {
 
   case Action::DRINK_BEER: {
     if (currentPlayer->useItemByName("Beer", shotgun.get())) {
+      // Beer ejects the current shell, so any previously revealed shell
+      // knowledge (from Magnifying Glass) is now stale and must be cleared.
+      currentPlayer->resetKnownNextShell();
       turnEnds = false;
     } else {
       std::cout << currentPlayer->getName() << " has no Beer."
@@ -239,6 +242,12 @@ bool Game::handleRoundEnd() {
   playerOne->resetHealth();
   playerTwo->resetHealth();
 
+  // Clear transient per-round state so nothing leaks into the next round.
+  playerOne->resetKnownNextShell();
+  playerTwo->resetKnownNextShell();
+  playerOne->resetHandcuffUsage();
+  playerTwo->resetHandcuffUsage();
+
   if (playerOneWins >= ROUNDS_TO_WIN) {
     std::cout << Color::yellow << playerOne->getName()
               << " wins the game by winning " << ROUNDS_TO_WIN << " rounds!"
@@ -293,6 +302,9 @@ void Game::runGame() {
 
     if (shotgun->isEmpty()) {
       std::cout << "\nShotgun is empty. Reloading...\n";
+      // Clear stale shell knowledge before reloading.
+      playerOne->resetKnownNextShell();
+      playerTwo->resetKnownNextShell();
       distributeItems();
       shotgun->loadShells();
       std::this_thread::sleep_for(SHELL_LOAD_DELAY);
