@@ -118,6 +118,12 @@ bool HumanPlayer::isValidAction(Action action) const {
                 << "\n";
       return false;
     }
+    if (opponent && opponent->areHandcuffsApplied()) {
+      std::cout << "Your opponent is already handcuffed. Please choose a "
+                << "different action."
+                << "\n";
+      return false;
+    }
     return true;
 
   case Action::USE_MAGNIFYING_GLASS:

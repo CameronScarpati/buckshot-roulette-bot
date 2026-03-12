@@ -675,9 +675,13 @@ std::vector<Action> BotPlayer::determineFeasibleActions(SimulatedGame *state) {
   // Always consider shooting the opponent
   feasible.push_back(Action::SHOOT_OPPONENT);
 
-  // Consider using handcuffs if available and not already used
+  // Consider using handcuffs if available, not already used this turn,
+  // and opponent is not already handcuffed (prevents indefinite turn skipping).
+  auto *opponentPlayer = state->isPlayerOneTurnNow() ? state->getPlayerTwo()
+                                                      : state->getPlayerOne();
   if (actingPlayer->hasItem("Handcuffs") &&
-      !actingPlayer->hasUsedHandcuffsThisTurn())
+      !actingPlayer->hasUsedHandcuffsThisTurn() &&
+      opponentPlayer && !opponentPlayer->areHandcuffsApplied())
     feasible.push_back(Action::USE_HANDCUFFS);
 
   // Use informational items if available — but skip when the shell is already
