@@ -19,9 +19,10 @@
 class BotPlayer final : public Player {
 private:
   // -- Terminal state evaluation scores --
-  // Extreme values returned when a player is dead (win/loss).
-  static constexpr float TERMINAL_LOSS_SCORE = -1000.0f;
-  static constexpr float TERMINAL_WIN_SCORE = 1000.0f;
+  // Must exceed the maximum possible heuristic evaluation (~8665) so that
+  // winning is always preferred over any non-terminal "good position".
+  static constexpr float TERMINAL_LOSS_SCORE = -10000.0f;
+  static constexpr float TERMINAL_WIN_SCORE = 10000.0f;
 
   // -- Heuristic evaluation weights --
   // Scales the normalized health differential (our HP vs. opponent HP).
