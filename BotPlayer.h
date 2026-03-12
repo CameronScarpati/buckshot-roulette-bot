@@ -37,7 +37,9 @@ private:
   // Bonus when the opponent is handcuffed (they lose a turn).
   static constexpr float HANDCUFF_WEIGHT = 100.0f;
   // Bonus when we know the next shell (information advantage).
-  static constexpr float MAGNIFYING_GLASS_WEIGHT = 120.0f;
+  // High value because knowing the shell enables perfect play: shoot self on
+  // blank (free turn), shoot opponent on live (guaranteed damage).
+  static constexpr float MAGNIFYING_GLASS_WEIGHT = 300.0f;
   // Bonus when handsaw is active on our turn (double damage potential).
   static constexpr float HANDSAW_WEIGHT = 80.0f;
   // Bonus when shell distribution is extreme (active player can choose optimally).
@@ -65,7 +67,9 @@ private:
   // Tolerance for floating-point probability comparisons.
   static constexpr float EPSILON = 0.0001f;
   // Maximum wall-clock time allowed for the search.
-  static constexpr std::chrono::milliseconds TIME_LIMIT{1000};
+  // 3 seconds allows depth 7-8+ with most game states, enough to see
+  // multi-item combos (e.g., MG → handcuffs → shoot) pay off.
+  static constexpr std::chrono::milliseconds TIME_LIMIT{3000};
 
   /**
    * @brief Returns a numerical value for an item (for evaluation purposes)
