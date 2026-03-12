@@ -145,9 +145,10 @@ bool BotPlayer::performAction(Action action, SimulatedGame *state,
       simShotgun->resetSawUsed();
       simShotgun->simulateLiveShell();
 
-      // If the opponent is handcuffed, remove them and keep turn.
+      // If the opponent is handcuffed, skip their turn and allow re-cuffing.
       if (otherPlayer->areHandcuffsApplied()) {
         otherPlayer->removeHandcuffs();
+        currentPlayer->resetHandcuffUsage();
         return state->isPlayerOneTurnNow();
       } else {
         currentPlayer->resetHandcuffUsage();
@@ -170,9 +171,10 @@ bool BotPlayer::performAction(Action action, SimulatedGame *state,
       simShotgun->simulateBlankShell();
     }
 
-    // If the opponent is handcuffed, remove them and keep turn.
+    // If the opponent is handcuffed, skip their turn and allow re-cuffing.
     if (otherPlayer->areHandcuffsApplied()) {
       otherPlayer->removeHandcuffs();
+      currentPlayer->resetHandcuffUsage();
       return state->isPlayerOneTurnNow();
     } else {
       currentPlayer->resetHandcuffUsage();

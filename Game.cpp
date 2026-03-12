@@ -208,10 +208,13 @@ void Game::determineTurnOrder(bool currentTurnEnded) {
 
   if (currentTurnEnded) {
     if (otherPlayer->areHandcuffsApplied()) {
-      // Opponent is handcuffed: skip their turn, remove cuffs, but do NOT
-      // reset handcuff usage — this prevents the current player from chaining
-      // handcuffs across consecutive turns to lock the opponent out forever.
+      // Opponent is handcuffed: skip their turn, remove cuffs, and reset
+      // handcuff usage so the current player can cuff again with a new item
+      // on their next turn.  Double-cuffing within the same turn is still
+      // blocked by the hasUsedHandcuffsThisTurn() check — this only opens
+      // it up once the cuffed skip has been consumed.
       otherPlayer->removeHandcuffs();
+      currentPlayer->resetHandcuffUsage();
     } else {
       // Actual turn switch: reset handcuff usage for the departing player.
       currentPlayer->resetHandcuffUsage();
