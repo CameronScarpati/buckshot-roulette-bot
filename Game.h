@@ -3,10 +3,12 @@
 
 #include "Player.h"
 #include "Shotgun.h"
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <memory>
 #include <random>
+#include <string>
 
 /**
  * @brief Manages the game loop, rounds, and turn order.
@@ -15,6 +17,18 @@
  */
 class Game {
 protected:
+  // Number of round wins required to win the match.
+  static constexpr int ROUNDS_TO_WIN = 3;
+  // Number of items each player receives per distribution phase.
+  static constexpr int MIN_ITEMS_PER_ROUND = 2;
+  static constexpr int MAX_ITEMS_PER_ROUND = 5;
+  // Default column width for console output formatting.
+  static constexpr int DEFAULT_DISPLAY_WIDTH = 50;
+  // Wider column width used for round headers and dividers.
+  static constexpr int WIDE_DISPLAY_WIDTH = 60;
+  // Pause duration (ms) after loading shells for dramatic effect.
+  static constexpr std::chrono::milliseconds SHELL_LOAD_DELAY{750};
+
   Player *playerOne;                ///< Pointer to player one (non-owning).
   Player *playerTwo;                ///< Pointer to player two (non-owning).
   std::unique_ptr<Shotgun> shotgun; ///< Game's shotgun instance.
@@ -70,20 +84,21 @@ public:
   /**
    * @brief Displays the current shotgun shell status.
    */
-  virtual void printShells();
+  virtual void printShells() const;
 
   /**
    * @brief Prints a divider line.
    * @param width The width of the divider line.
    */
-  static void printDivider(int width = 50);
+  static void printDivider(int width = DEFAULT_DISPLAY_WIDTH);
 
   /**
    * @brief Prints a centered header with divider lines above and below.
    * @param title The header title.
    * @param width The width of the header.
    */
-  static void printHeader(const std::string &title, int width = 50);
+  static void printHeader(const std::string &title,
+                           int width = DEFAULT_DISPLAY_WIDTH);
 
   /**
    * @brief Runs the game loop until a player wins.

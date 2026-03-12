@@ -4,6 +4,11 @@
 #include <limits>
 #include <string>
 
+// Lowest valid action index (Action::SHOOT_SELF).
+static constexpr int MIN_ACTION_ID = 0;
+// Highest valid action index (Action::USE_HANDSAW).
+static constexpr int MAX_ACTION_ID = 6;
+
 namespace {
 Action actionFromInput(int input) {
   switch (input) {
@@ -44,14 +49,14 @@ Action HumanPlayer::chooseAction(Shotgun *currentShotgun) {
     if (!(std::cin >> input)) {
       std::cin.clear();
       std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-      std::cout << "Invalid input. Please enter a number from 0 to 6."
-                << "\n";
+      std::cout << "Invalid input. Please enter a number from " << MIN_ACTION_ID
+                << " to " << MAX_ACTION_ID << ".\n";
       continue;
     }
 
-    if (input < 0 || input > 6) {
-      std::cout << "Invalid input. Please enter a number from 0 to 6."
-                << "\n";
+    if (input < MIN_ACTION_ID || input > MAX_ACTION_ID) {
+      std::cout << "Invalid input. Please enter a number from " << MIN_ACTION_ID
+                << " to " << MAX_ACTION_ID << ".\n";
       continue;
     }
 

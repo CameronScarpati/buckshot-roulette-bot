@@ -3,6 +3,7 @@
 
 #include "Player.h"
 #include <memory>
+#include <string>
 
 /**
  * @class SimulatedPlayer

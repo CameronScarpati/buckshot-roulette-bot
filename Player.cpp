@@ -106,11 +106,16 @@ Player &Player::operator=(Player &&other) noexcept {
 
 void Player::setOpponent(Player *opp) noexcept { opponent = opp; }
 
+// Damage dealt by a normal live shell.
+static constexpr int BASE_DAMAGE = 1;
+// Damage dealt when the handsaw doubles the shot.
+static constexpr int SAWED_DAMAGE = 2;
+
 void Player::loseHealth(bool sawUsed) {
   if (!isAlive()) {
     throw PlayerDeadException("This player is already dead.");
   }
-  health -= (sawUsed) ? 2 : 1;
+  health -= sawUsed ? SAWED_DAMAGE : BASE_DAMAGE;
 }
 
 void Player::smokeCigarette() noexcept {

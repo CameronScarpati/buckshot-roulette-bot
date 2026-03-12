@@ -60,7 +60,7 @@ public:
    * @brief Disables shell printing for simulations.
    * @throws std::logic_error Always.
    */
-  void printShells() override;
+  void printShells() const override;
 
   /**
    * @brief Disables game execution for simulations.

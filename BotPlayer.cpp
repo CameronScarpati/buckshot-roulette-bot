@@ -3,9 +3,11 @@
 #include "Items/Item.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <unordered_map>
 
 const std::chrono::milliseconds BotPlayer::TIME_LIMIT;
 constexpr int BotPlayer::MAX_SEARCH_DEPTH;
@@ -34,9 +36,9 @@ float BotPlayer::valueOfItem(const Item *item) {
 float BotPlayer::evaluateState(SimulatedGame *state) {
   // Terminal conditions: if one player's HP is zero, assign an extreme score.
   if (!state->getPlayerOne()->isAlive())
-    return -1000.0f;
+    return TERMINAL_LOSS_SCORE;
   if (!state->getPlayerTwo()->isAlive())
-    return +1000.0f;
+    return TERMINAL_WIN_SCORE;
 
   // 1. Health Differential: normalized difference.
   float healthScore =
@@ -88,7 +90,7 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
     shellScore = SHELL_WEIGHT * (1.0f - liveProbability);
 
     // Add penalty if it's our turn and most shells are live
-    if (state->isPlayerOneTurnNow() && liveProbability > 0.7f)
+    if (state->isPlayerOneTurnNow() && liveProbability > DANGEROUS_LIVE_THRESHOLD)
       shellScore -= DANGEROUS_TURN_PENALTY * liveProbability;
   }
 
@@ -290,12 +292,16 @@ BotPlayer::simulateAction(SimulatedGame *state, Action action) {
   return {std::move(liveState), std::move(blankState)};
 }
 
+// Computes the expected value of an action by branching over probabilistic
+// shell outcomes.  Deterministic actions (items) need only one branch;
+// probabilistic actions (shoot, beer, magnifying glass) require weighting the
+// live and blank outcomes by their respective probabilities.
 float BotPlayer::expectedValueForAction(SimulatedGame *state, Action action,
                                         int depth) {
   if (depth <= 0)
     return 0.0f;
 
-  // A single deterministic outcome does not need to consider probabilities
+  // Deterministic actions have a single outcome — no shell randomness involved.
   if (action == Action::SMOKE_CIGARETTE || action == Action::USE_HANDSAW ||
       action == Action::USE_HANDCUFFS) {
     auto newState = simulateNonProbabilisticAction(state, action);
@@ -306,7 +312,7 @@ float BotPlayer::expectedValueForAction(SimulatedGame *state, Action action,
   float pLive = state->getShotgun()->getLiveShellProbability();
   float pBlank = state->getShotgun()->getBlankShellProbability();
 
-  // For actions when the shell is certain (using epsilon for float comparison)
+  // When shell outcome is certain, only one branch needs evaluation.
   if (std::abs(pLive - 1.0f) < EPSILON) {
     auto liveState = simulateLiveAction(state, action);
     float result = expectiMiniMax(liveState.get(), depth - 1);
@@ -317,6 +323,8 @@ float BotPlayer::expectedValueForAction(SimulatedGame *state, Action action,
     return result;
   }
 
+  // Chance node: branch into both live and blank outcomes, then combine
+  // using E[V] = P(live) * V(live) + P(blank) * V(blank).
   auto [liveState, blankState] = simulateAction(state, action);
 
   float liveVal = 0.0f;
@@ -330,18 +338,24 @@ float BotPlayer::expectedValueForAction(SimulatedGame *state, Action action,
   return pLive * liveVal + pBlank * blankVal;
 }
 
+// Core expectiminimax search with alpha-beta pruning.
+// Player 1 (the bot) is the MAX player; Player 2 is the MIN player.
+// Chance nodes are handled inside expectedValueForAction, which weights
+// outcomes by shell probabilities.
 float BotPlayer::expectiMiniMax(
     SimulatedGame *state, int depth, float alpha, float beta,
     std::chrono::steady_clock::time_point startTime) {
-  // Check if time limit exceeded
+  // Bail out early if time budget is exhausted; return static evaluation.
   if (timeExpired(startTime))
     return evaluateState(state);
 
+  // Base case: leaf node — evaluate the position heuristically.
   if (depth == 0 || !state->getPlayerOne() || !state->getPlayerTwo() ||
       !state->getShotgun() || !state->getPlayerOne()->isAlive() ||
       !state->getPlayerTwo()->isAlive() || state->getShotgun()->isEmpty())
     return evaluateState(state);
 
+  // Generate and prioritize legal actions to improve pruning efficiency.
   std::vector<Action> actionsToTry;
   try {
     actionsToTry =
@@ -352,6 +366,7 @@ float BotPlayer::expectiMiniMax(
     return evaluateState(state);
   }
 
+  // MAX node (Player 1) starts at -inf; MIN node (Player 2) at +inf.
   float bestValue = state->isPlayerOneTurnNow()
                         ? -std::numeric_limits<float>::infinity()
                         : std::numeric_limits<float>::infinity();
@@ -359,6 +374,7 @@ float BotPlayer::expectiMiniMax(
   for (auto action : actionsToTry) {
     float value;
     try {
+      // Evaluate this action's expected value across chance outcomes.
       value = expectedValueForAction(state, action, depth);
     } catch (const GameException &) {
       continue; // Skip this action if it causes a game exception
@@ -367,15 +383,17 @@ float BotPlayer::expectiMiniMax(
     }
 
     if (state->isPlayerOneTurnNow()) {
+      // MAX node: keep the highest-valued action.
       bestValue = std::max(bestValue, value);
       alpha = std::max(alpha, bestValue);
       if (beta <= alpha)
-        break; // Beta cutoff
+        break; // Beta cutoff — MIN has a better option elsewhere.
     } else {
+      // MIN node: keep the lowest-valued action.
       bestValue = std::min(bestValue, value);
       beta = std::min(beta, bestValue);
       if (beta <= alpha)
-        break; // Alpha cutoff
+        break; // Alpha cutoff — MAX has a better option elsewhere.
     }
 
     if (timeExpired(startTime))
@@ -563,10 +581,11 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
       actionsToTry = {Action::SHOOT_OPPONENT, Action::SHOOT_SELF};
     }
 
-    // Try iterative deepening with a lower maximum depth
+    // Iterative deepening: search at increasing depths starting from
+    // MIN_SEARCH_DEPTH, refining the best action at each level until the
+    // time budget is exhausted or MAX_SEARCH_DEPTH is reached.
     int maxDepthReached = 0;
-    for (int depth = MIN_SEARCH_DEPTH; depth <= std::min(MAX_SEARCH_DEPTH, 5);
-         depth++) {
+    for (int depth = MIN_SEARCH_DEPTH; depth <= MAX_SEARCH_DEPTH; depth++) {
       bool timeOut = false;
       std::unordered_map<Action, float> actionValues;
 
