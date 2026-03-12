@@ -628,11 +628,33 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
       if (!timeOut) {
         maxDepthReached = depth;
 
-        // Replace previous best with this depth's best
+        // Replace previous best with this depth's best.
+        // Tie-breaking: when multiple actions share the best value,
+        // prefer offensive/impactful actions over passive ones.
+        // Priority: SHOOT_OPPONENT > HANDCUFFS > HANDSAW > MG > BEER >
+        //           SHOOT_SELF > CIGARETTE
+        // This matters when all paths lead to terminal loss — the bot
+        // should deal damage rather than waste turns or shoot itself.
+        auto actionPriority = [](Action a) -> int {
+          switch (a) {
+          case Action::SHOOT_OPPONENT: return 7;
+          case Action::USE_HANDCUFFS: return 6;
+          case Action::USE_HANDSAW: return 5;
+          case Action::USE_MAGNIFYING_GLASS: return 4;
+          case Action::DRINK_BEER: return 3;
+          case Action::SHOOT_SELF: return 2;
+          case Action::SMOKE_CIGARETTE: return 1;
+          default: return 0;
+          }
+        };
         float depthBest = -std::numeric_limits<float>::infinity();
+        int depthBestPriority = -1;
         for (const auto &[action, value] : actionValues) {
-          if (value > depthBest) {
+          int pri = actionPriority(action);
+          if (value > depthBest ||
+              (value == depthBest && pri > depthBestPriority)) {
             depthBest = value;
+            depthBestPriority = pri;
             bestValue = value;
             bestAction = action;
           }
@@ -704,9 +726,15 @@ std::vector<Action> BotPlayer::determineFeasibleActions(SimulatedGame *state) {
   if (actingPlayer->hasItem("Handsaw") && !state->getShotgun()->getSawUsed())
     feasible.push_back(Action::USE_HANDSAW);
 
-  // Always consider shooting self - the search will evaluate whether it's
-  // worth the risk (e.g., high blank probability gives a free turn)
-  feasible.push_back(Action::SHOOT_SELF);
+  // Consider shooting self — but never when the shell is guaranteed live
+  // (100% live or known live), since SHOOT_OPPONENT strictly dominates.
+  {
+    bool knownLive = actingPlayer->isNextShellRevealed() &&
+                     actingPlayer->returnKnownNextShell() == ShellType::LIVE_SHELL;
+    bool certainLive = std::abs(state->getShotgun()->getLiveShellProbability() - 1.0f) < EPSILON;
+    if (!knownLive && !certainLive)
+      feasible.push_back(Action::SHOOT_SELF);
+  }
 
   // Consider Beer if available
   if (actingPlayer->hasItem("Beer"))
