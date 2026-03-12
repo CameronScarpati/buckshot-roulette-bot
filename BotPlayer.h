@@ -68,15 +68,15 @@ private:
 
   // -- Search parameters --
   // Upper bound on iterative-deepening search depth.
-  static constexpr int MAX_SEARCH_DEPTH = 12;
+  static constexpr int MAX_SEARCH_DEPTH = 20;
   // Starting depth for iterative-deepening search.
   static constexpr int MIN_SEARCH_DEPTH = 5;
   // Tolerance for floating-point probability comparisons.
   static constexpr float EPSILON = 0.0001f;
   // Maximum wall-clock time allowed for the search.
-  // 3 seconds allows depth 7-8+ with most game states, enough to see
-  // multi-item combos (e.g., MG → handcuffs → shoot) pay off.
-  static constexpr std::chrono::milliseconds TIME_LIMIT{3000};
+  // 7 seconds allows deeper searches that can see multi-step combos like
+  // MG → conditional Handsaw → shoot, avoiding wasted items.
+  static constexpr std::chrono::milliseconds TIME_LIMIT{7000};
 
   /**
    * @brief Returns a numerical value for an item (for evaluation purposes)
