@@ -25,7 +25,7 @@
 
 Buckshot Roulette is a strategic tabletop game where two players take turns with a shotgun loaded with a hidden sequence of live and blank shells. Each turn, a player can shoot themselves or their opponent, and use items to gain an edge. This project builds an AI that plays the game optimally by searching the full decision tree, weighing probabilistic outcomes, and selecting the highest-value action at every turn.
 
-The bot uses an **Expectiminimax algorithm with alpha-beta pruning** -- the standard approach for adversarial games with chance nodes. It evaluates thousands of future game states per move within a 1-second time budget, using iterative deepening (depth 5-10) to balance search quality with responsiveness.
+The bot uses an **Expectiminimax algorithm with alpha-beta pruning** -- the standard approach for adversarial games with chance nodes. It evaluates thousands of future game states per move within a 7-second time budget, using iterative deepening (depth 5-20) to balance search quality with responsiveness. Bot actions are paced with a brief delay between each move so human players can follow along.
 
 ### Built With
 
@@ -88,9 +88,9 @@ The bot's decision engine is a time-bounded **Expectiminimax** search with **alp
 
 4. **Alpha-beta pruning** -- Standard pruning eliminates branches that cannot influence the final decision, reducing the effective branching factor significantly.
 
-5. **State evaluation** -- Leaf nodes are scored by a weighted heuristic considering health differential (150), item advantage (Magnifying Glass: 180, Handcuffs: 90, Handsaw: 70), turn advantage (85), shell distribution favorability (60), and a penalty for holding the turn when the shell distribution is dangerous (80).
+5. **State evaluation** -- Leaf nodes are scored by a weighted heuristic considering health differential (600), shell knowledge advantage (300), handsaw active bonus (80), handcuff advantage (50), turn advantage (50), shell distribution favorability (40), item synergy bonuses (15), and individual item values (Handcuffs: 40, Magnifying Glass: 40, Handsaw: 35, Beer: 20, Cigarette: 15).
 
-6. **Time management** -- Search runs with iterative deepening from depth 5 to 10, hard-capped at 1 second. The best result found within the time budget is used.
+6. **Time management** -- Search runs with iterative deepening from depth 5 to 20, hard-capped at 7 seconds. The best result from the deepest fully completed search depth is used; partially completed depths are discarded.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

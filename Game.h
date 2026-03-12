@@ -28,6 +28,8 @@ protected:
   static constexpr int WIDE_DISPLAY_WIDTH = 60;
   // Pause duration (ms) after loading shells for dramatic effect.
   static constexpr std::chrono::milliseconds SHELL_LOAD_DELAY{750};
+  // Pause duration (ms) between bot actions so humans can follow along.
+  static constexpr std::chrono::milliseconds BOT_ACTION_DELAY{1500};
 
   Player *playerOne;                ///< Pointer to player one (non-owning).
   Player *playerTwo;                ///< Pointer to player two (non-owning).
