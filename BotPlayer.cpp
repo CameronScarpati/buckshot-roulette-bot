@@ -519,6 +519,25 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   else if (std::abs(pLive - 1.0f) < EPSILON)
     return liveShellAction(currentShotgun);
 
+  // Heuristic: always use magnifying glass first when shell is unknown.
+  // Information enables perfectly informed decisions on subsequent actions
+  // (blank → shoot self for free turn, live → handcuffs/handsaw/shoot combo).
+  if (hasItem("Magnifying Glass"))
+    return Action::USE_MAGNIFYING_GLASS;
+
+  // Heuristic: use handcuffs before committing to a shot when odds are uncertain.
+  // Prevents opponent from retaliating regardless of outcome.
+  if (hasItem("Handcuffs") && !hasUsedHandcuffsThisTurn() &&
+      pLive > 0.3f && pBlank > 0.3f)
+    return Action::USE_HANDCUFFS;
+
+  // Heuristic: use beer when very few shells remain to gain certainty or
+  // trigger a reload for fresh items. With <=2 shells at 50/50, beer gives
+  // perfect information about the remaining shell(s).
+  if (hasItem("Beer") && currentShotgun->getTotalShellCount() <= 2 &&
+      pLive > 0.3f && pBlank > 0.3f)
+    return Action::DRINK_BEER;
+
   std::cout << "Live Probability: " << pLive << "\n";
   std::cout << "Blank Probability: " << pBlank << "\n";
 
