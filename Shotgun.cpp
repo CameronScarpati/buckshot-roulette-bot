@@ -21,7 +21,7 @@ std::ostream &operator<<(std::ostream &os, const ShellType &shell) {
 void Shotgun::loadShells() {
   static std::random_device rd;
   static std::mt19937 gen(rd());
-  std::uniform_int_distribution<int> dist(2, 8);
+  std::uniform_int_distribution<int> dist(MIN_SHELLS, MAX_SHELLS);
 
   totalShells = dist(gen);
 

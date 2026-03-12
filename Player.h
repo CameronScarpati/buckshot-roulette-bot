@@ -24,6 +24,7 @@ enum class Action : int {
   USE_HANDSAW = 6           ///< Doubles live round damage.
 };
 
+// Maximum number of items a player can hold in their inventory at once.
 static constexpr int MAX_ITEMS = 8;
 
 /**

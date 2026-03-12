@@ -130,7 +130,7 @@ SimulatedGame &SimulatedGame::operator=(SimulatedGame &&other) noexcept {
   return *this;
 }
 
-void SimulatedGame::printShells() {
+void SimulatedGame::printShells() const {
   throw std::logic_error(
       "SimulatedGame::printShells() should not be called in simulation.");
 }

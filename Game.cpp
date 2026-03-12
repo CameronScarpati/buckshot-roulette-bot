@@ -23,7 +23,8 @@ Game::Game(Player *pOne, Player *pTwo, bool isPlayerOneTurn)
 void Game::distributeItems() {
   static std::random_device rd;
   static std::mt19937 gen(rd());
-  std::uniform_int_distribution<int> itemCountDist(2, 5);
+  std::uniform_int_distribution<int> itemCountDist(MIN_ITEMS_PER_ROUND,
+                                                     MAX_ITEMS_PER_ROUND);
   int itemCount = itemCountDist(gen);
 
   std::vector<std::string_view> itemTypes = {
@@ -56,7 +57,7 @@ void Game::distributeItems() {
   }
 }
 
-void Game::printShells() {
+void Game::printShells() const {
   std::cout << Color::red << "Shotgun was loaded with "
             << shotgun->getLiveShellCount() << " live rounds and "
             << shotgun->getBlankShellCount() << " blank rounds."
@@ -214,7 +215,7 @@ bool Game::checkRoundEnd() const noexcept {
 }
 
 bool Game::handleRoundEnd() {
-  printDivider(60);
+  printDivider(WIDE_DISPLAY_WIDTH);
 
   if (!playerTwo->isAlive()) {
     std::cout << playerOne->getName() << " wins the round!"
@@ -231,20 +232,22 @@ bool Game::handleRoundEnd() {
   playerOne->resetHealth();
   playerTwo->resetHealth();
 
-  if (playerOneWins >= 3) {
+  if (playerOneWins >= ROUNDS_TO_WIN) {
     std::cout << Color::yellow << playerOne->getName()
-              << " wins the game by winning 3 rounds!" << Color::reset << "\n";
+              << " wins the game by winning " << ROUNDS_TO_WIN << " rounds!"
+              << Color::reset << "\n";
     return true;
-  } else if (playerTwoWins >= 3) {
+  } else if (playerTwoWins >= ROUNDS_TO_WIN) {
     std::cout << Color::yellow << playerTwo->getName()
-              << " wins the game by winning 3 rounds!" << Color::reset << "\n";
+              << " wins the game by winning " << ROUNDS_TO_WIN << " rounds!"
+              << Color::reset << "\n";
     return true;
   }
 
   // Set up next round
   distributeItems();
   shotgun->loadShells();
-  std::this_thread::sleep_for(std::chrono::milliseconds(750));
+  std::this_thread::sleep_for(SHELL_LOAD_DELAY);
   printShells();
   currentRound++;
 
@@ -252,26 +255,26 @@ bool Game::handleRoundEnd() {
   isPlayerOneTurn = !isPlayerOneTurn;
 
   std::cout << "\n";
-  printHeader("Round " + std::to_string(currentRound), 60);
+  printHeader("Round " + std::to_string(currentRound), WIDE_DISPLAY_WIDTH);
   std::cout << playerOne->getName() << " has " << playerOneWins
             << " round wins."
             << "\n";
   std::cout << playerTwo->getName() << " has " << playerTwoWins
             << " round wins."
             << "\n";
-  printDivider(60);
+  printDivider(WIDE_DISPLAY_WIDTH);
 
   return false; // The Game continues
 }
 
 void Game::runGame() {
-  printHeader("Buckshot Roulette", 60);
+  printHeader("Buckshot Roulette", WIDE_DISPLAY_WIDTH);
   std::cout << Color::blue << "Good luck to both players!" << Color::reset
             << "\n\n";
 
   distributeItems();
   shotgun->loadShells();
-  std::this_thread::sleep_for(std::chrono::milliseconds(750));
+  std::this_thread::sleep_for(SHELL_LOAD_DELAY);
   printShells();
 
   while (true) {
@@ -285,15 +288,15 @@ void Game::runGame() {
       std::cout << "\nShotgun is empty. Reloading...\n";
       distributeItems();
       shotgun->loadShells();
-      std::this_thread::sleep_for(std::chrono::milliseconds(750));
+      std::this_thread::sleep_for(SHELL_LOAD_DELAY);
       printShells();
     }
 
     std::cout << "\n";
-    printHeader("Player Status", 60);
+    printHeader("Player Status", WIDE_DISPLAY_WIDTH);
     std::cout << *playerOne << "\n";
     std::cout << *playerTwo << "\n";
-    printDivider(60);
+    printDivider(WIDE_DISPLAY_WIDTH);
 
     Player *currentPlayer = isPlayerOneTurn ? playerOne : playerTwo;
     currentPlayer->printItems();
@@ -306,7 +309,7 @@ void Game::runGame() {
   }
 
   std::cout << "\n";
-  printHeader("Game Over!", 60);
+  printHeader("Game Over!", WIDE_DISPLAY_WIDTH);
 }
 
 Player *Game::getPlayerOne() const noexcept { return playerOne; }

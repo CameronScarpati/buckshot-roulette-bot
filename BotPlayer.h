@@ -6,7 +6,9 @@
 #include "Simulations/SimulatedPlayer.h"
 #include "Simulations/SimulatedShotgun.h"
 #include <chrono>
+#include <limits>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -16,30 +18,54 @@
  */
 class BotPlayer final : public Player {
 private:
-  // State evaluation weights
+  // -- Terminal state evaluation scores --
+  // Extreme values returned when a player is dead (win/loss).
+  static constexpr float TERMINAL_LOSS_SCORE = -1000.0f;
+  static constexpr float TERMINAL_WIN_SCORE = 1000.0f;
+
+  // -- Heuristic evaluation weights --
+  // Scales the normalized health differential (our HP vs. opponent HP).
   static constexpr float HEALTH_WEIGHT = 150.0f;
+  // Scales the sum of actionable item values for the current player.
   static constexpr float ITEM_WEIGHT = 15.0f;
+  // Scales the favorability of the remaining shell composition.
   static constexpr float SHELL_WEIGHT = 60.0f;
+  // Bonus/penalty for whose turn it is (tempo advantage).
   static constexpr float TURN_WEIGHT = 85.0f;
+  // Bonus when the opponent is handcuffed (they lose a turn).
   static constexpr float HANDCUFF_WEIGHT = 90.0f;
+  // Bonus when we know the next shell (information advantage).
   static constexpr float MAGNIFYING_GLASS_WEIGHT = 180.0f;
+  // Bonus when handsaw is active on our turn (double damage potential).
   static constexpr float HANDSAW_WEIGHT = 70.0f;
+  // Minor bonus per extra item held over the opponent.
   static constexpr float ITEM_COUNT_WEIGHT = 5.0f;
+  // Penalty applied when it's our turn and live shell probability is high.
   static constexpr float DANGEROUS_TURN_PENALTY = 80.0f;
 
-  // State item values - Adjusted
+  // -- Individual item values for the evaluation heuristic --
+  // Beer: low value, only ejects a shell (minor information/tempo gain).
   static constexpr float BEER_VALUE = 5.0f;
+  // Cigarette: moderate value, restores 1 HP.
   static constexpr float CIGARETTE_VALUE = 20.0f;
+  // Handcuffs: high value, denies the opponent a full turn.
   static constexpr float HANDCUFFS_VALUE = 25.0f;
+  // Magnifying Glass: highest value, reveals shell type for optimal play.
   static constexpr float MAGNIFYING_GLASS_VALUE = 50.0f;
+  // Handsaw: moderate value, doubles next shot damage.
   static constexpr float HANDSAW_VALUE = 20.0f;
 
-  // Search parameters
+  // -- Search parameters --
+  // Upper bound on iterative-deepening search depth.
   static constexpr int MAX_SEARCH_DEPTH = 10;
+  // Starting depth for iterative-deepening search.
   static constexpr int MIN_SEARCH_DEPTH = 5;
+  // Tolerance for floating-point probability comparisons.
   static constexpr float EPSILON = 0.0001f;
-  static constexpr std::chrono::milliseconds TIME_LIMIT{
-      1000}; // 1000ms time limit
+  // Maximum wall-clock time allowed for the search.
+  static constexpr std::chrono::milliseconds TIME_LIMIT{1000};
+  // Threshold above which a high live-shell probability triggers a penalty.
+  static constexpr float DANGEROUS_LIVE_THRESHOLD = 0.7f;
 
   /**
    * @brief Returns a numerical value for an item (for evaluation purposes)

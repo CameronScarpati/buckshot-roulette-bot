@@ -2,8 +2,11 @@
 #include "Game.h"
 #include "HumanPlayer.h"
 
+// Starting hit points for each player at the beginning of every round.
+static constexpr int INITIAL_HEALTH = 3;
+
 int main() {
-  const int initialHealth = 3;
+  constexpr int initialHealth = INITIAL_HEALTH;
 
   auto *human = new HumanPlayer("Cameron", initialHealth);
   auto *dealer = new BotPlayer("Dealer", initialHealth, human);

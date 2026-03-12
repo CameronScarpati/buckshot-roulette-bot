@@ -29,6 +29,11 @@ std::ostream &operator<<(std::ostream &os, const ShellType &shell);
  */
 class Shotgun {
 protected:
+  // Minimum total shells loaded per round.
+  static constexpr int MIN_SHELLS = 2;
+  // Maximum total shells loaded per round.
+  static constexpr int MAX_SHELLS = 8;
+
   int totalShells = 0;                ///< Total number of shells.
   int liveShells = 0;                 ///< Live shells remaining.
   int blankShells = 0;                ///< Blank shells remaining.
