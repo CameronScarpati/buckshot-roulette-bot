@@ -26,12 +26,15 @@ private:
 
   // -- Heuristic evaluation weights --
   // Scales the normalized health differential (our HP vs. opponent HP).
-  static constexpr float HEALTH_WEIGHT = 200.0f;
+  // At maxHP=3, 1 HP = HEALTH_WEIGHT / 3.  Must dominate item scores
+  // so dealing damage is always preferred over hoarding items.
+  static constexpr float HEALTH_WEIGHT = 600.0f;
   // Scales the difference in total held item values between players.
-  // Kept low so the bot prefers using items for strategic advantage over
-  // hoarding them.  Max item score at 8: 8 * 8 * 40 = 2560 (well below
-  // terminal 10000).
-  static constexpr float ITEM_WEIGHT = 8.0f;
+  // Must be low enough that strategic weights (HANDCUFF_WEIGHT=100,
+  // HANDSAW_WEIGHT=80, MG_WEIGHT=300) easily exceed the item-loss
+  // penalty from using the item (value * ITEM_WEIGHT).
+  // Max item score at 1: 8 * 40 * 1 = 320 (well below terminal 10000).
+  static constexpr float ITEM_WEIGHT = 1.0f;
   // Bonus/penalty for whose turn it is (tempo advantage).
   static constexpr float TURN_WEIGHT = 50.0f;
   // Bonus when the opponent is handcuffed (they lose a turn).
