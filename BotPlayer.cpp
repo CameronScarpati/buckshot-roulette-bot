@@ -519,10 +519,11 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   else if (std::abs(pLive - 1.0f) < EPSILON)
     return liveShellAction(currentShotgun);
 
-  // Heuristic: always use magnifying glass first when shell is unknown.
-  // Information enables perfectly informed decisions on subsequent actions
-  // (blank → shoot self for free turn, live → handcuffs/handsaw/shoot combo).
-  if (hasItem("Magnifying Glass"))
+  // Heuristic: use magnifying glass first when the shell outcome is genuinely
+  // uncertain.  Skip it when we can already deduce the shell (e.g. only one
+  // type remains — handled above — or only one shell left where the
+  // probabilities already tell us everything we need).
+  if (hasItem("Magnifying Glass") && currentShotgun->getTotalShellCount() > 1)
     return Action::USE_MAGNIFYING_GLASS;
 
   // Heuristic: use handcuffs before committing to a shot when odds are uncertain.
