@@ -192,6 +192,13 @@ bool BotPlayer::performAction(Action action, SimulatedGame *state,
   case Action::DRINK_BEER:
     currentPlayer->resetKnownNextShell();
     currentPlayer->removeItemByName("Beer");
+    // Eject the shell from the shotgun (beer racks/ejects the current shell)
+    if (simShotgun) {
+      if (shell == ShellType::LIVE_SHELL)
+        simShotgun->simulateLiveShell();
+      else
+        simShotgun->simulateBlankShell();
+    }
     return state->isPlayerOneTurnNow();
 
   case Action::USE_HANDSAW:
@@ -262,20 +269,13 @@ BotPlayer::simulateAction(SimulatedGame *state, Action action) {
     return {std::move(liveReveal), std::move(blankReveal)};
   } else if (action == Action::DRINK_BEER) {
     // Simulate beer usage for both live and blank shell outcomes.
+    // Shell ejection is now handled inside performAction for Beer.
     auto liveBranch = std::make_unique<SimulatedGame>(*state);
-    auto *liveShotgun =
-        dynamic_cast<SimulatedShotgun *>(liveBranch->getShotgun());
-    if (liveShotgun && liveShotgun->getLiveShellCount() > 0)
-      liveShotgun->simulateLiveShell();
     bool turnAfterLive = performAction(Action::DRINK_BEER, liveBranch.get(),
                                        ShellType::LIVE_SHELL);
     liveBranch->changePlayerTurn(turnAfterLive);
 
     auto blankBranch = std::make_unique<SimulatedGame>(*state);
-    auto *blankShotgun =
-        dynamic_cast<SimulatedShotgun *>(blankBranch->getShotgun());
-    if (blankShotgun && blankShotgun->getBlankShellCount() > 0)
-      blankShotgun->simulateBlankShell();
     bool turnAfterBlank = performAction(Action::DRINK_BEER, blankBranch.get(),
                                         ShellType::BLANK_SHELL);
     blankBranch->changePlayerTurn(turnAfterBlank);
