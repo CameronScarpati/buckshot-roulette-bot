@@ -12,36 +12,20 @@
   <h3 align="center">Buckshot Roulette Bot</h3>
 
   <p align="center">
-    An optimal AI bot designed to win the game of Buckshot Roulette using Expectiminimax search.
-    <br />
-    <a href="https://github.com/CameronScarpati/buckshot-roulette-bot"><strong>Explore the docs »</strong></a>
+    An AI that plays <a href="https://store.steampowered.com/app/2537590/BUCKSHOT_ROULETTE/">Buckshot Roulette</a> optimally using Expectiminimax search with alpha-beta pruning.
     <br />
     <br />
-    <a href="https://github.com/CameronScarpati/buckshot-roulette-bot">View Demo</a>
-    ·
     <a href="https://github.com/CameronScarpati/buckshot-roulette-bot/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
-    ·
+    &middot;
     <a href="https://github.com/CameronScarpati/buckshot-roulette-bot/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
   </p>
 </div>
 
-## About The Project
+## About
 
-This project implements an AI bot designed to
-play [Buckshot Roulette](https://steamcommunity.com/sharedfiles/filedetails/?id=3218902482)
-optimally. Buckshot Roulette is a strategic game that combines luck and decision-making, where
-players take turns using a shotgun loaded with both live and blank shells.
+Buckshot Roulette is a strategic tabletop game where two players take turns with a shotgun loaded with a hidden sequence of live and blank shells. Each turn, a player can shoot themselves or their opponent, and use items to gain an edge. This project builds an AI that plays the game optimally by searching the full decision tree, weighing probabilistic outcomes, and selecting the highest-value action at every turn.
 
-The bot uses an Expectiminimax algorithm with alpha-beta pruning to evaluate possible game states
-and make optimal decisions. It considers probabilities, health states, and available items to
-determine the best action at each turn.
-
-Key features:
-
-- Strategic decision-making using lookahead search
-- Item usage optimization (Cigarettes, Handcuffs, Magnifying Glass, etc.)
-- Probabilistic reasoning for shell outcomes
-- Dynamic evaluation of game states
+The bot uses an **Expectiminimax algorithm with alpha-beta pruning** -- the standard approach for adversarial games with chance nodes. It evaluates thousands of future game states per move within a 1-second time budget, using iterative deepening (depth 5-10) to balance search quality with responsiveness.
 
 ### Built With
 
@@ -50,110 +34,182 @@ Key features:
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## Getting Started
+## Architecture
 
-To set up the project locally, follow these steps.
+```
+├── main.cpp                   # Entry point and game mode selection
+├── Game.h/.cpp                # Round lifecycle, turn management, win conditions
+├── Player.h/.cpp              # Abstract base: health, inventory, turn state
+│   ├── HumanPlayer            # Terminal input for human players
+│   ├── BotPlayer              # Expectiminimax AI decision engine
+│   └── SimulatedPlayer        # Lightweight clone used during search
+├── Shotgun.h/.cpp             # Shell queue, draw mechanics, saw state
+│   └── SimulatedShotgun       # Probability-only copy (no real shell queue)
+├── Items/
+│   ├── Item.h/.cpp            # Abstract base + factory method (createByName)
+│   ├── Cigarette              # Restore 1 HP
+│   ├── Beer                   # Eject current shell
+│   ├── Handcuffs              # Skip opponent's next turn
+│   ├── Handsaw                # Double next live round's damage
+│   └── MagnifyingGlass        # Reveal the next shell
+└── Simulations/
+    ├── SimulatedGame           # Deep-copyable game state for tree search
+    ├── SimulatedPlayer         # Cloneable player with item reconstruction
+    └── SimulatedShotgun        # Tracks live/blank counts without a real queue
+```
 
-### Prerequisites
+**Key design patterns:**
 
-Ensure you have the following installed:
+| Pattern | Where | Purpose |
+|---------|-------|---------|
+| **Factory** | `Item::createByName()` | Instantiate items by name string |
+| **Strategy** | `Player::chooseAction()` | Polymorphic decision-making (human input vs. AI search) |
+| **Prototype** | `Item::clone()` | Deep-copy inventory during state simulation |
+| **Template Method** | `Game::runGame()` | Shared round flow with subclass-specific behavior |
 
-* **C++ Compiler**: A compiler that supports C++17 or later.
-* **CMake**: Version 3.15 or newer.
-  ```sh
-  # For Ubuntu
-  sudo apt-get update
-  sudo apt-get install -y cmake
-
-  # For macOS
-  brew install cmake
-  ```
-
-### Installation
-
-1. **Clone the repository**:
-   ```sh
-   git clone https://github.com/CameronScarpati/buckshot-roulette-bot.git
-   cd buckshot-roulette-bot
-   ```
-
-2. **Create a build directory and navigate into it**:
-   ```sh
-   mkdir build && cd build
-   ```
-
-3. **Configure the project using CMake**:
-   ```sh
-   cmake ..
-   ```
-
-4. **Build the project**:
-   ```sh
-   cmake --build .
-   ```
+The `Simulations/` layer exists so the AI can explore future states without mutating the real game. Each node in the search tree gets its own deep-copied `SimulatedGame`, with `SimulatedPlayer` and `SimulatedShotgun` objects that track only the information needed for evaluation.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## Usage
+## How the AI Works
 
-After building the project, you can run the executable to play against the AI:
+The bot's decision engine is a time-bounded **Expectiminimax** search with **alpha-beta pruning**:
+
+1. **Action enumeration** -- On each turn, the bot identifies all feasible actions (shoot self, shoot opponent, use an item) based on current inventory and game state.
+
+2. **Strategic prioritization** -- Actions are ordered so the most promising branches are searched first. Known-shell shots and information-gathering items (Magnifying Glass) are evaluated before lower-value moves, which improves alpha-beta cutoff rates.
+
+3. **Expectiminimax tree search** -- The bot builds a game tree where:
+   - **Max nodes** represent the bot's turns (maximize expected value).
+   - **Min nodes** represent the opponent's turns (minimize expected value).
+   - **Chance nodes** represent uncertain shell draws, with branches weighted by `P(live)` and `P(blank)`.
+
+   Deterministic actions (Cigarette, Handsaw, Handcuffs) skip the chance layer entirely.
+
+4. **Alpha-beta pruning** -- Standard pruning eliminates branches that cannot influence the final decision, reducing the effective branching factor significantly.
+
+5. **State evaluation** -- Leaf nodes are scored by a weighted heuristic considering health differential (150), item advantage (Magnifying Glass: 180, Handcuffs: 90, Handsaw: 70), turn advantage (85), shell distribution favorability (60), and a penalty for holding the turn when the shell distribution is dangerous (80).
+
+6. **Time management** -- Search runs with iterative deepening from depth 5 to 10, hard-capped at 1 second. The best result found within the time budget is used.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## Sample Gameplay
+
+```
+=== Round 1 ===
+Shotgun loaded with 5 shells: 3 live, 2 blank.
+
+Cameron's items: [Magnifying Glass] [Cigarette] [Handcuffs]
+Dealer's items:  [Beer] [Handsaw] [Magnifying Glass]
+
+Cameron's turn (HP: 3)
+> Available actions: shoot self, shoot opponent, use magnifying glass, use cigarette, use handcuffs
+> Choice: use magnifying glass
+  Cameron peeks at the next shell... it's LIVE.
+
+Cameron's turn (HP: 3)
+> Choice: use handcuffs
+  Dealer is handcuffed! They will skip their next turn.
+
+Cameron's turn (HP: 3)
+> Choice: shoot opponent
+  BANG! Dealer takes 1 damage. (HP: 3 -> 2)
+
+Dealer's turn -- SKIPPED (handcuffed)
+
+Cameron's turn (HP: 3)
+> Choice: shoot self
+  *click* -- blank shell. Cameron keeps their turn.
+
+Cameron's turn (HP: 3)
+> Choice: shoot opponent
+  BANG! Dealer takes 1 damage. (HP: 2 -> 1)
+
+Dealer's turn (HP: 1)
+  Dealer uses Beer. Ejected shell: LIVE.
+  Dealer uses Magnifying Glass. Next shell is BLANK.
+  Dealer shoots self.
+  *click* -- blank shell. Dealer keeps their turn.
+
+  ...
+
+=== Cameron wins the round! ===
+```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## Getting Started
+
+### Prerequisites
+
+* **C++ compiler** with C++17 support (GCC 7+, Clang 5+, MSVC 2017+)
+* **CMake** 3.15+
+
+```sh
+# Ubuntu / Debian
+sudo apt-get update && sudo apt-get install -y cmake g++
+
+# macOS
+brew install cmake
+```
+
+### Build
+
+```sh
+git clone https://github.com/CameronScarpati/buckshot-roulette-bot.git
+cd buckshot-roulette-bot
+mkdir build && cd build
+cmake ..
+cmake --build .
+```
+
+### Run
 
 ```sh
 ./buckshot_roulette_bot
 ```
 
-The game supports three modes:
+### Test
 
-- Human vs. Bot: Test your skills against the AI
-- Human vs. Human: Play with a friend
-- Bot vs. Bot: Watch the AI play against itself
+```sh
+# From the build directory
+cmake --build . --target tests
+ctest --output-on-failure
+```
 
-### Game Rules
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-- Each round starts with a shotgun loaded with live and blank shells
-- Players take turns either shooting themselves or their opponent
-- Live shells deal damage; blank shells grant an extra turn
-- Items can be used strategically:
-    - Cigarette: Restores 1 HP
-    - Magnifying Glass: Reveals the next shell
-    - Handcuffs: Makes opponent skip their next turn
-    - Beer: Ejects the current shell
-    - Handsaw: Doubles the damage to the next live round
+## Game Modes
 
-The first player to win three rounds is the victor.
+| Mode | Description |
+|------|-------------|
+| **Human vs. Bot** | Test your skills against the AI |
+| **Human vs. Human** | Play with a friend over the terminal |
+| **Bot vs. Bot** | Watch two AI agents play against each other |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Roadmap
 
-- [x] Implement basic game mechanics
-- [x] Develop initial bot strategy using Expectiminimax
-- [ ] Support for "double or nothing" items
-- [ ] Create interface to use the bot as an advisor for real games
+- [x] Core game mechanics (shells, items, rounds, win conditions)
+- [x] Expectiminimax bot with alpha-beta pruning
+- [x] Time-bounded iterative deepening search
+- [ ] Advisor mode for use alongside the real game
 
-See the [open issues](https://github.com/CameronScarpati/buckshot-roulette-bot/issues) for a full
-list of proposed features and known issues.
+See the [open issues](https://github.com/CameronScarpati/buckshot-roulette-bot/issues) for a full list of proposed features and known issues.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Contributing
 
-Contributions are welcome! If you have suggestions for improving the bot or adding new features,
-please fork the repository and create a pull request.
+Contributions are welcome. Fork the repo, create a feature branch, and open a pull request.
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-### Development Areas
-
-- **AI Improvements**: Enhance the decision-making capabilities of the bot
-- **UI Enhancements**: Improve the game's text-based interface
-- **Performance Optimization**: Reduce memory usage and increase search depth
-- **New Items**: Implement additional items from the original game
-- **Testing**: Create comprehensive test cases for game mechanics
+```sh
+git checkout -b feature/your-feature
+git commit -m 'Add your feature'
+git push origin feature/your-feature
+```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -161,29 +217,20 @@ please fork the repository and create a pull request.
 
 Distributed under the MIT License. See `LICENSE.txt` for more information.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 ## Contact
 
 Cameron Scarpati - [LinkedIn](https://linkedin.com/in/cameron-scarpati) - cameronscarp@gmail.com
 
-Project
-Link: [https://github.com/CameronScarpati/buckshot-roulette-bot](https://github.com/CameronScarpati/buckshot-roulette-bot)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+Project Link: [github.com/CameronScarpati/buckshot-roulette-bot](https://github.com/CameronScarpati/buckshot-roulette-bot)
 
 ## Acknowledgments
 
-* [Buckshot Roulette](https://store.steampowered.com/app/2537590/BUCKSHOT_ROULETTE/) by Mike
-  Klubnika
+* [Buckshot Roulette](https://store.steampowered.com/app/2537590/BUCKSHOT_ROULETTE/) by Mike Klubnika
 * [Expectiminimax Algorithm](https://en.wikipedia.org/wiki/Expectiminimax_tree)
-* [C++ Standard Library](https://en.cppreference.com/w/)
-* [CMake Documentation](https://cmake.org/documentation/)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- MARKDOWN LINKS & IMAGES -->
-<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 
 [contributors-shield]: https://img.shields.io/github/contributors/CameronScarpati/buckshot-roulette-bot.svg?style=for-the-badge
 
