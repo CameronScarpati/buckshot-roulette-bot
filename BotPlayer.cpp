@@ -586,6 +586,8 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
     // Iterative deepening: search at increasing depths starting from
     // MIN_SEARCH_DEPTH, refining the best action at each level until the
     // time budget is exhausted or MAX_SEARCH_DEPTH is reached.
+    // Each completed depth REPLACES the previous result (deeper = more accurate).
+    // Partial depths (timed out mid-evaluation) are discarded.
     int maxDepthReached = 0;
     for (int depth = MIN_SEARCH_DEPTH; depth <= MAX_SEARCH_DEPTH; depth++) {
       bool timeOut = false;
@@ -620,13 +622,17 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
                   << "\n";
       }
 
-      // Update the best action if we completed this depth
-      if (!timeOut || !actionValues.empty()) {
+      // Only use results from fully completed depths — deeper searches are
+      // more accurate and should completely replace shallower results.
+      // Discard partial depths (timed out before all actions evaluated).
+      if (!timeOut) {
         maxDepthReached = depth;
 
-        // Find the best action at this depth
+        // Replace previous best with this depth's best
+        float depthBest = -std::numeric_limits<float>::infinity();
         for (const auto &[action, value] : actionValues) {
-          if (value > bestValue) {
+          if (value > depthBest) {
+            depthBest = value;
             bestValue = value;
             bestAction = action;
           }
