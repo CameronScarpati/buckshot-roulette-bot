@@ -134,6 +134,18 @@ public:
    * @param playerOneTurn Player turn boolean.
    */
   void changePlayerTurn(bool playerOneTurn) noexcept;
+
+  /**
+   * @brief Gets player one's round win count.
+   * @return Number of rounds won by player one.
+   */
+  [[nodiscard]] int getPlayerOneWins() const noexcept;
+
+  /**
+   * @brief Gets player two's round win count.
+   * @return Number of rounds won by player two.
+   */
+  [[nodiscard]] int getPlayerTwoWins() const noexcept;
 };
 
 #endif // BUCKSHOT_ROULETTE_BOT_GAME_H

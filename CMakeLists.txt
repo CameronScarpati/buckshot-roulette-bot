@@ -59,6 +59,9 @@ set(HEADERS
 
 add_executable(${PROJECT_NAME} main.cpp ${SOURCES} ${HEADERS})
 
+# Bot vs Bot simulation
+add_executable(simulate simulate.cpp ${SOURCES} ${HEADERS})
+
 # Testing
 option(BUILD_TESTS "Build unit tests" OFF)
 

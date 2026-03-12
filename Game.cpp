@@ -325,3 +325,7 @@ bool Game::isPlayerOneTurnNow() const noexcept { return isPlayerOneTurn; }
 void Game::changePlayerTurn(bool playerOneTurn) noexcept {
   isPlayerOneTurn = playerOneTurn;
 }
+
+int Game::getPlayerOneWins() const noexcept { return playerOneWins; }
+
+int Game::getPlayerTwoWins() const noexcept { return playerTwoWins; }
