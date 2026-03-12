@@ -28,7 +28,10 @@ private:
   // Scales the normalized health differential (our HP vs. opponent HP).
   static constexpr float HEALTH_WEIGHT = 200.0f;
   // Scales the difference in total held item values between players.
-  static constexpr float ITEM_WEIGHT = 25.0f;
+  // Kept low so the bot prefers using items for strategic advantage over
+  // hoarding them.  Max item score at 8: 8 * 8 * 40 = 2560 (well below
+  // terminal 10000).
+  static constexpr float ITEM_WEIGHT = 8.0f;
   // Bonus/penalty for whose turn it is (tempo advantage).
   static constexpr float TURN_WEIGHT = 50.0f;
   // Bonus when the opponent is handcuffed (they lose a turn).
