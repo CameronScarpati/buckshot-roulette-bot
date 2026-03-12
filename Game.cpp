@@ -325,6 +325,11 @@ void Game::runGame() {
 
     std::cout << currentPlayer->getName() << "'s turn:\n";
     Action action = currentPlayer->chooseAction(shotgun.get());
+
+    // Pause before bot actions so the human player can follow along.
+    if (dynamic_cast<BotPlayer *>(currentPlayer))
+      std::this_thread::sleep_for(BOT_ACTION_DELAY);
+
     bool turnEnds = performAction(action);
 
     determineTurnOrder(turnEnds);

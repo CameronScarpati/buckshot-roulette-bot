@@ -506,12 +506,6 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
   // The expectiminimax search already handles known shells, certain
   // probabilities, item combos, and all strategic considerations.
 
-  float pLive = currentShotgun->getLiveShellProbability();
-  float pBlank = currentShotgun->getBlankShellProbability();
-
-  std::cout << "Live Probability: " << pLive << "\n";
-  std::cout << "Blank Probability: " << pBlank << "\n";
-
   try {
     // Build a starting simulated state
     auto simShotgun = std::make_unique<SimulatedShotgun>(
@@ -566,7 +560,6 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
     // Now ownership of player pointers has been transferred to the
     // SimulatedGame
 
-    float bestValue = -std::numeric_limits<float>::infinity();
     Action bestAction = Action::SHOOT_OPPONENT;
 
     // Get current time for time-limited search
@@ -590,7 +583,6 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
     // time budget is exhausted or MAX_SEARCH_DEPTH is reached.
     // Each completed depth REPLACES the previous result (deeper = more accurate).
     // Partial depths (timed out mid-evaluation) are discarded.
-    int maxDepthReached = 0;
     for (int depth = MIN_SEARCH_DEPTH; depth <= MAX_SEARCH_DEPTH; depth++) {
       bool timeOut = false;
       std::unordered_map<Action, float> actionValues;
@@ -599,9 +591,6 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
       // shells, deterministic items, and probabilistic branches uniformly)
       for (auto action : actionsToTry) {
         float actionValue;
-
-        std::cout << "Evaluating action: " << static_cast<int>(action)
-                  << " at depth " << depth << "\n";
 
         try {
           actionValue =
@@ -619,17 +608,12 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
         }
 
         actionValues[action] = actionValue;
-        std::cout << "Action " << static_cast<int>(action)
-                  << " has value: " << actionValue << " at depth " << depth
-                  << "\n";
       }
 
       // Only use results from fully completed depths — deeper searches are
       // more accurate and should completely replace shallower results.
       // Discard partial depths (timed out before all actions evaluated).
       if (!timeOut) {
-        maxDepthReached = depth;
-
         // Replace previous best with this depth's best.
         // Tie-breaking: when multiple actions share the best value,
         // prefer offensive/impactful actions over passive ones.
@@ -657,7 +641,6 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
               (value == depthBest && pri > depthBestPriority)) {
             depthBest = value;
             depthBestPriority = pri;
-            bestValue = value;
             bestAction = action;
           }
         }
@@ -665,14 +648,9 @@ Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
 
       // Break if time limit reached
       if (timeOut) {
-        std::cout << "Search timed out at depth " << depth << "\n";
         break;
       }
     }
-
-    std::cout << "Completed search to depth " << maxDepthReached << "\n";
-    std::cout << "Best action: " << static_cast<int>(bestAction)
-              << " with value " << bestValue << "\n";
 
     return bestAction;
   } catch (const GameException &e) {
