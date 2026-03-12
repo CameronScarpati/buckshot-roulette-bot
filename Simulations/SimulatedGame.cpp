@@ -5,10 +5,11 @@
 #include <memory>
 
 SimulatedGame::SimulatedGame(SimulatedPlayer *p1, SimulatedPlayer *p2,
-                             SimulatedShotgun *shotgun, bool isPlayerOneTurn)
-    : Game(p1, p2, isPlayerOneTurn) {
+                             SimulatedShotgun *simShotgun,
+                             bool playerOneTurn)
+    : Game(p1, p2, playerOneTurn) {
   // Replace the shotgun with the simulation shotgun
-  this->shotgun.reset(shotgun);
+  shotgun.reset(simShotgun);
 }
 
 SimulatedGame::~SimulatedGame() {

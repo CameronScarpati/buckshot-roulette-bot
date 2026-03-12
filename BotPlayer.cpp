@@ -403,11 +403,12 @@ float BotPlayer::expectiMiniMax(
   return bestValue;
 }
 
-BotPlayer::BotPlayer(std::string name, int health)
-    : Player(std::move(name), health) {}
+BotPlayer::BotPlayer(std::string playerName, int playerHealth)
+    : Player(std::move(playerName), playerHealth) {}
 
-BotPlayer::BotPlayer(std::string name, int health, Player *opponent)
-    : Player(std::move(name), health, opponent) {}
+BotPlayer::BotPlayer(std::string playerName, int playerHealth,
+                     Player *playerOpponent)
+    : Player(std::move(playerName), playerHealth, playerOpponent) {}
 
 Action BotPlayer::liveShellAction(Shotgun *currentShotgun) {
   if (!currentShotgun)

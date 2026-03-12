@@ -2,11 +2,12 @@
 #include "Exceptions.h"
 #include <iostream>
 
-SimulatedPlayer::SimulatedPlayer(std::string name, int health)
-    : Player(std::move(name), health) {}
+SimulatedPlayer::SimulatedPlayer(std::string playerName, int playerHealth)
+    : Player(std::move(playerName), playerHealth) {}
 
-SimulatedPlayer::SimulatedPlayer(std::string name, int health, Player *opponent)
-    : Player(std::move(name), health, opponent) {}
+SimulatedPlayer::SimulatedPlayer(std::string playerName, int playerHealth,
+                                 Player *playerOpponent)
+    : Player(std::move(playerName), playerHealth, playerOpponent) {}
 
 SimulatedPlayer::SimulatedPlayer(const SimulatedPlayer &other)
     : Player(other) {}

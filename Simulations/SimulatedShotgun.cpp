@@ -2,7 +2,7 @@
 #include "Exceptions.h"
 
 SimulatedShotgun::SimulatedShotgun(int total, int live, int blank,
-                                   bool sawUsed) {
+                                   bool isSawUsed) {
   if (live + blank != total) {
     throw InvalidGameArgumentException(
         "Total shells must equal live shells + blank shells");
@@ -11,7 +11,7 @@ SimulatedShotgun::SimulatedShotgun(int total, int live, int blank,
   totalShells = total;
   liveShells = live;
   blankShells = blank;
-  this->sawUsed = sawUsed;
+  sawUsed = isSawUsed;
 }
 
 ShellType SimulatedShotgun::getNextShell() {
