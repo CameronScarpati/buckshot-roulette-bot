@@ -1,6 +1,6 @@
 #include "SimulatedPlayer.h"
+#include "Exceptions.h"
 #include <iostream>
-#include <stdexcept>
 
 SimulatedPlayer::SimulatedPlayer(std::string name, int health)
     : Player(std::move(name), health) {}
@@ -31,6 +31,6 @@ SimulatedPlayer &SimulatedPlayer::operator=(SimulatedPlayer &&other) noexcept {
 SimulatedPlayer::SimulatedPlayer(const Player &other) : Player(other) {}
 
 Action SimulatedPlayer::chooseAction(Shotgun * /*currentShotgun*/) {
-  throw std::logic_error(
+  throw SimulationException(
       "chooseAction() should not be called on a SimulatedPlayer!");
 }
