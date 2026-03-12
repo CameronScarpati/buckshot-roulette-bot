@@ -27,7 +27,7 @@ private:
   // Scales the normalized health differential (our HP vs. opponent HP).
   static constexpr float HEALTH_WEIGHT = 200.0f;
   // Scales the difference in total held item values between players.
-  static constexpr float ITEM_WEIGHT = 10.0f;
+  static constexpr float ITEM_WEIGHT = 25.0f;
   // Bonus/penalty for whose turn it is (tempo advantage).
   static constexpr float TURN_WEIGHT = 50.0f;
   // Bonus when the opponent is handcuffed (they lose a turn).
@@ -36,18 +36,22 @@ private:
   static constexpr float MAGNIFYING_GLASS_WEIGHT = 120.0f;
   // Bonus when handsaw is active on our turn (double damage potential).
   static constexpr float HANDSAW_WEIGHT = 80.0f;
+  // Bonus when shell distribution is extreme (active player can choose optimally).
+  static constexpr float SHELL_DISTRIBUTION_WEIGHT = 40.0f;
+  // Bonus for holding complementary item combos.
+  static constexpr float ITEM_SYNERGY_WEIGHT = 15.0f;
 
   // -- Individual item values for the evaluation heuristic --
   // Beer: ejects a shell (information/tempo gain).
-  static constexpr float BEER_VALUE = 10.0f;
+  static constexpr float BEER_VALUE = 20.0f;
   // Cigarette: restores 1 HP.
   static constexpr float CIGARETTE_VALUE = 15.0f;
   // Handcuffs: denies the opponent a full turn.
-  static constexpr float HANDCUFFS_VALUE = 30.0f;
+  static constexpr float HANDCUFFS_VALUE = 40.0f;
   // Magnifying Glass: reveals shell type for optimal play.
   static constexpr float MAGNIFYING_GLASS_VALUE = 40.0f;
   // Handsaw: doubles next shot damage.
-  static constexpr float HANDSAW_VALUE = 25.0f;
+  static constexpr float HANDSAW_VALUE = 35.0f;
 
   // -- Search parameters --
   // Upper bound on iterative-deepening search depth.

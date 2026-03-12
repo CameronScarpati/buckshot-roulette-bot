@@ -83,8 +83,48 @@ float BotPlayer::evaluateState(SimulatedGame *state) {
   // 4. Turn Advantage: bonus if it is our turn.
   float turnScore = (state->isPlayerOneTurnNow() ? TURN_WEIGHT : -TURN_WEIGHT);
 
+  // 5. Shell Distribution Favorability: extreme distributions (far from 50/50)
+  // favor the active player since they can choose shoot-self (if mostly blanks)
+  // or shoot-opponent (if mostly lives) optimally.
+  float shellScore = 0.0f;
+  int totalShells = state->getShotgun()->getTotalShellCount();
+  if (totalShells > 0) {
+    float pLive = state->getShotgun()->getLiveShellProbability();
+    float extremity = std::abs(pLive - 0.5f) * 2.0f; // 0 at 50/50, 1 at 100%
+    shellScore = SHELL_DISTRIBUTION_WEIGHT * extremity;
+    if (!state->isPlayerOneTurnNow())
+      shellScore = -shellScore;
+  }
+
+  // 6. Item Synergy: complementary item combos are worth more than their parts.
+  float synergyScore = 0.0f;
+  bool p1HasCuffs = state->getPlayerOne()->hasItem("Handcuffs");
+  bool p1HasSaw = state->getPlayerOne()->hasItem("Handsaw");
+  bool p1HasMag = state->getPlayerOne()->hasItem("Magnifying Glass");
+  bool p1HasBeer = state->getPlayerOne()->hasItem("Beer");
+  bool p2HasCuffs = state->getPlayerTwo()->hasItem("Handcuffs");
+  bool p2HasSaw = state->getPlayerTwo()->hasItem("Handsaw");
+  bool p2HasMag = state->getPlayerTwo()->hasItem("Magnifying Glass");
+  bool p2HasBeer = state->getPlayerTwo()->hasItem("Beer");
+
+  float p1Synergy = 0.0f;
+  float p2Synergy = 0.0f;
+  // Handcuffs + Handsaw: lock opponent down and deal double damage
+  if (p1HasCuffs && p1HasSaw) p1Synergy += 2.0f;
+  if (p2HasCuffs && p2HasSaw) p2Synergy += 2.0f;
+  // Handcuffs + Magnifying Glass: guaranteed optimal play with no retaliation
+  if (p1HasCuffs && p1HasMag) p1Synergy += 1.5f;
+  if (p2HasCuffs && p2HasMag) p2Synergy += 1.5f;
+  // Magnifying Glass + Handsaw: see live shell then double it
+  if (p1HasMag && p1HasSaw) p1Synergy += 1.0f;
+  if (p2HasMag && p2HasSaw) p2Synergy += 1.0f;
+  // Beer + Magnifying Glass: manipulate shells with information
+  if (p1HasBeer && p1HasMag) p1Synergy += 0.5f;
+  if (p2HasBeer && p2HasMag) p2Synergy += 0.5f;
+  synergyScore = ITEM_SYNERGY_WEIGHT * (p1Synergy - p2Synergy);
+
   // Total evaluation: sum of all weighted components.
-  return healthScore + itemScore + statusScore + turnScore;
+  return healthScore + itemScore + statusScore + turnScore + shellScore + synergyScore;
 }
 
 bool BotPlayer::performAction(Action action, SimulatedGame *state,
@@ -406,10 +446,8 @@ Action BotPlayer::liveShellAction(Shotgun *currentShotgun) {
   if (hasItem("Handsaw") && !currentShotgun->getSawUsed())
     return Action::USE_HANDSAW;
 
-  // If health is not full and a healing item is available, use it.
-  if (health < getMaxHealth() && hasItem("Cigarette"))
-    return Action::SMOKE_CIGARETTE;
-
+  // Shoot the opponent - don't waste turns healing when we have a confirmed
+  // live shell ready. Press the advantage.
   resetKnownNextShell();
   return Action::SHOOT_OPPONENT;
 }
@@ -438,8 +476,10 @@ BotPlayer::prioritizeStrategicActions(const std::vector<Action> &actions,
         action == Action::USE_MAGNIFYING_GLASS) {
       high_priority.push_back(action);
     }
-    // Medium priority: handcuffs, handsaw
-    else if (action == Action::USE_HANDCUFFS || action == Action::USE_HANDSAW) {
+    // Medium priority: handcuffs, handsaw, beer (beer is a key tempo tool
+    // for manipulating shell odds)
+    else if (action == Action::USE_HANDCUFFS || action == Action::USE_HANDSAW ||
+             action == Action::DRINK_BEER) {
       medium_priority.push_back(action);
     }
     // Low priority: other actions
