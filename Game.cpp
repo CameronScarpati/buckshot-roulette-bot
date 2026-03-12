@@ -175,6 +175,9 @@ bool Game::performAction(Action action) {
 
   case Action::DRINK_BEER: {
     if (currentPlayer->useItemByName("Beer", shotgun.get())) {
+      // Beer ejects the current shell, so any previously revealed shell
+      // knowledge (from Magnifying Glass) is now stale and must be cleared.
+      currentPlayer->resetKnownNextShell();
       turnEnds = false;
     } else {
       std::cout << currentPlayer->getName() << " has no Beer."
@@ -205,10 +208,13 @@ void Game::determineTurnOrder(bool currentTurnEnded) {
 
   if (currentTurnEnded) {
     if (otherPlayer->areHandcuffsApplied()) {
-      // Opponent is handcuffed: skip their turn, remove cuffs, but do NOT
-      // reset handcuff usage — this prevents the current player from chaining
-      // handcuffs across consecutive turns to lock the opponent out forever.
+      // Opponent is handcuffed: skip their turn, remove cuffs, and reset
+      // handcuff usage so the current player can cuff again with a new item
+      // on their next turn.  Double-cuffing within the same turn is still
+      // blocked by the hasUsedHandcuffsThisTurn() check — this only opens
+      // it up once the cuffed skip has been consumed.
       otherPlayer->removeHandcuffs();
+      currentPlayer->resetHandcuffUsage();
     } else {
       // Actual turn switch: reset handcuff usage for the departing player.
       currentPlayer->resetHandcuffUsage();
@@ -238,6 +244,12 @@ bool Game::handleRoundEnd() {
 
   playerOne->resetHealth();
   playerTwo->resetHealth();
+
+  // Clear transient per-round state so nothing leaks into the next round.
+  playerOne->resetKnownNextShell();
+  playerTwo->resetKnownNextShell();
+  playerOne->resetHandcuffUsage();
+  playerTwo->resetHandcuffUsage();
 
   if (playerOneWins >= ROUNDS_TO_WIN) {
     std::cout << Color::yellow << playerOne->getName()
@@ -293,6 +305,9 @@ void Game::runGame() {
 
     if (shotgun->isEmpty()) {
       std::cout << "\nShotgun is empty. Reloading...\n";
+      // Clear stale shell knowledge before reloading.
+      playerOne->resetKnownNextShell();
+      playerTwo->resetKnownNextShell();
       distributeItems();
       shotgun->loadShells();
       std::this_thread::sleep_for(SHELL_LOAD_DELAY);
