@@ -143,6 +143,7 @@ bool Game::performAction(Action action) {
 
   case Action::USE_HANDCUFFS: {
     if (!currentPlayer->hasUsedHandcuffsThisTurn() &&
+        !otherPlayer->areHandcuffsApplied() &&
         currentPlayer->useItemByName("Handcuffs")) {
       otherPlayer->applyHandcuffs();
       currentPlayer->useHandcuffsThisTurn();
@@ -203,12 +204,16 @@ void Game::determineTurnOrder(bool currentTurnEnded) {
   Player *otherPlayer = isPlayerOneTurn ? playerTwo : playerOne;
 
   if (currentTurnEnded) {
-    currentPlayer->resetHandcuffUsage();
-
-    if (otherPlayer->areHandcuffsApplied())
+    if (otherPlayer->areHandcuffsApplied()) {
+      // Opponent is handcuffed: skip their turn, remove cuffs, but do NOT
+      // reset handcuff usage — this prevents the current player from chaining
+      // handcuffs across consecutive turns to lock the opponent out forever.
       otherPlayer->removeHandcuffs();
-    else
+    } else {
+      // Actual turn switch: reset handcuff usage for the departing player.
+      currentPlayer->resetHandcuffUsage();
       isPlayerOneTurn = !isPlayerOneTurn;
+    }
   }
 }
 
@@ -325,3 +330,7 @@ bool Game::isPlayerOneTurnNow() const noexcept { return isPlayerOneTurn; }
 void Game::changePlayerTurn(bool playerOneTurn) noexcept {
   isPlayerOneTurn = playerOneTurn;
 }
+
+int Game::getPlayerOneWins() const noexcept { return playerOneWins; }
+
+int Game::getPlayerTwoWins() const noexcept { return playerTwoWins; }
