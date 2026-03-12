@@ -1,4 +1,5 @@
 #include "HumanPlayer.h"
+#include "Exceptions.h"
 #include <iostream>
 #include <limits>
 #include <string>
@@ -7,6 +8,30 @@
 static constexpr int MIN_ACTION_ID = 0;
 // Highest valid action index (Action::USE_HANDSAW).
 static constexpr int MAX_ACTION_ID = 6;
+
+namespace {
+Action actionFromInput(int input) {
+  switch (input) {
+  case 0:
+    return Action::SHOOT_SELF;
+  case 1:
+    return Action::SHOOT_OPPONENT;
+  case 2:
+    return Action::SMOKE_CIGARETTE;
+  case 3:
+    return Action::USE_HANDCUFFS;
+  case 4:
+    return Action::USE_MAGNIFYING_GLASS;
+  case 5:
+    return Action::DRINK_BEER;
+  case 6:
+    return Action::USE_HANDSAW;
+  default:
+    throw InvalidActionException("Invalid action input: " +
+                                 std::to_string(input));
+  }
+}
+} // namespace
 
 HumanPlayer::HumanPlayer(std::string name, int health)
     : Player(std::move(name), health) {}
@@ -35,7 +60,7 @@ Action HumanPlayer::chooseAction(Shotgun *currentShotgun) {
       continue;
     }
 
-    auto chosen = static_cast<Action>(input);
+    auto chosen = actionFromInput(input);
 
     // Validate the action based on current inventory and status
     if (!isValidAction(chosen))

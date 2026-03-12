@@ -1,8 +1,8 @@
 #include "SimulatedGame.h"
 #include "SimulatedPlayer.h"
 #include "SimulatedShotgun.h"
+#include "Exceptions.h"
 #include <memory>
-#include <stdexcept>
 
 SimulatedGame::SimulatedGame(SimulatedPlayer *p1, SimulatedPlayer *p2,
                              SimulatedShotgun *shotgun, bool isPlayerOneTurn)
@@ -31,8 +31,8 @@ SimulatedGame::SimulatedGame(const SimulatedGame &other)
   // Check if the shotgun is of the correct type
   auto *simShotgun = dynamic_cast<SimulatedShotgun *>(other.getShotgun());
   if (!simShotgun) {
-    throw std::logic_error("Trying to copy a SimulatedGame whose shotgun is "
-                           "not SimulatedShotgun!");
+    throw SimulationException("Trying to copy a SimulatedGame whose shotgun is "
+                              "not SimulatedShotgun!");
   }
 
   // Create a new shotgun instance
@@ -45,7 +45,7 @@ SimulatedGame::SimulatedGame(const SimulatedGame &other)
   auto *p2 = dynamic_cast<SimulatedPlayer *>(other.getPlayerTwo());
 
   if (!p1 || !p2) {
-    throw std::logic_error(
+    throw SimulationException(
         "Trying to copy SimulatedGame with invalid player types!");
   }
 
@@ -131,11 +131,11 @@ SimulatedGame &SimulatedGame::operator=(SimulatedGame &&other) noexcept {
 }
 
 void SimulatedGame::printShells() const {
-  throw std::logic_error(
+  throw SimulationException(
       "SimulatedGame::printShells() should not be called in simulation.");
 }
 
 void SimulatedGame::runGame() {
-  throw std::logic_error(
+  throw SimulationException(
       "SimulatedGame::runGame() should not be called in simulation.");
 }

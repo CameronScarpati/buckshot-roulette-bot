@@ -2,7 +2,6 @@
 #define BUCKSHOT_ROULETTE_BOT_SIMULATEDSHOTGUN_H
 
 #include "Shotgun.h"
-#include <stdexcept>
 
 /**
  * @class SimulatedShotgun

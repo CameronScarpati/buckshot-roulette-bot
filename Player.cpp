@@ -1,12 +1,16 @@
 #include "Player.h"
+#include "Exceptions.h"
 #include <algorithm>
-#include <stdexcept>
 #include <utility>
 
 int Player::maxHealth = 0;
 
 Player::Player(std::string name, int health)
     : name(std::move(name)), health(health), opponent(nullptr) {
+  if (health <= 0) {
+    throw InvalidGameArgumentException(
+        "Player health must be a positive value.");
+  }
   if (maxHealth == 0) {
     maxHealth = health;
   }
@@ -14,6 +18,10 @@ Player::Player(std::string name, int health)
 
 Player::Player(std::string name, int health, Player *opp)
     : name(std::move(name)), health(health), opponent(opp) {
+  if (health <= 0) {
+    throw InvalidGameArgumentException(
+        "Player health must be a positive value.");
+  }
   if (maxHealth == 0) {
     maxHealth = health;
   }
@@ -105,7 +113,7 @@ static constexpr int SAWED_DAMAGE = 2;
 
 void Player::loseHealth(bool sawUsed) {
   if (!isAlive()) {
-    throw std::runtime_error("This player is already dead.");
+    throw PlayerDeadException("This player is already dead.");
   }
   health -= sawUsed ? SAWED_DAMAGE : BASE_DAMAGE;
 }
@@ -148,7 +156,10 @@ ShellType Player::returnKnownNextShell() const noexcept {
 void Player::resetKnownNextShell() noexcept { nextShellRevealed = false; }
 
 bool Player::addItem(std::unique_ptr<Item> newItem) {
-  if (items.size() >= MAX_ITEMS || !newItem) {
+  if (!newItem) {
+    throw InvalidItemException("Cannot add a null item to inventory.");
+  }
+  if (items.size() >= MAX_ITEMS) {
     return false;
   }
   items.push_back(std::move(newItem));
