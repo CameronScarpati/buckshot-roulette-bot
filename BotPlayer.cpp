@@ -500,44 +500,12 @@ BotPlayer::prioritizeStrategicActions(const std::vector<Action> &actions,
 }
 
 Action BotPlayer::chooseAction(Shotgun *currentShotgun) {
-  // If the next shell is already revealed, decide based on its type
-  if (isNextShellRevealed()) {
-    if (returnKnownNextShell() == ShellType::LIVE_SHELL)
-      return liveShellAction(currentShotgun);
-    else {
-      resetKnownNextShell();
-      return Action::SHOOT_SELF;
-    }
-  }
+  // Let the search engine decide all actions — no heuristic shortcuts.
+  // The expectiminimax search already handles known shells, certain
+  // probabilities, item combos, and all strategic considerations.
 
   float pLive = currentShotgun->getLiveShellProbability();
   float pBlank = currentShotgun->getBlankShellProbability();
-
-  // If only blanks remain, shoot self; if only lives, act accordingly
-  if (std::abs(pBlank - 1.0f) < EPSILON)
-    return Action::SHOOT_SELF;
-  else if (std::abs(pLive - 1.0f) < EPSILON)
-    return liveShellAction(currentShotgun);
-
-  // Heuristic: use magnifying glass first when the shell outcome is genuinely
-  // uncertain.  Skip it when we can already deduce the shell (e.g. only one
-  // type remains — handled above — or only one shell left where the
-  // probabilities already tell us everything we need).
-  if (hasItem("Magnifying Glass") && currentShotgun->getTotalShellCount() > 1)
-    return Action::USE_MAGNIFYING_GLASS;
-
-  // Heuristic: use handcuffs before committing to a shot when odds are uncertain.
-  // Prevents opponent from retaliating regardless of outcome.
-  if (hasItem("Handcuffs") && !hasUsedHandcuffsThisTurn() &&
-      pLive > 0.3f && pBlank > 0.3f)
-    return Action::USE_HANDCUFFS;
-
-  // Heuristic: use beer when very few shells remain to gain certainty or
-  // trigger a reload for fresh items. With <=2 shells at 50/50, beer gives
-  // perfect information about the remaining shell(s).
-  if (hasItem("Beer") && currentShotgun->getTotalShellCount() <= 2 &&
-      pLive > 0.3f && pBlank > 0.3f)
-    return Action::DRINK_BEER;
 
   std::cout << "Live Probability: " << pLive << "\n";
   std::cout << "Blank Probability: " << pBlank << "\n";
@@ -712,9 +680,14 @@ std::vector<Action> BotPlayer::determineFeasibleActions(SimulatedGame *state) {
       !actingPlayer->hasUsedHandcuffsThisTurn())
     feasible.push_back(Action::USE_HANDCUFFS);
 
-  // Use informational items if available
+  // Use informational items if available — but skip when the shell is already
+  // known (revealed or deducible from probabilities, e.g. only 1 shell left
+  // or all shells are the same type).
   if (actingPlayer->hasItem("Magnifying Glass") &&
-      !actingPlayer->isNextShellRevealed())
+      !actingPlayer->isNextShellRevealed() &&
+      state->getShotgun()->getTotalShellCount() > 1 &&
+      state->getShotgun()->getLiveShellCount() > 0 &&
+      state->getShotgun()->getBlankShellCount() > 0)
     feasible.push_back(Action::USE_MAGNIFYING_GLASS);
 
   // Prefer to use Handsaw if available and if the saw hasn't been applied
