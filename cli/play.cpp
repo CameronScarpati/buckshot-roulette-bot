@@ -142,8 +142,13 @@ int runBatch(int rounds, unsigned seed, int charges, int players, int reloadBudg
                                             static_cast<std::uint8_t>(charges))
                   : RuleConfig::doubleOrNothing(static_cast<std::uint8_t>(charges));
   int wins = 0;
+  int unfinished = 0;
   long long moves = 0;
   long long nodes = 0;
+  // A round of this game can run a long way when both seats keep healing, so a
+  // cap keeps a batch bounded. Rounds that hit it are reported rather than
+  // counted as a result either way.
+  constexpr int kMoveCap = 400;
   for (int round = 0; round < rounds; ++round) {
     std::mt19937 rng(seed + static_cast<unsigned>(round));
     GameState state;
@@ -155,7 +160,7 @@ int runBatch(int rounds, unsigned seed, int charges, int players, int reloadBudg
     state.current = 0;
     reload(&state, config, &rng, false);
     int guard = 0;
-    while (!state.roundOver() && guard++ < 4000) {
+    while (!state.roundOver() && guard++ < kMoveCap) {
       while (rules::applyPendingSkip(&state)) {
         if (state.roundOver()) break;
       }
@@ -183,6 +188,7 @@ int runBatch(int rounds, unsigned seed, int charges, int players, int reloadBudg
       ++moves;
     }
     if (state.soleSurvivor() == 0) ++wins;
+    if (!state.roundOver()) ++unfinished;
   }
   std::cout << "rounds " << rounds << ", seed " << seed << ", " << charges << " charges, "
             << players << " seats, reload budget " << reloadBudget << "\n";
@@ -192,6 +198,10 @@ int runBatch(int rounds, unsigned seed, int charges, int players, int reloadBudg
             << std::fixed << std::setprecision(1)
             << (100.0 * static_cast<double>(wins) / static_cast<double>(rounds)) << " percent\n";
   std::cout << moves << " moves played, " << nodes << " states examined\n";
+  if (unfinished > 0) {
+    std::cout << unfinished << " rounds reached the " << kMoveCap
+              << " move cap without a winner and are counted as losses\n";
+  }
   return 0;
 }
 

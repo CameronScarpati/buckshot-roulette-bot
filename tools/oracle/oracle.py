@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from typing import NamedTuple
 
@@ -44,7 +45,7 @@ POOLS = {"don": POOL_DON, "mp": POOL_MP}
 ITEMS_PER_LOAD = 2
 TABLE_LIMIT = 8
 # Deterministic deal: seat i (1-based) takes items starting at pool index i.
-DEAL_INDEX_BASE = 1
+DEAL_INDEX_BASE = 0
 
 EPS = 1e-9
 
@@ -408,8 +409,6 @@ class Solver:
 # Position notation
 # --------------------------------------------------------------------------
 
-import re  # noqa: E402  (kept next to the parser it serves)
-
 SEAT_RE = re.compile(r"^p(\d+)=(\d+)(?:/(\d+))?(?:\[([^\]]*)\])?$")
 TURN_RE = re.compile(r"^turn=p(\d+)(?:\[([^\]]*)\])?$")
 TUBE_RE = re.compile(r"^tube=(\d+)l(\d+)b$")
@@ -658,6 +657,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seat", type=int, default=1, help="seat solved for (default 1)")
     ap.add_argument("--reloads", type=int, default=2, help="reload budget (default 2)")
     ap.add_argument("--mode", choices=("don", "mp"), default="don")
+    ap.add_argument("--json", action="store_true",
+                    help="accepted for argv compatibility with the C++ advisor; "
+                         "this tool always writes JSON")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args(argv)
 

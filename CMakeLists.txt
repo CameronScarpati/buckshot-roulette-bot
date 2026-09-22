@@ -55,29 +55,6 @@ add_executable(play cli/play.cpp)
 target_link_libraries(play PRIVATE bsr_core bsr_warnings)
 
 # ---------------------------------------------------------------------------
-# Previous engine, kept until the new one covers everything it did.
-# ---------------------------------------------------------------------------
-set(LEGACY_SOURCES
-    BotPlayer.cpp
-    Game.cpp
-    HumanPlayer.cpp
-    Player.cpp
-    Shotgun.cpp
-    Simulations/SimulatedPlayer.cpp
-    Simulations/SimulatedGame.cpp
-    Simulations/SimulatedShotgun.cpp
-    Items/Cigarette.cpp
-    Items/Handcuffs.cpp
-    Items/MagnifyingGlass.cpp
-    Items/Beer.cpp
-    Items/Handsaw.cpp
-    Items/Item.cpp
-)
-
-add_executable(${PROJECT_NAME} main.cpp ${LEGACY_SOURCES})
-add_executable(simulate simulate.cpp ${LEGACY_SOURCES})
-
-# ---------------------------------------------------------------------------
 # Tests. On by default: a test suite nobody runs is not a test suite, and the
 # README's build instructions used to fail because this defaulted to OFF.
 # ---------------------------------------------------------------------------
@@ -97,19 +74,11 @@ if(BUILD_TESTS)
 
     include(GoogleTest)
 
-    file(GLOB LEGACY_TEST_SOURCES tests/legacy/*.cpp)
-    file(GLOB CORE_TEST_SOURCES tests/*.cpp)
+    file(GLOB TEST_SOURCES tests/*.cpp)
 
-    if(CORE_TEST_SOURCES)
-        add_executable(tests ${CORE_TEST_SOURCES})
+    if(TEST_SOURCES)
+        add_executable(tests ${TEST_SOURCES})
         target_link_libraries(tests PRIVATE bsr_core bsr_warnings GTest::gtest_main)
         gtest_discover_tests(tests)
-    endif()
-
-    if(LEGACY_TEST_SOURCES)
-        add_executable(legacy_tests ${LEGACY_TEST_SOURCES} ${LEGACY_SOURCES})
-        target_link_libraries(legacy_tests PRIVATE GTest::gtest_main)
-        target_include_directories(legacy_tests PRIVATE ${CMAKE_SOURCE_DIR})
-        gtest_discover_tests(legacy_tests)
     endif()
 endif()

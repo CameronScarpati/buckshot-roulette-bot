@@ -3,11 +3,22 @@
 /// are the last player standing.
 
 #include <algorithm>
+#include <cstdio>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#if defined(_WIN32)
+#include <io.h>
+#define BSR_ISATTY _isatty
+#define BSR_FILENO _fileno
+#else
+#include <unistd.h>
+#define BSR_ISATTY isatty
+#define BSR_FILENO fileno
+#endif
 
 #include "engine/Notation.h"
 #include "engine/Rules.h"
@@ -262,12 +273,17 @@ int main(int argc, char** argv) {
   session.options.seat = startSeat;
   session.options.reloadBudget = reloads;
 
-  std::cout << "Buckshot Roulette advisor. Type help for commands, quit to leave.\n";
-  std::cout << notation::board(session.state) << "\n";
+  if (BSR_ISATTY(BSR_FILENO(stdin)) != 0) {
+    std::cout << "Buckshot Roulette advisor. Type help for commands, quit to leave.\n";
+    std::cout << notation::board(session.state) << "\n";
+  }
 
+  // A prompt is for a person. When input is piped, leaving it out keeps a
+  // captured session readable.
+  const bool interactive = BSR_ISATTY(BSR_FILENO(stdin)) != 0;
   std::string line;
   while (true) {
-    std::cout << "> " << std::flush;
+    if (interactive) std::cout << "> " << std::flush;
     if (!std::getline(std::cin, line)) {
       std::cout << "\n";
       break;
