@@ -46,18 +46,7 @@ std::vector<std::string> tokenize(const std::string& line) {
 }
 
 bool parseSeat(const std::string& text, const GameState& state, int* seat) {
-  if (text.size() >= 2 && (text[0] == 'p' || text[0] == 'P')) {
-    const int value = std::atoi(text.c_str() + 1);
-    if (value >= 1 && value <= state.playerCount) {
-      *seat = value - 1;
-      return true;
-    }
-  }
-  if (text == "self" || text == "me") {
-    *seat = state.current;
-    return true;
-  }
-  return false;
+  return cli::parseSeatToken(text, state.playerCount, state.current, seat);
 }
 
 bool parseShell(const std::string& text, Shell* shell) {
@@ -301,7 +290,15 @@ int runOnce(const std::string& position, int seat, int reloads, const std::strin
     config = RuleConfig::multiplayer(state.playerCount, state.players[0].maxHp);
     options.opponent = OpponentModel::Paranoid;
   } else if (mode.rfind("story", 0) == 0) {
-    config = RuleConfig::storyRound(mode.size() > 5 ? std::atoi(mode.c_str() + 5) : 2);
+    long round = 2;
+    if (mode.size() > 5 && !cli::parseWholeNumber(mode.substr(5), 1, 3, &round)) {
+      std::cerr << "Modes: don, story1, story2, story3, mp.\n";
+      return 1;
+    }
+    config = RuleConfig::storyRound(static_cast<int>(round));
+  } else if (mode != "don") {
+    std::cerr << "Modes: don, story1, story2, story3, mp.\n";
+    return 1;
   }
   const SolveResult result = solve(state, config, options);
   if (asJson) {
@@ -445,8 +442,12 @@ int main(int argc, char** argv) {
       if (mode == "don") {
         session.config = RuleConfig::doubleOrNothing(session.state.players[0].maxHp);
       } else if (mode.rfind("story", 0) == 0) {
-        const int round = mode.size() > 5 ? std::atoi(mode.c_str() + 5) : 2;
-        session.config = RuleConfig::storyRound(round);
+        long round = 2;
+        if (mode.size() > 5 && !cli::parseWholeNumber(mode.substr(5), 1, 3, &round)) {
+          std::cout << "Modes: don, story1, story2, story3, mp.\n";
+          continue;
+        }
+        session.config = RuleConfig::storyRound(static_cast<int>(round));
       } else if (mode == "mp" || mode == "multiplayer") {
         session.config =
             RuleConfig::multiplayer(session.state.playerCount, session.state.players[0].maxHp);

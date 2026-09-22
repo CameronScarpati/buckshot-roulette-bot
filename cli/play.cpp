@@ -216,8 +216,10 @@ int chooseFromMenu(const std::vector<Action>& actions, const GameState& state) {
     std::string line;
     if (!std::getline(std::cin, line)) return -1;
     if (line == "q" || line == "quit") return -1;
-    const int choice = std::atoi(line.c_str());
-    if (choice >= 1 && choice <= static_cast<int>(actions.size())) return choice - 1;
+    long choice = 0;
+    if (cli::parseWholeNumber(line, 1, static_cast<long>(actions.size()), &choice)) {
+      return static_cast<int>(choice) - 1;
+    }
     std::cout << "Pick a number from 1 to " << actions.size() << ", or q to quit.\n";
   }
 }

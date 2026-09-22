@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cerrno>
 #include <cctype>
+#include <cerrno>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -38,6 +38,26 @@ inline bool nextValue(int argc, char** argv, int* index, const std::string& flag
   ++*index;
   *out = argv[*index];
   return true;
+}
+
+/// A seat named the way every command names one: p1, p2, and so on, counting
+/// from one, or self and me for the seat to move. Returns the seat's index,
+/// counting from zero. The digits are checked before the range is, so a number
+/// too large for an int is refused rather than wrapped into a seat that is
+/// really at the table.
+inline bool parseSeatToken(const std::string& text, int playerCount, int currentSeat, int* seat) {
+  if (text == "self" || text == "me") {
+    *seat = currentSeat;
+    return true;
+  }
+  if (text.size() >= 2 && (text[0] == 'p' || text[0] == 'P')) {
+    long value = 0;
+    if (parseWholeNumber(text.substr(1), 1, playerCount, &value)) {
+      *seat = static_cast<int>(value) - 1;
+      return true;
+    }
+  }
+  return false;
 }
 
 /// A flag whose value is a whole number in a stated range.
