@@ -99,13 +99,18 @@ class Search {
   std::vector<Action> legalFor(const GameState& state) const {
     std::vector<Action> actions = rules::legalActions(state, config_);
     if (state.current == options_.seat || options_.opponentUsesInfoItems) return actions;
-    actions.erase(std::remove_if(actions.begin(), actions.end(),
-                                 [](const Action& action) {
-                                   return action.kind == Action::Kind::UseItem &&
-                                          (action.item == Item::MagnifyingGlass ||
-                                           action.item == Item::BurnerPhone);
-                                 }),
-                  actions.end());
+    const auto readsShells = [](Item item) {
+      return item == Item::MagnifyingGlass || item == Item::BurnerPhone;
+    };
+    actions.erase(
+        std::remove_if(actions.begin(), actions.end(),
+                       [&readsShells](const Action& action) {
+                         if (action.kind != Action::Kind::UseItem) return false;
+                         // Adrenaline can reach for one of these too.
+                         return readsShells(action.item) ||
+                                (action.item == Item::Adrenaline && readsShells(action.stolen));
+                       }),
+        actions.end());
     if (actions.empty()) actions.push_back(Action::shoot(state.current));
     return actions;
   }
@@ -168,6 +173,7 @@ SolveResult solve(const GameState& state, const RuleConfig& config, const SolveO
     if (start.roundOver()) break;
   }
 
+  result.mover = start.current;
   Search search(config, options);
   if (start.roundOver()) {
     result.value = start.soleSurvivor() == options.seat ? 1.0 : 0.0;

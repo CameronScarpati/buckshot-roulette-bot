@@ -237,6 +237,15 @@ bool parse(const std::string& text, GameState* state, std::string* error) {
     *error = "the seat to move has no charges left";
     return false;
   }
+  if (result.tube.chamberInverted && result.tube.truth[0] != Shell::Unknown) {
+    // The flag only means anything while the chamber is still an unresolved
+    // draw. Once a seat has seen the chamber, an inversion has a definite
+    // result, so the position should name the type it fires as.
+    *error =
+        "a chamber a seat has already seen cannot also be marked inverted; give the type it "
+        "fires as";
+    return false;
+  }
 
   *state = result;
   return true;

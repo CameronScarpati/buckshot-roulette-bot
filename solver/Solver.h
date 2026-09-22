@@ -38,7 +38,11 @@ struct ActionValue {
 
 struct SolveResult {
   double value = 0.0;
-  std::vector<ActionValue> ranked;  ///< best first
+  /// The seat the ranking belongs to. It is not always `options.seat`: a seat
+  /// that arrives handcuffed is skipped before anything is asked of it, so the
+  /// moves listed can be the opponent's.
+  int mover = 0;
+  std::vector<ActionValue> ranked;  ///< best first for `mover`
   long long nodes = 0;
   bool truncated = false;  ///< a node hit the reload budget or the node limit
   std::string assumptions;

@@ -77,8 +77,11 @@ bool Action::operator==(const Action& other) const {
   if (kind != other.kind) return false;
   if (kind == Kind::Shoot) return target == other.target;
   if (item != other.item) return false;
+  if (item == Item::Adrenaline) {
+    if (stolen != other.stolen || stealFrom != other.stealFrom) return false;
+    return !itemNeedsTarget(stolen) || target == other.target;
+  }
   if (itemNeedsTarget(item) && target != other.target) return false;
-  if (item == Item::Adrenaline && stolen != other.stolen) return false;
   return true;
 }
 
@@ -93,8 +96,9 @@ std::string Action::describe(int actingSeat) const {
     return out.str();
   }
   if (item == Item::Adrenaline) {
-    out << "steal " << itemName(stolen) << " from p" << (static_cast<int>(target) + 1)
+    out << "steal " << itemName(stolen) << " from p" << (static_cast<int>(stealFrom) + 1)
         << " and use it";
+    if (itemNeedsTarget(stolen)) out << " on p" << (static_cast<int>(target) + 1);
     return out.str();
   }
   out << "use " << itemName(item);

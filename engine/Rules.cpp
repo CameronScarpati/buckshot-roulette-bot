@@ -229,15 +229,11 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
       return out;
     }
     case Item::Adrenaline: {
-      // Paid for by the caller; resolve the stolen item as if the thief owned it.
+      // Paid for by the caller; resolve the stolen item as if the thief owned
+      // it, aimed wherever the action says. A stolen restraint names its own
+      // victim, which is not necessarily the seat it was taken from.
       Action inner = Action::use(action.stolen);
       inner.target = action.target;
-      if (action.stolen == Item::Handcuffs || action.stolen == Item::Jammer) {
-        // The stolen restraint still needs a victim: the first legal one that is
-        // not the seat it was stolen from, falling back to that seat.
-        const std::vector<int> seats = restrainableSeats(state);
-        inner.target = seats.empty() ? action.target : static_cast<std::uint8_t>(seats.front());
-      }
       return applyItemEffect(state, inner, config);
     }
   }
@@ -324,7 +320,13 @@ std::vector<Action> legalActions(const GameState& state, const RuleConfig& confi
         if (item == Item::Adrenaline) continue;  // cannot steal adrenaline
         if (state.players[other].items[k] == 0) continue;
         if (!itemIsUseful(item)) continue;
-        actions.push_back(Action::steal(other, item));
+        if (itemNeedsTarget(item)) {
+          // A stolen restraint is aimed by the thief, so every legal victim is
+          // a separate move.
+          for (int victim : restrainable) actions.push_back(Action::steal(other, item, victim));
+        } else {
+          actions.push_back(Action::steal(other, item));
+        }
       }
     }
   }
@@ -359,7 +361,7 @@ std::vector<Outcome> apply(const GameState& state, const Action& action, const R
   GameState paid = state;
   consume(&paid.players[seat], action.item);
   if (action.item == Item::Adrenaline) {
-    consume(&paid.players[action.target], action.stolen);
+    consume(&paid.players[action.stealFrom], action.stolen);
   }
   out = applyItemEffect(paid, action, config);
   if (out.empty()) {

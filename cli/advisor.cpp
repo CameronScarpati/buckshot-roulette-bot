@@ -3,6 +3,7 @@
 /// are the last player standing.
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <iomanip>
 #include <iostream>
@@ -70,6 +71,23 @@ bool parseShell(const std::string& text, Shell* shell) {
   return false;
 }
 
+/// A tube cannot hold more shells of a type than its counts allow. Any command
+/// that records a fact about a shell has to answer this before it is believed.
+bool tubeStillFits(const Tube& tube) {
+  int live = 0;
+  int blank = 0;
+  for (int i = 0; i < tube.size(); ++i) {
+    if (tube.truth[i] == Shell::Live) ++live;
+    if (tube.truth[i] == Shell::Blank) ++blank;
+  }
+  return live <= tube.live && blank <= tube.blank;
+}
+
+std::string contradictionMessage(Shell shell) {
+  return std::string("That contradicts the tube: it does not hold another ") +
+         (shell == Shell::Live ? "live" : "blank") + " shell.\n";
+}
+
 std::uint8_t allSeats(const GameState& state) {
   return static_cast<std::uint8_t>((1u << state.playerCount) - 1u);
 }
@@ -83,28 +101,18 @@ bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Sh
       std::cout << "The tube is empty. Use load to start the next one.\n";
       return false;
     }
-    // Force the chamber to what was observed, honouring a pending inversion by
-    // recording the fired type directly.
-    session->state.tube.chamberInverted = false;
-    session->state.tube.resolve(0, shell, allSeats(session->state));
-    const int knownLive = [&] {
-      int count = 0;
-      for (int i = 0; i < session->state.tube.size(); ++i) {
-        if (session->state.tube.truth[i] == Shell::Live) ++count;
-      }
-      return count;
-    }();
-    const int knownBlank = [&] {
-      int count = 0;
-      for (int i = 0; i < session->state.tube.size(); ++i) {
-        if (session->state.tube.truth[i] == Shell::Blank) ++count;
-      }
-      return count;
-    }();
-    if (knownLive > session->state.tube.live || knownBlank > session->state.tube.blank) {
+    // Force the chamber to what was observed. With an inversion pending, the
+    // shell drawn from the pool is the opposite of the one that fired, and
+    // resolveChamberDraw is what moves the public counts to match.
+    if (session->state.tube.chamberInverted) {
+      const Shell drawn = shell == Shell::Live ? Shell::Blank : Shell::Live;
+      session->state.tube.resolveChamberDraw(drawn, allSeats(session->state));
+    } else {
+      session->state.tube.resolve(0, shell, allSeats(session->state));
+    }
+    if (!tubeStillFits(session->state.tube)) {
       session->state = before;
-      std::cout << "That contradicts the tube: it does not hold another "
-                << (shell == Shell::Live ? "live" : "blank") << " shell.\n";
+      std::cout << contradictionMessage(shell);
       return false;
     }
   }
@@ -129,13 +137,18 @@ void printRanking(const SolveResult& result, const GameState& state, int seat) {
     std::cout << "No legal move from this position.\n";
     return;
   }
-  std::cout << "\nAdvising seat p" << (seat + 1) << ", to move: p"
-            << (static_cast<int>(state.current) + 1) << "\n";
+  std::cout << "\nAdvising seat p" << (seat + 1) << ", to move: p" << (result.mover + 1);
+  if (result.mover != static_cast<int>(state.current)) {
+    std::cout << " (p" << (static_cast<int>(state.current) + 1) << " is handcuffed and skipped)";
+  }
+  std::cout << "\n";
   const double top = result.ranked.front().value;
   for (const ActionValue& entry : result.ranked) {
-    const bool best = top - entry.value < 1e-9;
+    // An opponent's ranking is sorted the other way, so the test has to be
+    // symmetric or every row looks best.
+    const bool best = std::abs(top - entry.value) < 1e-9;
     std::cout << (best ? "  * " : "    ") << std::left << std::setw(34)
-              << entry.action.describe(state.current) << std::right << std::fixed
+              << entry.action.describe(result.mover) << std::right << std::fixed
               << std::setprecision(4) << entry.value;
     if (!best) {
       std::cout << "   (" << std::showpos << std::setprecision(4) << (entry.value - top)
@@ -192,12 +205,12 @@ void printHelp() {
 
 /// Print a result as JSON, so another implementation can be compared against
 /// this one move by move.
-void printJson(const SolveResult& result, const GameState& state) {
+void printJson(const SolveResult& result) {
   std::cout << "{\"value\": " << std::fixed << std::setprecision(12) << result.value
             << ", \"actions\": [";
   for (std::size_t i = 0; i < result.ranked.size(); ++i) {
     if (i > 0) std::cout << ", ";
-    std::cout << "{\"action\": \"" << result.ranked[i].action.describe(state.current)
+    std::cout << "{\"action\": \"" << result.ranked[i].action.describe(result.mover)
               << "\", \"value\": " << result.ranked[i].value << "}";
   }
   std::cout << "], \"nodes\": " << result.nodes
@@ -224,7 +237,7 @@ int runOnce(const std::string& position, int seat, int reloads, const std::strin
   }
   const SolveResult result = solve(state, config, options);
   if (asJson) {
-    printJson(result, state);
+    printJson(result);
   } else {
     std::cout << notation::board(state);
     printRanking(result, state, seat);
@@ -484,12 +497,22 @@ int main(int argc, char** argv) {
         std::cout << "The tube is empty.\n";
         continue;
       }
-      session.history.push_back(session.state);
       const int seat = session.state.current;
+      GameState probe = session.state;
+      if (probe.tube.chamberInverted) {
+        const Shell drawn = shell == Shell::Live ? Shell::Blank : Shell::Live;
+        probe.tube.resolveChamberDraw(drawn, static_cast<std::uint8_t>(1u << seat));
+      } else {
+        probe.tube.resolve(0, shell, static_cast<std::uint8_t>(1u << seat));
+      }
+      if (!tubeStillFits(probe.tube)) {
+        std::cout << contradictionMessage(shell);
+        continue;
+      }
+      session.history.push_back(session.state);
+      session.state = probe;
       std::uint8_t& count = session.state.players[seat].items[itemIndex(Item::MagnifyingGlass)];
       if (count > 0) --count;
-      session.state.tube.chamberInverted = false;
-      session.state.tube.resolve(0, shell, static_cast<std::uint8_t>(1u << seat));
       std::cout << notation::board(session.state);
       continue;
     }
@@ -500,11 +523,17 @@ int main(int argc, char** argv) {
         std::cout << "Say which shell and what it is, as in phone 3 blank (1 is the chamber).\n";
         continue;
       }
-      session.history.push_back(session.state);
       const int seat = session.state.current;
+      GameState probe = session.state;
+      probe.tube.resolve(position - 1, shell, static_cast<std::uint8_t>(1u << seat));
+      if (!tubeStillFits(probe.tube)) {
+        std::cout << contradictionMessage(shell);
+        continue;
+      }
+      session.history.push_back(session.state);
+      session.state = probe;
       std::uint8_t& count = session.state.players[seat].items[itemIndex(Item::BurnerPhone)];
       if (count > 0) --count;
-      session.state.tube.resolve(position - 1, shell, static_cast<std::uint8_t>(1u << seat));
       std::cout << notation::board(session.state);
       continue;
     }

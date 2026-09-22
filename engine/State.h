@@ -54,9 +54,10 @@ struct GameState {
 /// separate action kind, and items that take a target carry one too.
 struct Action {
   enum class Kind : std::uint8_t { Shoot, UseItem } kind = Kind::Shoot;
-  std::uint8_t target = 0;   ///< seat being shot, or the seat an item points at
-  Item item = Item::Beer;    ///< meaningful when kind == UseItem
-  Item stolen = Item::Beer;  ///< the item Adrenaline takes
+  std::uint8_t target = 0;     ///< seat being shot, or the seat an item points at
+  Item item = Item::Beer;      ///< meaningful when kind == UseItem
+  Item stolen = Item::Beer;    ///< the item Adrenaline takes
+  std::uint8_t stealFrom = 0;  ///< the seat Adrenaline takes it from
 
   static Action shoot(int seat) {
     Action a;
@@ -75,9 +76,14 @@ struct Action {
     a.target = static_cast<std::uint8_t>(seat);
     return a;
   }
-  static Action steal(int seat, Item what) {
-    Action a = useOn(Item::Adrenaline, seat);
+  /// Take `what` from `from` and use it at once. A stolen restraint still needs
+  /// a victim of its own, which is what `victim` names; for everything else it
+  /// is ignored.
+  static Action steal(int from, Item what, int victim = 0) {
+    Action a = use(Item::Adrenaline);
+    a.stealFrom = static_cast<std::uint8_t>(from);
     a.stolen = what;
+    a.target = static_cast<std::uint8_t>(victim);
     return a;
   }
 
