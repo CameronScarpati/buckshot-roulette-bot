@@ -72,6 +72,14 @@ struct Tube {
   /// a pending inversion, and return the type it actually fires as.
   Shell resolveChamberDraw(Shell drawn, std::uint8_t observerMask);
 
+  /// Whether the chamber could fire `type` at all. A chamber that is already
+  /// pinned down can only fire what it was pinned to, and one that is still a
+  /// draw needs the pool to hold a shell that would produce it, which with an
+  /// inversion pending is the opposite type. Anything that records what a shell
+  /// did has to ask this first, because resolving a shell the tube cannot
+  /// supply drives a count below zero.
+  bool canFire(Shell type) const;
+
   bool operator==(const Tube& other) const;
 };
 

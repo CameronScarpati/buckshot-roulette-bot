@@ -21,6 +21,7 @@
 #define BSR_FILENO fileno
 #endif
 
+#include "cli/Args.h"
 #include "engine/Notation.h"
 #include "engine/Rules.h"
 #include "solver/Solver.h"
@@ -71,6 +72,28 @@ bool parseShell(const std::string& text, Shell* shell) {
   return false;
 }
 
+/// Whether the chamber can fire the observed type at all. A chamber that has
+/// already been pinned down can only fire what it was pinned to, and one that
+/// is still a draw needs the pool to hold a shell that would produce it, which
+/// with an inversion pending is the opposite type.
+bool chamberCanFire(const Tube& tube, Shell fired, std::string* why) {
+  if (tube.canFire(fired)) return true;
+  if (tube.empty()) {
+    *why = "The tube is empty. Use load to start the next one.\n";
+  } else if (tube.truth[0] != Shell::Unknown) {
+    *why = "That contradicts the chamber, which is already recorded as ";
+    *why += tube.truth[0] == Shell::Live ? "live" : "blank";
+    *why += ".\n";
+  } else {
+    const Shell drawn =
+        tube.chamberInverted ? (fired == Shell::Live ? Shell::Blank : Shell::Live) : fired;
+    *why = "That contradicts the tube: it does not hold another ";
+    *why += drawn == Shell::Live ? "live" : "blank";
+    *why += " shell.\n";
+  }
+  return false;
+}
+
 /// A tube cannot hold more shells of a type than its counts allow. Any command
 /// that records a fact about a shell has to answer this before it is believed.
 bool tubeStillFits(const Tube& tube) {
@@ -96,9 +119,19 @@ std::uint8_t allSeats(const GameState& state) {
 /// that matches what actually happened.
 bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Shell shell) {
   GameState before = session->state;
+  bool legal = false;
+  for (const Action& candidate : rules::legalActions(session->state, session->config)) {
+    if (candidate == action) legal = true;
+  }
+  if (!legal) {
+    std::cout << "That move is not available here: the seat to move either does not hold the "
+                 "item or cannot use it in this position.\n";
+    return false;
+  }
   if (haveShell) {
-    if (session->state.tube.empty()) {
-      std::cout << "The tube is empty. Use load to start the next one.\n";
+    std::string why;
+    if (!chamberCanFire(session->state.tube, shell, &why)) {
+      std::cout << why;
       return false;
     }
     // Force the chamber to what was observed. With an inversion pending, the
@@ -130,6 +163,30 @@ bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Sh
   session->history.push_back(before);
   session->state = chosen->state;
   return true;
+}
+
+/// Expired medicine has two branches of equal weight, so the caller says which
+/// one happened and the matching branch is taken.
+bool applyMedicine(Session* session, const Action& action, bool healed) {
+  bool legal = false;
+  for (const Action& candidate : rules::legalActions(session->state, session->config)) {
+    if (candidate == action) legal = true;
+  }
+  if (!legal) {
+    std::cout << "That move is not available here.\n";
+    return false;
+  }
+  const int seat = session->state.current;
+  const int before = session->state.players[seat].hp;
+  for (const Outcome& outcome : rules::apply(session->state, action, session->config)) {
+    const bool wentUp = outcome.state.players[seat].hp > before;
+    if (wentUp != healed) continue;
+    session->history.push_back(session->state);
+    session->state = outcome.state;
+    return true;
+  }
+  std::cout << "That outcome is not possible here.\n";
+  return false;
 }
 
 void printRanking(const SolveResult& result, const GameState& state, int seat) {
@@ -197,6 +254,7 @@ void printHelp() {
     phone <k> live|blank  a burner phone named shell k, counting from 2, since
                           a burner phone never names the chamber
     use <item> [p<N>]     the seat to move used an item with no chance outcome
+    use med ok|bad        expired medicine, and how it went
     use adr p<N> <item> [p<M>]
                           the seat to move stole an item and used it, on p<M>
                           when the stolen item needs a target
@@ -271,7 +329,7 @@ int main(int argc, char** argv) {
   bool asJson = false;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
-    auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
+    long number = 0;
     if (arg == "--help" || arg == "-h") {
       std::cout << "advisor [--position \"<notation>\"] [--seat N] [--reloads N] "
                    "[--mode don|story2|mp] [--json]\n\n";
@@ -279,15 +337,25 @@ int main(int argc, char** argv) {
       return 0;
     }
     if (arg == "--position" || arg == "-p") {
-      startPosition = next();
+      // A written position is the one value that may look like a flag.
+      if (i + 1 >= argc) {
+        std::cerr << arg << " needs a position\n";
+        return 2;
+      }
+      startPosition = argv[++i];
     } else if (arg == "--seat") {
-      startSeat = std::max(0, std::atoi(next().c_str()) - 1);
+      if (!cli::nextNumber(argc, argv, &i, arg, 1, kMaxPlayers, &number)) return 2;
+      startSeat = static_cast<int>(number) - 1;
     } else if (arg == "--reloads") {
-      reloads = std::atoi(next().c_str());
+      if (!cli::nextNumber(argc, argv, &i, arg, 0, 6, &number)) return 2;
+      reloads = static_cast<int>(number);
     } else if (arg == "--mode") {
-      startMode = next();
+      if (!cli::nextValue(argc, argv, &i, arg, &startMode)) return 2;
     } else if (arg == "--json") {
       asJson = true;
+    } else {
+      std::cerr << "unrecognised option " << arg << "\n";
+      return 2;
     }
   }
   if (!startPosition.empty()) {
@@ -363,7 +431,12 @@ int main(int argc, char** argv) {
       continue;
     }
     if (command == "reloads" && words.size() >= 2) {
-      session.options.reloadBudget = std::max(0, std::atoi(words[1].c_str()));
+      long budget = 0;
+      if (!cli::parseWholeNumber(words[1], 0, 6, &budget)) {
+        std::cout << "Give a number of reloads between 0 and 6.\n";
+        continue;
+      }
+      session.options.reloadBudget = static_cast<int>(budget);
       std::cout << "Looking through " << session.options.reloadBudget << " reloads.\n";
       continue;
     }
@@ -413,9 +486,14 @@ int main(int argc, char** argv) {
         std::cout << "Name a seat, as in hp p1 3.\n";
         continue;
       }
-      const int charges = std::atoi(words[2].c_str());
+      long parsed = 0;
+      if (!cli::parseWholeNumber(words[2], 0, 64, &parsed)) {
+        std::cout << "Give a number of charges.\n";
+        continue;
+      }
+      const int charges = static_cast<int>(parsed);
       PlayerState& player = session.state.players[seat];
-      if (charges < 0 || charges > player.maxHp) {
+      if (charges > player.maxHp) {
         std::cout << "That seat holds at most " << static_cast<int>(player.maxHp) << " charges.\n";
         continue;
       }
@@ -508,6 +586,11 @@ int main(int argc, char** argv) {
         continue;
       }
       const int seat = session.state.current;
+      std::string why;
+      if (!chamberCanFire(session.state.tube, shell, &why)) {
+        std::cout << why;
+        continue;
+      }
       GameState probe = session.state;
       if (probe.tube.chamberInverted) {
         const Shell drawn = shell == Shell::Live ? Shell::Blank : Shell::Live;
@@ -527,14 +610,23 @@ int main(int argc, char** argv) {
       continue;
     }
     if (command == "phone" && words.size() >= 3) {
-      const int position = std::atoi(words[1].c_str());
+      long parsed = 0;
+      const bool number = cli::parseWholeNumber(words[1], 0, 64, &parsed);
+      const int position = number ? static_cast<int>(parsed) : 0;
       Shell shell;
-      if (position < 2 || position > session.state.tube.size() || !parseShell(words[2], &shell)) {
+      if (!number || position < 2 || position > session.state.tube.size() ||
+          !parseShell(words[2], &shell)) {
         std::cout << "Say which shell and what it is, as in phone 3 blank. A burner phone "
                      "never names the chamber, so the number starts at 2.\n";
         continue;
       }
       const int seat = session.state.current;
+      const Shell already = session.state.tube.truth[position - 1];
+      if (already != Shell::Unknown && already != shell) {
+        std::cout << "Shell " << position << " is already recorded as "
+                  << (already == Shell::Live ? "live" : "blank") << ".\n";
+        continue;
+      }
       GameState probe = session.state;
       probe.tube.resolve(position - 1, shell, static_cast<std::uint8_t>(1u << seat));
       if (!tubeStillFits(probe.tube)) {
@@ -588,6 +680,25 @@ int main(int argc, char** argv) {
           continue;
         }
         action.target = static_cast<std::uint8_t>(seat);
+      }
+      // Items whose result is a matter of chance are recorded through the
+      // command that names the result, so that the advisor tracks what actually
+      // happened rather than the likeliest branch.
+      const Item effect = item == Item::Adrenaline ? action.stolen : item;
+      if (effect == Item::MagnifyingGlass || effect == Item::Beer || effect == Item::BurnerPhone) {
+        std::cout << "Say what it showed instead: mg live, eject blank, or phone 3 live.\n";
+        continue;
+      }
+      if (effect == Item::ExpiredMedicine) {
+        const std::string outcome = words.size() >= 3 ? words.back() : "";
+        if (outcome != "ok" && outcome != "bad") {
+          std::cout << "Expired medicine is a toss up, so say how it went: use med ok, or "
+                       "use med bad.\n";
+          continue;
+        }
+        if (!applyMedicine(&session, action, outcome == "ok")) continue;
+        std::cout << notation::board(session.state);
+        continue;
       }
       if (applyWithOutcome(&session, action, false, Shell::Unknown)) {
         std::cout << notation::board(session.state);

@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "cli/Args.h"
 #include "engine/Notation.h"
 #include "engine/Rules.h"
 #include "solver/Solver.h"
@@ -229,23 +230,25 @@ int main(int argc, char** argv) {
   bool bothSolvers = true;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
-    auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
+    long number = 0;
     if (arg == "--seed") {
-      options.seed = static_cast<unsigned>(std::stoul(next()));
+      if (!cli::nextNumber(argc, argv, &i, arg, 0, 4294967295L, &number)) return 2;
+      options.seed = static_cast<unsigned>(number);
     } else if (arg == "--charges") {
-      options.charges = std::atoi(next().c_str());
+      if (!cli::nextNumber(argc, argv, &i, arg, 1, 8, &number)) return 2;
+      options.charges = static_cast<int>(number);
     } else if (arg == "--players") {
-      options.players = std::atoi(next().c_str());
+      if (!cli::nextNumber(argc, argv, &i, arg, 2, kMaxPlayers, &number)) return 2;
+      options.players = static_cast<int>(number);
     } else if (arg == "--reloads") {
-      options.reloadBudget = std::atoi(next().c_str());
+      if (!cli::nextNumber(argc, argv, &i, arg, 0, 6, &number)) return 2;
+      options.reloadBudget = static_cast<int>(number);
     } else if (arg == "--quiet") {
       options.quiet = true;
-    } else if (arg == "--selfplay") {
-      batchRounds = std::atoi(next().c_str());
-      bothSolvers = true;
-    } else if (arg == "--baseline") {
-      batchRounds = std::atoi(next().c_str());
-      bothSolvers = false;
+    } else if (arg == "--selfplay" || arg == "--baseline") {
+      if (!cli::nextNumber(argc, argv, &i, arg, 1, 100000, &number)) return 2;
+      batchRounds = static_cast<int>(number);
+      bothSolvers = arg == "--selfplay";
     } else if (arg == "--help" || arg == "-h") {
       std::cout << "play [--seed N] [--charges N] [--players N] [--reloads N]\n"
                    "     [--selfplay ROUNDS | --baseline ROUNDS]\n\n"

@@ -47,6 +47,13 @@ void Tube::resolve(int offset, Shell type, std::uint8_t observerMask) {
   knownBy[offset] = static_cast<std::uint8_t>(knownBy[offset] | observerMask);
 }
 
+bool Tube::canFire(Shell type) const {
+  if (empty() || type == Shell::Unknown) return false;
+  if (truth[0] != Shell::Unknown) return truth[0] == type;
+  const Shell drawn = chamberInverted ? (type == Shell::Live ? Shell::Blank : Shell::Live) : type;
+  return (drawn == Shell::Live ? unresolvedLive() : unresolvedBlank()) > 0;
+}
+
 Shell Tube::resolveChamberDraw(Shell drawn, std::uint8_t observerMask) {
   Shell fires = drawn;
   if (chamberInverted) {

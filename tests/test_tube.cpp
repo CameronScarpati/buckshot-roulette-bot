@@ -117,6 +117,33 @@ TEST(Tube, ResolvingAnInvertedChamberComplementsTheDrawAndTheCounts) {
   EXPECT_EQ(tube.unresolvedBlank(), 3);
 }
 
+TEST(Tube, ACountCanNeverBeDrivenBelowZeroByAnObservation) {
+  // Recording what a shell did without asking whether the tube could supply it
+  // wrapped a count past zero, leaving a tube of 255 shells and probabilities
+  // above one. Every path that records an observation asks this first.
+  Tube allLive = makeTube(2, 0);
+  EXPECT_TRUE(allLive.canFire(Shell::Live));
+  EXPECT_FALSE(allLive.canFire(Shell::Blank));
+
+  // With an inversion pending the question is about the opposite type, because
+  // that is the shell the pool has to supply.
+  Tube inverted = makeTube(2, 0);
+  inverted.invertChamber();
+  ASSERT_TRUE(inverted.chamberInverted);
+  EXPECT_TRUE(inverted.canFire(Shell::Blank));
+  EXPECT_FALSE(inverted.canFire(Shell::Live));
+
+  // A chamber that is already pinned down can only fire what it was pinned to.
+  Tube known = makeTube(1, 1);
+  known.resolve(0, Shell::Live, kBoth);
+  EXPECT_TRUE(known.canFire(Shell::Live));
+  EXPECT_FALSE(known.canFire(Shell::Blank));
+
+  Tube empty = makeTube(0, 0);
+  EXPECT_FALSE(empty.canFire(Shell::Live));
+  EXPECT_FALSE(empty.canFire(Shell::Blank));
+}
+
 TEST(Tube, ResolvingAPlainChamberLeavesTheCountsAlone) {
   Tube tube = makeTube(2, 2);
   const Shell fired = tube.resolveChamberDraw(Shell::Live, kBoth);
