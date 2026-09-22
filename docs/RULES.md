@@ -180,6 +180,14 @@ items randomly from the pool (`cli/play.cpp:40-51`), and only the solver rounds 
 
 ## What is not modelled
 
+The solver treats every seat other than the one it is advising as choosing from that seat's
+own information state. A shell that the advised seat has revealed privately is put back into
+the unresolved pool before the other seat picks a move, and its choice is then played out in
+the position as it really is. When two of its moves look identical from what it has seen, it
+is assumed to pick between them evenly, since nothing it knows separates them. Without this,
+the search would hand a seat knowledge it has no way of having, and a private reveal would
+make a position look worse rather than better.
+
 **The scripted dealer.** The single-player dealer follows a policy the game ships. That policy
 is not implemented here, and it is deliberately absent rather than guessed
 (`engine/Config.h:27-30`). The solver's opponent is an exact minimiser of the advised seat's

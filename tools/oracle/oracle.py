@@ -81,6 +81,19 @@ def flip(t: str) -> str:
     return "B" if t == "L" else "L"
 
 
+def hidden_from(st: State, seat: int) -> bool:
+    """True when a shell is resolved but this seat has not seen it."""
+    return any(t is not None and seat not in seen for t, seen in st.slots)
+
+
+def blind_to(st: State, seat: int) -> State:
+    """The position as this seat sees it: what it has not seen goes back into
+    the unresolved pool, where it is exchangeable again."""
+    slots = tuple((t, seen) if (t is not None and seat in seen) else (None, ())
+                  for t, seen in st.slots)
+    return st._replace(slots=slots)
+
+
 def unresolved_counts(st: State) -> tuple[int, int]:
     rl = sum(1 for t, _ in st.slots if t == "L")
     rb = sum(1 for t, _ in st.slots if t == "B")
@@ -217,7 +230,22 @@ class Solver:
                 return st.seats[self.seat].hp / total if total else 0.0
             return sum(p * self.value(s) for p, s in self.reload_branches(st))
         vals = self.node_values(st)
-        return max(vals.values()) if st.turn == self.seat else min(vals.values())
+        if st.turn == self.seat:
+            return max(vals.values())
+        if not hidden_from(st, st.turn):
+            return min(vals.values())
+        # The seat to move cannot see a shell somebody else has resolved, so it
+        # has to choose from its own information state and its choice is then
+        # played out in the position as it really is. Moves it cannot tell apart
+        # are assumed equally likely, since nothing it knows separates them.
+        seen = blind_to(st, st.turn)
+        theirs = self.node_values(seen)
+        if not theirs:
+            return min(vals.values())
+        floor = min(theirs.values())
+        tied = [text for text, v in theirs.items() if abs(v - floor) <= 1e-12]
+        real = [vals[text] for text in tied if text in vals]
+        return sum(real) / len(real) if real else min(vals.values())
 
     def node_values(self, st: State) -> dict[str, float]:
         """Value of every legal action text (targets of a steal are folded in)."""

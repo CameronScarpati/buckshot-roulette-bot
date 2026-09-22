@@ -37,6 +37,30 @@ double boundaryValue(const GameState& state, int seat) {
   return static_cast<double>(mine) / static_cast<double>(total);
 }
 
+/// True when the tube holds a shell that has been pinned down but that `seat`
+/// has not seen. That is exactly the case where a seat must not be allowed to
+/// choose as though it could see it.
+bool hasHiddenShell(const GameState& state, int seat) {
+  const int shells = std::min<int>(state.tube.size(), kMaxShells);
+  for (int i = 0; i < shells; ++i) {
+    if (state.tube.truth[i] != Shell::Unknown && !state.tube.knows(seat, i)) return true;
+  }
+  return false;
+}
+
+/// The position as `seat` sees it: every shell it has not observed goes back
+/// into the unresolved pool, where it is exchangeable again.
+GameState blindedTo(const GameState& state, int seat) {
+  GameState blind = state;
+  const int shells = std::min<int>(blind.tube.size(), kMaxShells);
+  for (int i = 0; i < shells; ++i) {
+    if (blind.tube.knows(seat, i)) continue;
+    blind.tube.truth[i] = Shell::Unknown;
+    blind.tube.knownBy[i] = 0;
+  }
+  return blind;
+}
+
 class Search {
  public:
   Search(const RuleConfig& config, const SolveOptions& options)
@@ -79,13 +103,45 @@ class Search {
     if (actions.empty()) {
       best = boundaryValue(state, options_.seat);
       truncated_ = true;
-    }
-    for (const Action& action : actions) {
-      const double candidate = actionValue(state, action, reloadsLeft);
-      best = maximising ? std::max(best, candidate) : std::min(best, candidate);
+    } else if (maximising || !hasHiddenShell(state, state.current)) {
+      for (const Action& action : actions) {
+        const double candidate = actionValue(state, action, reloadsLeft);
+        best = maximising ? std::max(best, candidate) : std::min(best, candidate);
+      }
+    } else {
+      best = opponentValue(state, actions, reloadsLeft);
     }
     memo_.emplace(key, best);
     return best;
+  }
+
+  /// The value of a position where the seat to move would otherwise be choosing
+  /// with sight of a shell it has never seen.
+  ///
+  /// The seat picks from its own information state, which is the position with
+  /// every shell it has not observed returned to the unresolved pool. Its
+  /// choice is then played out in the position as it really is. When it cannot
+  /// tell two options apart, it is assumed to pick among them evenly, which is
+  /// the only assumption available: nothing it knows separates them.
+  double opponentValue(const GameState& state, const std::vector<Action>& actions,
+                       int reloadsLeft) {
+    const GameState blind = blindedTo(state, state.current);
+    std::vector<Action> chosen;
+    double bestSeen = 2.0;
+    for (const Action& action : actions) {
+      const double candidate = actionValue(blind, action, reloadsLeft);
+      if (candidate < bestSeen - 1e-12) {
+        bestSeen = candidate;
+        chosen.clear();
+        chosen.push_back(action);
+      } else if (std::abs(candidate - bestSeen) <= 1e-12) {
+        chosen.push_back(action);
+      }
+    }
+    if (chosen.empty()) return boundaryValue(state, options_.seat);
+    double total = 0.0;
+    for (const Action& action : chosen) total += actionValue(state, action, reloadsLeft);
+    return total / static_cast<double>(chosen.size());
   }
 
   double actionValue(const GameState& state, const Action& action, int reloadsLeft) {
@@ -158,6 +214,8 @@ std::string describeAssumptions(const RuleConfig& config, const SolveOptions& op
     out << ", spending no magnifying glasses or burner phones, so it is modelled "
            "slightly weaker than a player who tracks shells";
   }
+  out << ", and choosing from what it has seen rather than from what you have seen, "
+         "picking evenly between moves it cannot tell apart";
   out << ". Values are the probability of being the last player standing in this "
          "round, looking through "
       << options.reloadBudget << " reload" << (options.reloadBudget == 1 ? "" : "s") << ".";
@@ -192,22 +250,40 @@ SolveResult solve(const GameState& state, const RuleConfig& config, const SolveO
     return result;
   }
 
+  // Values are always the solved seat's chance of surviving. The ordering
+  // belongs to whoever is holding the gun, and when that is an opponent it has
+  // to rank its moves by what it can see rather than by what we have seen.
+  const bool mine = static_cast<int>(start.current) == options.seat;
+  const bool hidden = !mine && hasHiddenShell(start, start.current);
+  const GameState seen = hidden ? blindedTo(start, start.current) : start;
+
+  struct Ranked {
+    Action action;
+    double value = 0.0;  ///< the solved seat's chance, in the position as it is
+    double key = 0.0;    ///< what the seat holding the gun is choosing on
+  };
+  std::vector<Ranked> rows;
   for (const Action& action : search.legalFor(start)) {
+    Ranked row;
+    row.action = action;
+    row.value = search.actionValue(start, action, options.reloadBudget);
+    row.key = hidden ? search.actionValue(seen, action, options.reloadBudget) : row.value;
+    rows.push_back(row);
+  }
+  std::stable_sort(rows.begin(), rows.end(), [mine](const Ranked& a, const Ranked& b) {
+    return mine ? a.key > b.key : a.key < b.key;
+  });
+  for (const Ranked& row : rows) {
     ActionValue entry;
-    entry.action = action;
-    entry.value = search.actionValue(start, action, options.reloadBudget);
+    entry.action = row.action;
+    entry.value = row.value;
     result.ranked.push_back(entry);
   }
-  // Values are always the solved seat's chance of surviving, but the ordering
-  // belongs to whoever is holding the gun: best first for that seat, which for
-  // an opponent means the move that leaves us worst off.
-  const bool mine = static_cast<int>(start.current) == options.seat;
-  std::stable_sort(result.ranked.begin(), result.ranked.end(),
-                   [mine](const ActionValue& a, const ActionValue& b) {
-                     return mine ? a.value > b.value : a.value < b.value;
-                   });
+  // Read the position's worth from the search rather than from the front of the
+  // list: an opponent that cannot tell its options apart makes the position
+  // worth the average over them, not the worst of them.
   result.value =
-      result.ranked.empty() ? boundaryValue(start, options.seat) : result.ranked.front().value;
+      rows.empty() ? boundaryValue(start, options.seat) : search.value(start, options.reloadBudget);
   result.nodes = search.nodes();
   result.truncated = search.truncated();
   return result;

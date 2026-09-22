@@ -149,10 +149,13 @@ item. Across a reload the search continues for a stated number of reloads and th
 a boundary value, and any answer that touched the boundary says so.
 
 **The opponent model is stated, because the word optimal means nothing without one.** By
-default the other seat plays to minimise your chance of surviving the round. It is modelled
-as spending no magnifying glasses and no burner phones, which keeps the search from
-branching on knowledge you cannot see, at the cost of modelling the opponent slightly weaker
-than a player who tracks shells. Every answer prints this.
+default the other seat plays to minimise your chance of surviving the round, and it chooses
+from what it has seen rather than from the position as it really is. A shell you revealed
+privately is not one it can act on, and when two of its moves look the same to it, it is
+assumed to pick between them evenly. It is also modelled as spending no magnifying glasses
+and no burner phones, which keeps the search from branching on knowledge you cannot see, at
+the cost of modelling it slightly weaker than a player who tracks shells. Every answer
+prints all of this.
 
 ## What it does not do
 

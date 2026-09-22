@@ -126,6 +126,40 @@ TEST(Regression, KnowledgeCannotExceedWhatTheTubeHolds) {
   EXPECT_FALSE(notation::parse("p1=2/2 p2=2/2 tube=1L1B turn=p1 known=p1:0L,1L", &state, &error));
 }
 
+TEST(Regression, TheOpponentCannotActOnAShellOnlyWeHaveSeen) {
+  // 1L1B, both on their last charge, the opponent to move, and we alone know
+  // the chamber is live. The opponent cannot tell its two moves apart: from
+  // what it can see each is worth one half to us. The shell is live, so
+  // whichever it picks decides the round, and the position is worth the average
+  // of the two, one half. Minimising over the position as it really is would
+  // have handed it our private knowledge and valued this at zero.
+  const SolveResult result = solve(parse("p1=1/1 p2=1/1 tube=1L1B turn=p2 known=p1:0L"),
+                                   RuleConfig::doubleOrNothing(1), options(0));
+  EXPECT_NEAR(result.value, 0.5, 1e-12);
+
+  // Both consequences are still shown, because that is what we want to know.
+  double shootUs = -1.0;
+  double shootSelf = -1.0;
+  for (const ActionValue& entry : result.ranked) {
+    const std::string text = entry.action.describe(result.mover);
+    if (text == "shoot p1") shootUs = entry.value;
+    if (text == "shoot self") shootSelf = entry.value;
+  }
+  EXPECT_NEAR(shootUs, 0.0, 1e-12);
+  EXPECT_NEAR(shootSelf, 1.0, 1e-12);
+}
+
+TEST(Regression, PrivateKnowledgeIsNeverWorseThanNone) {
+  // Knowing something the opponent does not cannot hurt. Before the fix a
+  // private reveal made the search value the position lower, because the
+  // opponent was allowed to read it.
+  const RuleConfig config = RuleConfig::doubleOrNothing(2);
+  const double blind = solve(parse("p1=2/2 p2=2/2 tube=2L2B turn=p2"), config, options(0, 1)).value;
+  const double informed =
+      solve(parse("p1=2/2 p2=2/2 tube=2L2B turn=p2 known=p1:1L"), config, options(0, 1)).value;
+  EXPECT_GE(informed, blind - 1e-9);
+}
+
 TEST(Regression, EveryValueStaysAProbability) {
   // A sweep over positions that mix knowledge, restraints, inversion and items,
   // asserting the one invariant that covers every arithmetic slip at once.

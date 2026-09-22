@@ -46,6 +46,13 @@ FIXED_POSITIONS = [
     "p1=1/2 p2=1/2 tube=2L1B turn=p1 sawed",
     "p1=2/3[saw,beer] p2=2/3[cuff] tube=2L2B turn=p1",
     "p1=1/1 p2=1/1 tube=1L1B turn=p1 cuffed=p2",
+    # The seat to move cannot see what the other seat has: both solvers have to
+    # choose from the mover's own information state rather than from the
+    # position as it really is.
+    "p1=1/1 p2=1/1 tube=1L1B turn=p2 known=p1:0L",
+    "p1=2/2 p2=2/2 tube=2L2B turn=p2 known=p1:1L",
+    "p1=2/2 p2=2/2 tube=1L2B turn=p2 known=p1:0B,2L",
+    "p1=2/2[saw] p2=2/2 tube=2L2B turn=p2 known=p1:0L",
 ]
 
 ITEMS = ["mg", "beer", "cig", "cuff", "saw", "phone", "inv", "med"]
