@@ -76,7 +76,36 @@ TEST(Notation, RejectsPositionsThatCannotExist) {
   parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p1 known=p1:0L,1L");  // two lives in a 1L tube
   parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p1 [saw]");           // stray token
   parseFails("p1=2/2 p2=2/2[nope] tube=1L1B turn=p1");           // no such item
-  parseFails("p1=0/2 p2=2/2 tube=1L1B turn=p1");                 // the seat to move is out
+  // A seat that is out cannot be to move while the round is still running.
+  parseFails("p1=0/2 p2=2/2 p3=2/2 tube=1L1B turn=p1");
+  parseFails("p1=2/2 p1=3/3 p2=2/2 tube=1L1B turn=p1");                   // seat given twice
+  parseFails("p1=2/2 p2=2/2 tube=1L1B tube=2L2B turn=p1");                // tube given twice
+  parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p1 dir=cww");                  // dir typo
+  parseFails("p1=300/300 p2=2/2 tube=1L1B turn=p1");                      // charges that would wrap
+  parseFails("p1=2/2 p2=2/2 tube=1L3B turn=p1 known=p1:2147483648L");     // offset that would wrap
+  parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p1 known=p1:0L known=p2:0B");  // two answers, one shell
+  parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p1 inverted known=p1:0L");     // seen and inverted
+  parseFails("p1=2/2 p2=2/2 tube=0L0B turn=p1 inverted");                 // nothing to invert
+}
+
+TEST(Notation, AFinishedRoundMayLeaveTheTurnOnTheSeatThatDied) {
+  // This is what the engine produces after a fatal shot, so the notation has to
+  // be able to say it.
+  const GameState state = parseOk("p1=0/2 p2=2/2 tube=1L1B turn=p1");
+  EXPECT_TRUE(state.roundOver());
+  EXPECT_EQ(state.soleSurvivor(), 1);
+}
+
+TEST(Notation, CarriesTheFlagsThatDecideWhoMayBeRestrained) {
+  // skipConsumed and cuffUsedThisTurn change which moves are legal, so a
+  // printed position that dropped them parsed back into a different game.
+  const GameState state = parseOk("p1=2/2[cuff] p2=2/2 tube=1L1B turn=p1 skipped=p2 restraintused");
+  EXPECT_TRUE(state.players[1].skipConsumed);
+  EXPECT_TRUE(state.cuffUsedThisTurn);
+  const std::string printed = notation::print(state);
+  EXPECT_NE(printed.find("skipped=p2"), std::string::npos);
+  EXPECT_NE(printed.find("restraintused"), std::string::npos);
+  EXPECT_TRUE(parseOk(printed) == state);
 }
 
 TEST(Notation, AcceptsItemNamesAsWellAsTokens) {

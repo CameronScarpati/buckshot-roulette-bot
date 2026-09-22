@@ -167,6 +167,12 @@ std::string describeAssumptions(const RuleConfig& config, const SolveOptions& op
 SolveResult solve(const GameState& state, const RuleConfig& config, const SolveOptions& options) {
   SolveResult result;
   result.assumptions = describeAssumptions(config, options);
+  if (options.seat < 0 || options.seat >= state.playerCount) {
+    // Nothing sensible can be said about a seat that is not at the table, and
+    // the value would otherwise be read from past the end of the seats.
+    result.assumptions = "No such seat in this position.";
+    return result;
+  }
 
   GameState start = state;
   while (rules::applyPendingSkip(&start)) {

@@ -225,6 +225,12 @@ int runOnce(const std::string& position, int seat, int reloads, const std::strin
     std::cerr << error << "\n";
     return 1;
   }
+  if (seat < 0 || seat >= state.playerCount) {
+    std::cerr << "this position has " << static_cast<int>(state.playerCount)
+              << " seats, so --seat must be between 1 and " << static_cast<int>(state.playerCount)
+              << "\n";
+    return 1;
+  }
   RuleConfig config = RuleConfig::doubleOrNothing(state.players[0].maxHp);
   SolveOptions options;
   options.seat = seat;
@@ -344,8 +350,8 @@ int main(int argc, char** argv) {
     }
     if (command == "seat" && words.size() >= 2) {
       int seat = 0;
-      if (!parseSeat(words[1], session.state, &seat)) {
-        std::cout << "Name a seat, as in seat p1.\n";
+      if (!parseSeat(words[1], session.state, &seat) || seat >= session.state.playerCount) {
+        std::cout << "Name a seat at this table, as in seat p1.\n";
         continue;
       }
       session.options.seat = seat;
