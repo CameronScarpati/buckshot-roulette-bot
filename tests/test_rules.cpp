@@ -34,7 +34,9 @@ const Outcome& branchWhereShellIs(const std::vector<Outcome>& outcomes, Shell ty
   return outcomes.front();
 }
 
-RuleConfig config() { return RuleConfig::doubleOrNothing(4); }
+RuleConfig config() {
+  return RuleConfig::doubleOrNothing(4);
+}
 
 bool contains(const std::vector<Action>& actions, const Action& wanted) {
   for (const Action& action : actions) {

@@ -39,9 +39,7 @@ struct Tube {
   /// leaves.
   bool chamberInverted = false;
 
-  constexpr std::uint8_t size() const {
-    return static_cast<std::uint8_t>(live + blank);
-  }
+  constexpr std::uint8_t size() const { return static_cast<std::uint8_t>(live + blank); }
   constexpr bool empty() const { return size() == 0; }
 
   /// Live shells whose position nobody has resolved yet.

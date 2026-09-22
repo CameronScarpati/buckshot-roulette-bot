@@ -19,8 +19,8 @@ struct MemoKey {
 struct MemoHash {
   std::size_t operator()(const MemoKey& key) const noexcept {
     std::size_t h = std::hash<GameState>{}(key.state);
-    h ^= static_cast<std::size_t>(key.reloadsLeft) *
-         static_cast<std::size_t>(0x9e3779b97f4a7c15ULL);
+    h ^=
+        static_cast<std::size_t>(key.reloadsLeft) * static_cast<std::size_t>(0x9e3779b97f4a7c15ULL);
     return h;
   }
 };
@@ -159,8 +159,7 @@ std::string describeAssumptions(const RuleConfig& config, const SolveOptions& op
   return out.str();
 }
 
-SolveResult solve(const GameState& state, const RuleConfig& config,
-                  const SolveOptions& options) {
+SolveResult solve(const GameState& state, const RuleConfig& config, const SolveOptions& options) {
   SolveResult result;
   result.assumptions = describeAssumptions(config, options);
 
@@ -195,15 +194,14 @@ SolveResult solve(const GameState& state, const RuleConfig& config,
                    [mine](const ActionValue& a, const ActionValue& b) {
                      return mine ? a.value > b.value : a.value < b.value;
                    });
-  result.value = result.ranked.empty() ? boundaryValue(start, options.seat)
-                                       : result.ranked.front().value;
+  result.value =
+      result.ranked.empty() ? boundaryValue(start, options.seat) : result.ranked.front().value;
   result.nodes = search.nodes();
   result.truncated = search.truncated();
   return result;
 }
 
-double solveValue(const GameState& state, const RuleConfig& config,
-                  const SolveOptions& options) {
+double solveValue(const GameState& state, const RuleConfig& config, const SolveOptions& options) {
   return solve(state, config, options).value;
 }
 

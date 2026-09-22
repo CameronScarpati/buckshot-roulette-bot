@@ -29,8 +29,12 @@ constexpr int kBaseItemCount = 5;
 
 using ItemCounts = IndexedArray<std::uint8_t, kItemCount>;
 
-constexpr int itemIndex(Item item) { return static_cast<int>(item); }
-constexpr Item itemAt(int index) { return static_cast<Item>(index); }
+constexpr int itemIndex(Item item) {
+  return static_cast<int>(item);
+}
+constexpr Item itemAt(int index) {
+  return static_cast<Item>(index);
+}
 
 /// Display name, for transcripts and the advisor.
 const char* itemName(Item item);

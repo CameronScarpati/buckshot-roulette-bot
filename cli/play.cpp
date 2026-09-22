@@ -137,10 +137,9 @@ Action baselineAction(const GameState& state, const RuleConfig& config) {
 /// Run rounds with nobody watching and report how often seat 1 survives.
 int runBatch(int rounds, unsigned seed, int charges, int players, int reloadBudget,
              bool solverOnBothSides) {
-  RuleConfig config =
-      players > 2 ? RuleConfig::multiplayer(static_cast<std::uint8_t>(players),
-                                            static_cast<std::uint8_t>(charges))
-                  : RuleConfig::doubleOrNothing(static_cast<std::uint8_t>(charges));
+  RuleConfig config = players > 2 ? RuleConfig::multiplayer(static_cast<std::uint8_t>(players),
+                                                            static_cast<std::uint8_t>(charges))
+                                  : RuleConfig::doubleOrNothing(static_cast<std::uint8_t>(charges));
   int wins = 0;
   int unfinished = 0;
   long long moves = 0;
@@ -192,10 +191,11 @@ int runBatch(int rounds, unsigned seed, int charges, int players, int reloadBudg
   }
   std::cout << "rounds " << rounds << ", seed " << seed << ", " << charges << " charges, "
             << players << " seats, reload budget " << reloadBudget << "\n";
-  std::cout << "seat 1 " << (solverOnBothSides ? "(solver, against the solver)"
-                                               : "(solver, against the heuristic)")
-            << " survived " << wins << " of " << rounds << " rounds, "
-            << std::fixed << std::setprecision(1)
+  std::cout << "seat 1 "
+            << (solverOnBothSides ? "(solver, against the solver)"
+                                  : "(solver, against the heuristic)")
+            << " survived " << wins << " of " << rounds << " rounds, " << std::fixed
+            << std::setprecision(1)
             << (100.0 * static_cast<double>(wins) / static_cast<double>(rounds)) << " percent\n";
   std::cout << moves << " moves played, " << nodes << " states examined\n";
   if (unfinished > 0) {

@@ -51,13 +51,11 @@ struct SolveResult {
 
 /// Solve a position exactly under the stated model. The value is the
 /// probability that `options.seat` is the last player standing in this round.
-SolveResult solve(const GameState& state, const RuleConfig& config,
-                  const SolveOptions& options);
+SolveResult solve(const GameState& state, const RuleConfig& config, const SolveOptions& options);
 
 /// The value of a position without ranking the moves, for tests and the oracle
 /// comparison.
-double solveValue(const GameState& state, const RuleConfig& config,
-                  const SolveOptions& options);
+double solveValue(const GameState& state, const RuleConfig& config, const SolveOptions& options);
 
 /// One line naming every assumption that could change the answer.
 std::string describeAssumptions(const RuleConfig& config, const SolveOptions& options);

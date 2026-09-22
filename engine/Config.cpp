@@ -6,8 +6,7 @@ namespace bsr {
 namespace {
 
 std::vector<Item> basePool() {
-  return {Item::MagnifyingGlass, Item::Beer, Item::Cigarettes, Item::Handcuffs,
-          Item::HandSaw};
+  return {Item::MagnifyingGlass, Item::Beer, Item::Cigarettes, Item::Handcuffs, Item::HandSaw};
 }
 
 std::vector<Item> doubleOrNothingPool() {

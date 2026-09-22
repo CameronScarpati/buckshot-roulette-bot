@@ -56,6 +56,21 @@ jobs:
       - name: Self play
         run: ./build/play --selfplay 20 --seed 1 --charges 2 --reloads 1
 
+  format:
+    # The committed clang-format config, checked against every file, so that it
+    # describes the code rather than contradicting it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check formatting
+        run: |
+          clang-format --version
+          git ls-files '*.cpp' '*.h' | xargs clang-format --dry-run -Werror
+      - name: Check clang-tidy
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+          clang-tidy --quiet -p build engine/*.cpp solver/*.cpp cli/*.cpp
+
   sanitizers:
     # Index arithmetic and a hand-rolled hash deserve a run under the address
     # and undefined behaviour sanitizers.

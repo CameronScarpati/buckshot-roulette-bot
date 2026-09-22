@@ -27,8 +27,7 @@ std::vector<Action> legalActions(const GameState& state, const RuleConfig& confi
 /// The returned states may have an empty tube, in which case the caller decides
 /// how the reload happens: `reloadOutcomes` for a solver, `sampleReload` for a
 /// live game. Probabilities in the result sum to one.
-std::vector<Outcome> apply(const GameState& state, const Action& action,
-                           const RuleConfig& config);
+std::vector<Outcome> apply(const GameState& state, const Action& action, const RuleConfig& config);
 
 /// Every load a reload can produce, with probabilities, for a solver. Item
 /// deals are folded in as the expected deal when `dealItems` is set, because

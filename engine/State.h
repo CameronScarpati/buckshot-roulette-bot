@@ -31,8 +31,8 @@ struct PlayerState {
 struct GameState {
   IndexedArray<PlayerState, kMaxPlayers> players{};
   std::uint8_t playerCount = 2;
-  std::uint8_t current = 0;    ///< seat to move
-  std::int8_t direction = 1;   ///< +1 clockwise, -1 after a Remote
+  std::uint8_t current = 0;   ///< seat to move
+  std::int8_t direction = 1;  ///< +1 clockwise, -1 after a Remote
   Tube tube;
   bool cuffUsedThisTurn = false;  ///< no stacking within one turn
 

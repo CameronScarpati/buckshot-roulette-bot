@@ -68,15 +68,15 @@ TEST(Notation, ChargesDefaultToFull) {
 }
 
 TEST(Notation, RejectsPositionsThatCannotExist) {
-  parseFails("p1=3/4 tube=1L1B turn=p1");                      // one seat
-  parseFails("p1=5/4 p2=2/4 tube=1L1B turn=p1");               // over maximum charges
-  parseFails("p1=2/2 p2=2/2 tube=9L1B turn=p1");               // tube too long
-  parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p3");               // no such seat
-  parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p1 known=p1:5L");   // past the end
-  parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p1 known=p1:0L,1L"); // two lives in a 1L tube
-  parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p1 [saw]");         // stray token
-  parseFails("p1=2/2 p2=2/2[nope] tube=1L1B turn=p1");         // no such item
-  parseFails("p1=0/2 p2=2/2 tube=1L1B turn=p1");               // the seat to move is out
+  parseFails("p1=3/4 tube=1L1B turn=p1");                        // one seat
+  parseFails("p1=5/4 p2=2/4 tube=1L1B turn=p1");                 // over maximum charges
+  parseFails("p1=2/2 p2=2/2 tube=9L1B turn=p1");                 // tube too long
+  parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p3");                 // no such seat
+  parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p1 known=p1:5L");     // past the end
+  parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p1 known=p1:0L,1L");  // two lives in a 1L tube
+  parseFails("p1=2/2 p2=2/2 tube=1L1B turn=p1 [saw]");           // stray token
+  parseFails("p1=2/2 p2=2/2[nope] tube=1L1B turn=p1");           // no such item
+  parseFails("p1=0/2 p2=2/2 tube=1L1B turn=p1");                 // the seat to move is out
 }
 
 TEST(Notation, AcceptsItemNamesAsWellAsTokens) {

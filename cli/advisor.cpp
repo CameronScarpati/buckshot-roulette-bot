@@ -200,8 +200,8 @@ void printJson(const SolveResult& result, const GameState& state) {
     std::cout << "{\"action\": \"" << result.ranked[i].action.describe(state.current)
               << "\", \"value\": " << result.ranked[i].value << "}";
   }
-  std::cout << "], \"nodes\": " << result.nodes << ", \"truncated\": "
-            << (result.truncated ? "true" : "false") << "}\n";
+  std::cout << "], \"nodes\": " << result.nodes
+            << ", \"truncated\": " << (result.truncated ? "true" : "false") << "}\n";
 }
 
 int runOnce(const std::string& position, int seat, int reloads, const std::string& mode,
@@ -289,7 +289,7 @@ int main(int argc, char** argv) {
       break;
     }
     std::vector<std::string> words = tokenize(line);
-    if (words.empty()) words.push_back("advise");
+    if (words.empty()) words.emplace_back("advise");
     std::string command = words[0];
     std::transform(command.begin(), command.end(), command.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -352,8 +352,8 @@ int main(int argc, char** argv) {
         const int round = mode.size() > 5 ? std::atoi(mode.c_str() + 5) : 2;
         session.config = RuleConfig::storyRound(round);
       } else if (mode == "mp" || mode == "multiplayer") {
-        session.config = RuleConfig::multiplayer(session.state.playerCount,
-                                                 session.state.players[0].maxHp);
+        session.config =
+            RuleConfig::multiplayer(session.state.playerCount, session.state.players[0].maxHp);
         session.options.opponent = OpponentModel::Paranoid;
       } else {
         std::cout << "Modes: don, story1, story2, story3, mp.\n";
@@ -393,8 +393,7 @@ int main(int argc, char** argv) {
       const int charges = std::atoi(words[2].c_str());
       PlayerState& player = session.state.players[seat];
       if (charges < 0 || charges > player.maxHp) {
-        std::cout << "That seat holds at most " << static_cast<int>(player.maxHp)
-                  << " charges.\n";
+        std::cout << "That seat holds at most " << static_cast<int>(player.maxHp) << " charges.\n";
         continue;
       }
       session.history.push_back(session.state);

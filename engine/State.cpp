@@ -108,9 +108,7 @@ namespace std {
 
 std::size_t hash<bsr::GameState>::operator()(const bsr::GameState& state) const noexcept {
   std::size_t h = 1469598103934665603ULL;
-  auto mix = [&h](std::size_t value) {
-    h ^= value + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-  };
+  auto mix = [&h](std::size_t value) { h ^= value + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2); };
   mix(state.playerCount);
   mix(state.current);
   mix(static_cast<std::size_t>(state.direction + 1));

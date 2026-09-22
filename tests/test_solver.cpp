@@ -66,8 +66,8 @@ TEST(Solver, TheSawTurnsACertainLiveIntoAKillOnTwoCharges) {
   // Without the saw the shot leaves the opponent alive and empties the tube, so
   // the round runs past the reload budget and falls back to charges in hand:
   // one each, so one half.
-  const SolveResult plain = solve(parse("p1=1/1 p2=2/2 tube=1L0B turn=p1"),
-                                  RuleConfig::doubleOrNothing(2), options());
+  const SolveResult plain =
+      solve(parse("p1=1/1 p2=2/2 tube=1L0B turn=p1"), RuleConfig::doubleOrNothing(2), options());
   EXPECT_NEAR(valueOf(plain, "shoot p2"), 0.5, 1e-12);
   EXPECT_TRUE(plain.truncated);
 }
@@ -126,8 +126,8 @@ TEST(Solver, TheInverterFlipsABlankHeavyTubeIntoALikelyKill) {
 
 TEST(Solver, ShootingAnEliminatedSeatIsNotOffered) {
   const RuleConfig multi = RuleConfig::multiplayer(3, 1);
-  const SolveResult result = solve(parse("p1=1/1 p2=0/1 p3=1/1 tube=1L0B turn=p1"), multi,
-                                   options());
+  const SolveResult result =
+      solve(parse("p1=1/1 p2=0/1 p3=1/1 tube=1L0B turn=p1"), multi, options());
   for (const ActionValue& entry : result.ranked) {
     EXPECT_NE(entry.action.describe(0), "shoot p2");
   }
@@ -146,9 +146,8 @@ TEST(Solver, ThreeSeatsRankAKillAheadOfShootingYourself) {
 }
 
 TEST(Solver, ValuesAreProbabilitiesAndTheRankingIsSorted) {
-  const SolveResult result =
-      solve(parse("p1=2/3[mg,beer,saw] p2=2/3[cuff,cig] tube=2L2B turn=p1"),
-            RuleConfig::doubleOrNothing(3), options(1));
+  const SolveResult result = solve(parse("p1=2/3[mg,beer,saw] p2=2/3[cuff,cig] tube=2L2B turn=p1"),
+                                   RuleConfig::doubleOrNothing(3), options(1));
   ASSERT_FALSE(result.ranked.empty());
   double previous = 2.0;
   for (const ActionValue& entry : result.ranked) {

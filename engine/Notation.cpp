@@ -114,9 +114,8 @@ bool parse(const std::string& text, GameState* state, std::string* error) {
       if (bracket != std::string::npos) {
         charges = value.substr(0, bracket);
         const std::size_t close = value.find(']', bracket);
-        itemList = value.substr(bracket + 1, close == std::string::npos
-                                                 ? std::string::npos
-                                                 : close - bracket - 1);
+        itemList = value.substr(
+            bracket + 1, close == std::string::npos ? std::string::npos : close - bracket - 1);
       }
       const std::size_t slash = charges.find('/');
       int hp = 0;
@@ -159,8 +158,9 @@ bool parse(const std::string& text, GameState* state, std::string* error) {
   result.playerCount = static_cast<std::uint8_t>(highestSeat + 1);
   for (int seat = 0; seat < result.playerCount; ++seat) {
     if (result.players[seat].maxHp == 0) {
-      *error = "seat p" + std::to_string(seat + 1) + " has no charges; every seat between p1 and p" +
-               std::to_string(result.playerCount) + " must be given some";
+      *error = "seat p" + std::to_string(seat + 1) +
+               " has no charges; every seat between p1 and p" + std::to_string(result.playerCount) +
+               " must be given some";
       return false;
     }
   }

@@ -8,7 +8,9 @@ namespace bsr {
 namespace rules {
 namespace {
 
-std::uint8_t maskFor(int seat) { return static_cast<std::uint8_t>(1u << seat); }
+std::uint8_t maskFor(int seat) {
+  return static_cast<std::uint8_t>(1u << seat);
+}
 
 std::uint8_t maskAll(int playerCount) {
   return static_cast<std::uint8_t>((1u << playerCount) - 1u);
@@ -54,9 +56,8 @@ std::vector<Outcome> resolveChamber(const GameState& state, std::uint8_t observe
     Outcome only;
     only.probability = 1.0;
     only.state = state;
-    only.state.tube.knownBy[0] =
-        static_cast<std::uint8_t>(only.state.tube.knownBy[0] | observers);
-    out.push_back(std::move(only));
+    only.state.tube.knownBy[0] = static_cast<std::uint8_t>(only.state.tube.knownBy[0] | observers);
+    out.push_back(only);
     return out;
   }
   const int unresolvedLive = state.tube.unresolvedLive();
@@ -71,14 +72,14 @@ std::vector<Outcome> resolveChamber(const GameState& state, std::uint8_t observe
     branch.probability = unresolvedLive / total;
     branch.state = state;
     branch.state.tube.resolveChamberDraw(Shell::Live, observers);
-    out.push_back(std::move(branch));
+    out.push_back(branch);
   }
   if (unresolvedBlank > 0) {
     Outcome branch;
     branch.probability = unresolvedBlank / total;
     branch.state = state;
     branch.state.tube.resolveChamberDraw(Shell::Blank, observers);
-    out.push_back(std::move(branch));
+    out.push_back(branch);
   }
   return out;
 }
@@ -138,7 +139,7 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
       Outcome only;
       only.state = state;
       heal(&only.state.players[seat], 1);
-      out.push_back(std::move(only));
+      out.push_back(only);
       return out;
     }
     case Item::Handcuffs:
@@ -148,14 +149,14 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
       only.state.players[action.target].cuffed = true;
       // One restraint per turn, whichever kind it is.
       only.state.cuffUsedThisTurn = true;
-      out.push_back(std::move(only));
+      out.push_back(only);
       return out;
     }
     case Item::HandSaw: {
       Outcome only;
       only.state = state;
       only.state.tube.sawed = true;
-      out.push_back(std::move(only));
+      out.push_back(only);
       return out;
     }
     case Item::Inverter: {
@@ -165,7 +166,7 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
       Outcome only;
       only.state = state;
       only.state.tube.invertChamber();
-      out.push_back(std::move(only));
+      out.push_back(only);
       return out;
     }
     case Item::BurnerPhone: {
@@ -173,7 +174,7 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
       if (offsets.empty()) {
         Outcome only;
         only.state = state;
-        out.push_back(std::move(only));
+        out.push_back(only);
         return out;
       }
       const double share = 1.0 / static_cast<double>(offsets.size());
@@ -184,7 +185,7 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
           branch.state = state;
           branch.state.tube.knownBy[offset] =
               static_cast<std::uint8_t>(branch.state.tube.knownBy[offset] | maskFor(seat));
-          out.push_back(std::move(branch));
+          out.push_back(branch);
           continue;
         }
         const int unresolvedLive = state.tube.unresolvedLive();
@@ -195,14 +196,14 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
           branch.probability = share * unresolvedLive / total;
           branch.state = state;
           branch.state.tube.resolve(offset, Shell::Live, maskFor(seat));
-          out.push_back(std::move(branch));
+          out.push_back(branch);
         }
         if (unresolvedBlank > 0) {
           Outcome branch;
           branch.probability = share * unresolvedBlank / total;
           branch.state = state;
           branch.state.tube.resolve(offset, Shell::Blank, maskFor(seat));
-          out.push_back(std::move(branch));
+          out.push_back(branch);
         }
       }
       return out;
@@ -216,15 +217,15 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
       bad.probability = 1.0 - config.medicineSuccess;
       bad.state = state;
       damage(&bad.state.players[seat], 1);
-      if (good.probability > 0.0) out.push_back(std::move(good));
-      if (bad.probability > 0.0) out.push_back(std::move(bad));
+      if (good.probability > 0.0) out.push_back(good);
+      if (bad.probability > 0.0) out.push_back(bad);
       return out;
     }
     case Item::Remote: {
       Outcome only;
       only.state = state;
       only.state.direction = static_cast<std::int8_t>(-only.state.direction);
-      out.push_back(std::move(only));
+      out.push_back(only);
       return out;
     }
     case Item::Adrenaline: {
@@ -235,8 +236,7 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
         // The stolen restraint still needs a victim: the first legal one that is
         // not the seat it was stolen from, falling back to that seat.
         const std::vector<int> seats = restrainableSeats(state);
-        inner.target = seats.empty() ? action.target
-                                     : static_cast<std::uint8_t>(seats.front());
+        inner.target = seats.empty() ? action.target : static_cast<std::uint8_t>(seats.front());
       }
       return applyItemEffect(state, inner, config);
     }
@@ -332,8 +332,7 @@ std::vector<Action> legalActions(const GameState& state, const RuleConfig& confi
   return actions;
 }
 
-std::vector<Outcome> apply(const GameState& state, const Action& action,
-                           const RuleConfig& config) {
+std::vector<Outcome> apply(const GameState& state, const Action& action, const RuleConfig& config) {
   std::vector<Outcome> out;
   const int seat = state.current;
 
@@ -352,7 +351,7 @@ std::vector<Outcome> apply(const GameState& state, const Action& action,
       if (!next.players[seat].alive() || live || !selfShot) {
         advanceTurn(&next);
       }
-      out.push_back(std::move(branch));
+      out.push_back(branch);
     }
     return out;
   }
@@ -366,7 +365,7 @@ std::vector<Outcome> apply(const GameState& state, const Action& action,
   if (out.empty()) {
     Outcome only;
     only.state = paid;
-    out.push_back(std::move(only));
+    out.push_back(only);
   }
   // Using an item never ends the turn, but it can end the round: medicine can
   // kill its user, and that seat must not keep the turn.
@@ -395,8 +394,8 @@ std::vector<std::tuple<std::uint8_t, std::uint8_t, double>> loadDistribution(
   for (int total = 2; total <= kMaxShells; ++total) {
     const double liveShare = totalShare / static_cast<double>(total - 1);
     for (int live = 1; live < total; ++live) {
-      table.emplace_back(static_cast<std::uint8_t>(live),
-                         static_cast<std::uint8_t>(total - live), liveShare);
+      table.emplace_back(static_cast<std::uint8_t>(live), static_cast<std::uint8_t>(total - live),
+                         liveShare);
     }
   }
   return table;
@@ -454,7 +453,7 @@ std::vector<Outcome> reloadOutcomes(const GameState& state, const RuleConfig& co
       next.current = static_cast<std::uint8_t>(next.nextSeat(next.current));
     }
     next.cuffUsedThisTurn = false;
-    out.push_back(std::move(branch));
+    out.push_back(branch);
   }
   return out;
 }

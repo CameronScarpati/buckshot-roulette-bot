@@ -17,9 +17,7 @@ struct IndexedArray : std::array<T, N> {
   using Base::operator[];
 
   T& operator[](int index) { return Base::operator[](static_cast<std::size_t>(index)); }
-  const T& operator[](int index) const {
-    return Base::operator[](static_cast<std::size_t>(index));
-  }
+  const T& operator[](int index) const { return Base::operator[](static_cast<std::size_t>(index)); }
 };
 
 }  // namespace bsr

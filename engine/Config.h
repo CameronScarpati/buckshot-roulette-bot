@@ -17,9 +17,9 @@ enum class Mode : std::uint8_t { Story, DoubleOrNothing, Multiplayer };
 /// depends on the answer, so it is a setting with an explicit default rather
 /// than a hard-coded rule. See docs/RULES.md, rule R11.
 enum class ReloadTurn : std::uint8_t {
-  KeepCurrent,   ///< whoever was to move keeps the turn
-  PlayerFirst,   ///< seat 0 acts first after every reload
-  DealerFirst,   ///< seat 1 acts first after every reload
+  KeepCurrent,  ///< whoever was to move keeps the turn
+  PlayerFirst,  ///< seat 0 acts first after every reload
+  DealerFirst,  ///< seat 1 acts first after every reload
 };
 
 /// How the solver treats the other seats. Stated in every advisor answer,
