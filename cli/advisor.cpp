@@ -179,6 +179,48 @@ void printHelp() {
 )";
 }
 
+/// Print a result as JSON, so another implementation can be compared against
+/// this one move by move.
+void printJson(const SolveResult& result, const GameState& state) {
+  std::cout << "{\"value\": " << std::fixed << std::setprecision(12) << result.value
+            << ", \"actions\": [";
+  for (std::size_t i = 0; i < result.ranked.size(); ++i) {
+    if (i > 0) std::cout << ", ";
+    std::cout << "{\"action\": \"" << result.ranked[i].action.describe(state.current)
+              << "\", \"value\": " << result.ranked[i].value << "}";
+  }
+  std::cout << "], \"nodes\": " << result.nodes << ", \"truncated\": "
+            << (result.truncated ? "true" : "false") << "}\n";
+}
+
+int runOnce(const std::string& position, int seat, int reloads, const std::string& mode,
+            bool asJson) {
+  GameState state;
+  std::string error;
+  if (!notation::parse(position, &state, &error)) {
+    std::cerr << error << "\n";
+    return 1;
+  }
+  RuleConfig config = RuleConfig::doubleOrNothing(state.players[0].maxHp);
+  SolveOptions options;
+  options.seat = seat;
+  options.reloadBudget = reloads;
+  if (mode == "mp" || mode == "multiplayer") {
+    config = RuleConfig::multiplayer(state.playerCount, state.players[0].maxHp);
+    options.opponent = OpponentModel::Paranoid;
+  } else if (mode.rfind("story", 0) == 0) {
+    config = RuleConfig::storyRound(mode.size() > 5 ? std::atoi(mode.c_str() + 5) : 2);
+  }
+  const SolveResult result = solve(state, config, options);
+  if (asJson) {
+    printJson(result, state);
+  } else {
+    std::cout << notation::board(state);
+    printRanking(result, state, seat);
+  }
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -188,13 +230,37 @@ int main(int argc, char** argv) {
     std::cerr << "internal: " << error << "\n";
     return 1;
   }
+  std::string startPosition;
+  std::string startMode = "don";
+  int startSeat = 0;
+  int reloads = 2;
+  bool asJson = false;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
+    auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
     if (arg == "--help" || arg == "-h") {
+      std::cout << "advisor [--position \"<notation>\"] [--seat N] [--reloads N] "
+                   "[--mode don|story2|mp] [--json]\n\n";
       printHelp();
       return 0;
     }
+    if (arg == "--position" || arg == "-p") {
+      startPosition = next();
+    } else if (arg == "--seat") {
+      startSeat = std::max(0, std::atoi(next().c_str()) - 1);
+    } else if (arg == "--reloads") {
+      reloads = std::atoi(next().c_str());
+    } else if (arg == "--mode") {
+      startMode = next();
+    } else if (arg == "--json") {
+      asJson = true;
+    }
   }
+  if (!startPosition.empty()) {
+    return runOnce(startPosition, startSeat, reloads, startMode, asJson);
+  }
+  session.options.seat = startSeat;
+  session.options.reloadBudget = reloads;
 
   std::cout << "Buckshot Roulette advisor. Type help for commands, quit to leave.\n";
   std::cout << notation::board(session.state) << "\n";

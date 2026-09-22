@@ -6,8 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Compiler warning flags
-add_compile_options(
+# Warning flags, carried by an interface target so that they apply to this
+# project's code and not to anything fetched into the build.
+option(WARNINGS_AS_ERRORS "Turn warnings into errors" OFF)
+
+add_library(bsr_warnings INTERFACE)
+target_compile_options(bsr_warnings INTERFACE
     -Wall
     -Wextra
     -Wpedantic
@@ -17,6 +21,9 @@ add_compile_options(
     -Wnon-virtual-dtor
     -Woverloaded-virtual
 )
+if(WARNINGS_AS_ERRORS)
+    target_compile_options(bsr_warnings INTERFACE -Werror)
+endif()
 
 # Release optimization flags
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
@@ -37,14 +44,15 @@ add_library(bsr_core STATIC
     solver/Solver.cpp
 )
 target_include_directories(bsr_core PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(bsr_core PUBLIC bsr_warnings)
 
 # Position advisor: enter any position, get every move ranked by win probability.
 add_executable(advisor cli/advisor.cpp)
-target_link_libraries(advisor PRIVATE bsr_core)
+target_link_libraries(advisor PRIVATE bsr_core bsr_warnings)
 
 # Play a round against the solver.
 add_executable(play cli/play.cpp)
-target_link_libraries(play PRIVATE bsr_core)
+target_link_libraries(play PRIVATE bsr_core bsr_warnings)
 
 # ---------------------------------------------------------------------------
 # Previous engine, kept until the new one covers everything it did.
@@ -94,7 +102,7 @@ if(BUILD_TESTS)
 
     if(CORE_TEST_SOURCES)
         add_executable(tests ${CORE_TEST_SOURCES})
-        target_link_libraries(tests PRIVATE bsr_core GTest::gtest_main)
+        target_link_libraries(tests PRIVATE bsr_core bsr_warnings GTest::gtest_main)
         gtest_discover_tests(tests)
     endif()
 

@@ -30,11 +30,63 @@ jobs:
         env:
           CC: ${{ matrix.cc }}
           CXX: ${{ matrix.cxx }}
-        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DBUILD_TESTS=ON
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DWARNINGS_AS_ERRORS=ON
 
       - name: Build
-        run: cmake --build build --config ${{ matrix.build_type }}
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Test
         working-directory: build
         run: ctest --output-on-failure --build-config ${{ matrix.build_type }}
+
+  readme-commands:
+    # The build and test commands printed in the README, run exactly as written
+    # on a clean checkout, so that they cannot drift away from what works.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Advisor
+        run: ./build/advisor --position "p1=2/4[saw] p2=3/4[mg,beer] tube=2L2B turn=p1"
+      - name: Self play
+        run: ./build/play --selfplay 20 --seed 1 --charges 2 --reloads 1
+
+  sanitizers:
+    # Index arithmetic and a hand-rolled hash deserve a run under the address
+    # and undefined behaviour sanitizers.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+      - name: Build
+        run: cmake --build build --target tests --parallel
+      - name: Test
+        env:
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ./build/tests
+
+  differential:
+    # The C++ solver against an independently written Python solver. Two
+    # implementations of the same rules that share no code have to agree.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build the advisor
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target advisor --parallel
+      - name: Check the oracle against itself
+        run: python3 tools/oracle/oracle.py --selftest
+      - name: Compare the two solvers
+        run: python3 tools/compare_solvers.py --advisor build/advisor --random 60 --seed 11 --quiet

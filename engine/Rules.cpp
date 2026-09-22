@@ -146,7 +146,8 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
       Outcome only;
       only.state = state;
       only.state.players[action.target].cuffed = true;
-      if (action.item == Item::Handcuffs) only.state.cuffUsedThisTurn = true;
+      // One restraint per turn, whichever kind it is.
+      only.state.cuffUsedThisTurn = true;
       out.push_back(std::move(only));
       return out;
     }
@@ -295,7 +296,7 @@ std::vector<Action> legalActions(const GameState& state, const RuleConfig& confi
       case Item::ExpiredMedicine:
         return true;
       case Item::Jammer:
-        return multiplayer && !restrainable.empty();
+        return multiplayer && !state.cuffUsedThisTurn && !restrainable.empty();
       case Item::Remote:
         return multiplayer && state.aliveCount() > 2;
       case Item::Adrenaline:

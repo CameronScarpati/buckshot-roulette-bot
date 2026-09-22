@@ -94,6 +94,107 @@ void reload(GameState* state, const RuleConfig& config, std::mt19937* rng, bool 
   }
 }
 
+/// A plain heuristic opponent, written out so that the solver has something
+/// honest to be measured against. It knows the odds and the obvious tactics and
+/// nothing else: no search, no lookahead past the current shell.
+Action baselineAction(const GameState& state, const RuleConfig& config) {
+  const int seat = state.current;
+  const std::vector<Action> actions = rules::legalActions(state, config);
+  auto available = [&](const Action& wanted) {
+    for (const Action& action : actions) {
+      if (action == wanted) return true;
+    }
+    return false;
+  };
+  const double live = state.tube.liveProbability(seat, 0);
+  const int opponent = state.nextSeat(seat);
+
+  // Finish the job when the shell is certain and the damage is enough.
+  const int damage = state.tube.sawed ? 2 : 1;
+  if (live >= 1.0 && state.players[opponent].hp <= damage && available(Action::shoot(opponent))) {
+    return Action::shoot(opponent);
+  }
+  // Saw a certain live shell that would otherwise leave the opponent standing.
+  if (live >= 1.0 && !state.tube.sawed && state.players[opponent].hp > 1 &&
+      available(Action::use(Item::HandSaw))) {
+    return Action::use(Item::HandSaw);
+  }
+  if (available(Action::use(Item::Cigarettes))) return Action::use(Item::Cigarettes);
+  if (live > 0.0 && live < 1.0 && available(Action::use(Item::MagnifyingGlass))) {
+    return Action::use(Item::MagnifyingGlass);
+  }
+  if (available(Action::useOn(Item::Handcuffs, opponent))) {
+    return Action::useOn(Item::Handcuffs, opponent);
+  }
+  if (live > 0.5 && !state.tube.sawed && available(Action::use(Item::HandSaw))) {
+    return Action::use(Item::HandSaw);
+  }
+  if (live < 0.5 && available(Action::shoot(seat))) return Action::shoot(seat);
+  if (available(Action::shoot(opponent))) return Action::shoot(opponent);
+  return actions.front();
+}
+
+/// Run rounds with nobody watching and report how often seat 1 survives.
+int runBatch(int rounds, unsigned seed, int charges, int players, int reloadBudget,
+             bool solverOnBothSides) {
+  RuleConfig config =
+      players > 2 ? RuleConfig::multiplayer(static_cast<std::uint8_t>(players),
+                                            static_cast<std::uint8_t>(charges))
+                  : RuleConfig::doubleOrNothing(static_cast<std::uint8_t>(charges));
+  int wins = 0;
+  long long moves = 0;
+  long long nodes = 0;
+  for (int round = 0; round < rounds; ++round) {
+    std::mt19937 rng(seed + static_cast<unsigned>(round));
+    GameState state;
+    state.playerCount = static_cast<std::uint8_t>(players);
+    for (int seat = 0; seat < players; ++seat) {
+      state.players[seat].hp = static_cast<std::uint8_t>(charges);
+      state.players[seat].maxHp = static_cast<std::uint8_t>(charges);
+    }
+    state.current = 0;
+    reload(&state, config, &rng, false);
+    int guard = 0;
+    while (!state.roundOver() && guard++ < 4000) {
+      while (rules::applyPendingSkip(&state)) {
+        if (state.roundOver()) break;
+      }
+      if (state.roundOver()) break;
+      if (state.needsReload()) {
+        reload(&state, config, &rng, false);
+        continue;
+      }
+      Action action;
+      if (state.current == 0 || solverOnBothSides) {
+        SolveOptions options;
+        options.seat = state.current;
+        options.reloadBudget = reloadBudget;
+        options.opponent = players > 2 ? OpponentModel::Paranoid : OpponentModel::Optimal;
+        const SolveResult result = solve(state, config, options);
+        nodes += result.nodes;
+        if (result.ranked.empty()) break;
+        action = result.ranked.front().action;
+      } else {
+        action = baselineAction(state, config);
+      }
+      const std::vector<Outcome> outcomes = rules::apply(state, action, config);
+      if (outcomes.empty()) break;
+      state = sample(outcomes, &rng).state;
+      ++moves;
+    }
+    if (state.soleSurvivor() == 0) ++wins;
+  }
+  std::cout << "rounds " << rounds << ", seed " << seed << ", " << charges << " charges, "
+            << players << " seats, reload budget " << reloadBudget << "\n";
+  std::cout << "seat 1 " << (solverOnBothSides ? "(solver, against the solver)"
+                                               : "(solver, against the heuristic)")
+            << " survived " << wins << " of " << rounds << " rounds, "
+            << std::fixed << std::setprecision(1)
+            << (100.0 * static_cast<double>(wins) / static_cast<double>(rounds)) << " percent\n";
+  std::cout << moves << " moves played, " << nodes << " states examined\n";
+  return 0;
+}
+
 int chooseFromMenu(const std::vector<Action>& actions, const GameState& state) {
   std::cout << "\nYour move:\n";
   for (std::size_t i = 0; i < actions.size(); ++i) {
@@ -114,6 +215,8 @@ int chooseFromMenu(const std::vector<Action>& actions, const GameState& state) {
 
 int main(int argc, char** argv) {
   Options options;
+  int batchRounds = 0;
+  bool bothSolvers = true;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
@@ -127,15 +230,29 @@ int main(int argc, char** argv) {
       options.reloadBudget = std::atoi(next().c_str());
     } else if (arg == "--quiet") {
       options.quiet = true;
+    } else if (arg == "--selfplay") {
+      batchRounds = std::atoi(next().c_str());
+      bothSolvers = true;
+    } else if (arg == "--baseline") {
+      batchRounds = std::atoi(next().c_str());
+      bothSolvers = false;
     } else if (arg == "--help" || arg == "-h") {
       std::cout << "play [--seed N] [--charges N] [--players N] [--reloads N]\n"
-                   "Play one round against the solver. The same seed replays the same "
-                   "shells.\n";
+                   "     [--selfplay ROUNDS | --baseline ROUNDS]\n\n"
+                   "With no batch flag, play one round yourself against the solver. The\n"
+                   "same seed replays the same shells. --selfplay runs the solver against\n"
+                   "itself, --baseline runs it against a heuristic opponent, and both\n"
+                   "report how often seat 1 survives.\n";
       return 0;
     }
   }
   options.players = std::max(2, std::min(options.players, static_cast<int>(kMaxPlayers)));
   options.charges = std::max(1, std::min(options.charges, 8));
+
+  if (batchRounds > 0) {
+    return runBatch(batchRounds, options.seed, options.charges, options.players,
+                    options.reloadBudget, bothSolvers);
+  }
 
   RuleConfig config = options.players > 2
                           ? RuleConfig::multiplayer(static_cast<std::uint8_t>(options.players),
