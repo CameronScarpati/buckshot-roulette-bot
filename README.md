@@ -59,13 +59,8 @@ Advising seat p1, to move: p1
     use Hand Saw                      0.2464   (-0.0256)
     shoot self                        0.1532   (-0.1189)
   Note: the search hit its reload budget in some lines, so those were valued by charges in hand.
-  Model: double or nothing, 4 charges, 2 items dealt per load, after a reload seat 1 acts
-  first, a sawed barrel does not survive a reload, a reload clears handcuffs. The other seat
-  plays to minimise your chance of surviving the round, spending no magnifying glasses or
-  burner phones, so it is modelled slightly weaker than a player who tracks shells. Values
-  are the probability of being the last player standing in this round, looking through 1
-  reload.
-  434575 states examined.
+  Model: double or nothing, 4 charges, 2 items dealt per load, after a reload seat 1 acts first, a sawed barrel does not survive a reload, a reload clears handcuffs. The other seat plays to minimise your chance of surviving the round, spending no magnifying glasses or burner phones, so it is modelled slightly weaker than a player who tracks shells, and choosing from what it has seen rather than from what you have seen, picking evenly between moves it cannot tell apart. The answer is given from what the advised seat has seen, so a shell only somebody else has looked at counts as unseen. Values are the probability of being the last player standing in this round, looking through 1 reload.
+  434583 states examined.
 ```
 
 ### The notation
@@ -88,6 +83,34 @@ p1=3/4[saw,beer] p2=2/4[mg] tube=2L3B turn=p1 cuffed=p2 sawed inverted known=p1:
 | `dir=ccw` | turn order runs the other way after a remote |
 
 Item tokens: `mg`, `beer`, `cig`, `cuff`, `saw`, `phone`, `adr`, `inv`, `med`, `jam`, `rem`.
+
+### Changing an assumption
+
+Several rules of this game are not documented anywhere reliable, so the engine had to pick a
+value and say so. Each of those is an option, which means a rule can be settled by playing a
+round and then checking the answer rather than by argument.
+
+```sh
+./build/advisor --position "p1=4/4[mg] p2=4/4 tube=2L3B turn=p1"
+./build/advisor --position "p1=4/4[mg] p2=4/4 tube=2L3B turn=p1" --reload-turn keep
+```
+
+| Who acts first after a mid-round reload | Best move | Its value |
+|---|---|---|
+| Seat 1, the default | shoot p2 | 0.5721 |
+| Whoever was to move | shoot p2 | 0.4054 |
+
+This is also the setting the results table further down calls the chair. Running the
+self-play batch under the other assumption turns 85 percent into 60 percent over the same
+twenty rounds and the same seed, which is the clearest measure of how much rests on it.
+
+```sh
+./build/play --selfplay 20 --seed 1 --charges 2 --reloads 1
+./build/play --selfplay 20 --seed 1 --charges 2 --reloads 1 --reload-turn keep
+```
+
+`--help` on either binary lists every setting, and
+[docs/RULES.md](docs/RULES.md) maps each one to the field it changes.
 
 ### Narrating a round
 

@@ -154,6 +154,24 @@ prints the ones that change answers in one line (`engine/Config.cpp:78-98`), and
 attaches that line to every result it returns (`solver/Solver.cpp:141-160`), so no answer is
 ever quoted without the assumptions it was computed under.
 
+Seven of these settings are also command line options on both binaries, so a rule can be
+checked against a real game without a compiler. The name of the option is the name of the
+field, written the way options are written.
+
+| Field | Option | Values |
+|---|---|---|
+| `reloadTurn` | `--reload-turn` | `keep`, `p1`, `dealer` |
+| `sawSurvivesReload` | `--saw-survives` | `yes`, `no` |
+| `reloadClearsCuffs` | `--clear-cuffs` | `yes`, `no` |
+| `itemsPerLoad` | `--items-per-load` | 0 to 8 |
+| `itemLimit` | `--item-limit` | 1 to 8 |
+| `medicineSuccess` | `--med-success` | 0 to 1 |
+| `medicineHeal` | `--med-heal` | 0 to 8 |
+
+The advisor also takes them one at a time as `rule <name> <value>` while a round is being
+narrated, and `rules` prints what they are currently set to. The remaining assumptions in
+this section have no setting behind them and are named as such in the table below.
+
 | Assumption | Current value | Field | What a different choice changes |
 |---|---|---|---|
 | Turn owner after a mid-round reload | Seat p1 acts first in the single-player modes, the seat to move keeps the turn in multiplayer (`engine/Rules.cpp:442-451`) | `reloadTurn` | This is the largest of the assumptions. It decides whether emptying the tube hands the initiative away or keeps it, so it changes whether racking the last shell with Beer is good or terrible, and it changes the value of a self-shot on the last shell |

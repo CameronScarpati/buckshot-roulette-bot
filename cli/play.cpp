@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "cli/Args.h"
+#include "cli/RuleFlags.h"
 #include "engine/Notation.h"
 #include "engine/Rules.h"
 #include "solver/Solver.h"
@@ -137,10 +138,16 @@ Action baselineAction(const GameState& state, const RuleConfig& config) {
 
 /// Run rounds with nobody watching and report how often seat 1 survives.
 int runBatch(int rounds, unsigned seed, int charges, int players, int reloadBudget,
-             bool solverOnBothSides) {
+             bool solverOnBothSides,
+             const std::vector<std::pair<std::string, std::string>>& ruleSettings) {
   RuleConfig config = players > 2 ? RuleConfig::multiplayer(static_cast<std::uint8_t>(players),
                                                             static_cast<std::uint8_t>(charges))
                                   : RuleConfig::doubleOrNothing(static_cast<std::uint8_t>(charges));
+  std::string settingError;
+  if (!cli::applyRuleSettings(ruleSettings, &config, &settingError)) {
+    std::cerr << settingError << "\n";
+    return 2;
+  }
   int wins = 0;
   int unfinished = 0;
   long long moves = 0;
@@ -230,6 +237,7 @@ int main(int argc, char** argv) {
   Options options;
   int batchRounds = 0;
   bool bothSolvers = true;
+  std::vector<std::pair<std::string, std::string>> ruleSettings;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     long number = 0;
@@ -247,18 +255,35 @@ int main(int argc, char** argv) {
       options.reloadBudget = static_cast<int>(number);
     } else if (arg == "--quiet") {
       options.quiet = true;
+    } else if (cli::isRuleSetting(arg)) {
+      std::string value;
+      if (!cli::nextValue(argc, argv, &i, arg, &value)) return 2;
+      std::string settingError;
+      RuleConfig probe;
+      if (!cli::applyRuleSetting(arg, value, &probe, &settingError)) {
+        std::cerr << settingError << "\n";
+        return 2;
+      }
+      ruleSettings.emplace_back(arg, value);
     } else if (arg == "--selfplay" || arg == "--baseline") {
       if (!cli::nextNumber(argc, argv, &i, arg, 1, 100000, &number)) return 2;
       batchRounds = static_cast<int>(number);
       bothSolvers = arg == "--selfplay";
     } else if (arg == "--help" || arg == "-h") {
       std::cout << "play [--seed N] [--charges N] [--players N] [--reloads N]\n"
-                   "     [--selfplay ROUNDS | --baseline ROUNDS]\n\n"
+                   "     [--selfplay ROUNDS | --baseline ROUNDS]\n"
+                   "     [rule settings, listed below]\n\n"
                    "With no batch flag, play one round yourself against the solver. The\n"
                    "same seed replays the same shells. --selfplay runs the solver against\n"
                    "itself, --baseline runs it against a heuristic opponent, and both\n"
-                   "report how often seat 1 survives.\n";
+                   "report how often seat 1 survives. --quiet prints only the result.\n\n"
+                   "A batch at the default reload budget takes minutes a round. Pass\n"
+                   "--reloads 0 or 1 for a batch you intend to wait for.\n\n"
+                << cli::ruleSettingsHelp();
       return 0;
+    } else {
+      std::cerr << "unrecognised option " << arg << "\n";
+      return 2;
     }
   }
   options.players = std::max(2, std::min(options.players, static_cast<int>(kMaxPlayers)));
@@ -266,13 +291,18 @@ int main(int argc, char** argv) {
 
   if (batchRounds > 0) {
     return runBatch(batchRounds, options.seed, options.charges, options.players,
-                    options.reloadBudget, bothSolvers);
+                    options.reloadBudget, bothSolvers, ruleSettings);
   }
 
   RuleConfig config = options.players > 2
                           ? RuleConfig::multiplayer(static_cast<std::uint8_t>(options.players),
                                                     static_cast<std::uint8_t>(options.charges))
                           : RuleConfig::doubleOrNothing(static_cast<std::uint8_t>(options.charges));
+  std::string settingError;
+  if (!cli::applyRuleSettings(ruleSettings, &config, &settingError)) {
+    std::cerr << settingError << "\n";
+    return 2;
+  }
 
   GameState state;
   state.playerCount = static_cast<std::uint8_t>(options.players);

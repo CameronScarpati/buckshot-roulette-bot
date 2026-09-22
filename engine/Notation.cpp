@@ -1,5 +1,6 @@
 #include "engine/Notation.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <cstdlib>

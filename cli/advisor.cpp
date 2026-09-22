@@ -22,6 +22,7 @@
 #endif
 
 #include "cli/Args.h"
+#include "cli/RuleFlags.h"
 #include "engine/Notation.h"
 #include "engine/Rules.h"
 #include "solver/Solver.h"
@@ -35,7 +36,19 @@ struct Session {
   RuleConfig config = RuleConfig::doubleOrNothing(4);
   SolveOptions options;
   std::vector<GameState> history;
+  /// Rule settings typed on the command line or with `rule`. Kept so that a
+  /// later `mode` command, which rebuilds the configuration from a preset,
+  /// does not quietly throw them away.
+  std::vector<std::pair<std::string, std::string>> ruleSettings;
 };
+
+/// Rebuild the settings on top of whatever preset is now in force.
+bool reapplySettings(Session* session) {
+  std::string error;
+  if (cli::applyRuleSettings(session->ruleSettings, &session->config, &error)) return true;
+  std::cout << error << "\n";
+  return false;
+}
 
 std::vector<std::string> tokenize(const std::string& line) {
   std::vector<std::string> words;
@@ -193,9 +206,12 @@ void printRanking(const SolveResult& result, const GameState& state, int seat) {
     // An opponent's ranking is sorted the other way, so the test has to be
     // symmetric or every row looks best.
     const bool best = std::abs(top - entry.value) < 1e-9;
-    std::cout << (best ? "  * " : "    ") << std::left << std::setw(34)
-              << entry.action.describe(result.mover) << std::right << std::fixed
-              << std::setprecision(4) << entry.value;
+    // A stolen item makes for a long name, and a name that fills the column
+    // used to run into the number after it.
+    std::string name = entry.action.describe(result.mover);
+    if (name.size() >= 34) name += " ";
+    std::cout << (best ? "  * " : "    ") << std::left << std::setw(34) << name << std::right
+              << std::fixed << std::setprecision(4) << entry.value;
     if (!best) {
       std::cout << "   (" << std::showpos << std::setprecision(4) << (entry.value - top)
                 << std::noshowpos << ")";
@@ -214,6 +230,29 @@ void printRanking(const SolveResult& result, const GameState& state, int seat) {
   std::cout << "  " << result.nodes << " states examined.\n\n";
 }
 
+/// An item that the chosen rule set never deals is still parsed, still printed
+/// on the board, and never offered as a move. Saying so is the difference
+/// between an answer that looks complete and one that is.
+std::string itemsOutsideThePool(const GameState& state, const RuleConfig& config) {
+  std::string names;
+  for (int index = 0; index < kItemCount; ++index) {
+    const Item item = itemAt(index);
+    bool held = false;
+    for (int seat = 0; seat < state.playerCount; ++seat) {
+      if (state.players[seat].items[index] > 0) held = true;
+    }
+    if (!held) continue;
+    if (std::find(config.itemPool.begin(), config.itemPool.end(), item) != config.itemPool.end()) {
+      continue;
+    }
+    if (!names.empty()) names += ", ";
+    names += itemName(item);
+  }
+  if (names.empty()) return names;
+  return "These rules never deal " + names +
+         ", so a seat holding one has no move that uses it: " + config.describe();
+}
+
 void printHelp() {
   std::cout << R"(Commands
 
@@ -226,6 +265,9 @@ void printHelp() {
     seat p<N>             advise this seat (default p1)
     mode don|story<N>|mp  rule set: double or nothing, story round N, multiplayer
     reloads <n>           how many reloads to look through (default 2)
+    rule <name> <value>   change a rule this engine had to assume, as in
+                          rule reload-turn keep. rules lists them all
+    rules                 the rule settings and what they are set to
 
   Edits
     hp p<N> <charges>     set charges
@@ -269,7 +311,7 @@ void printJson(const SolveResult& result) {
 }
 
 int runOnce(const std::string& position, int seat, int reloads, const std::string& mode,
-            bool asJson) {
+            bool asJson, const std::vector<std::pair<std::string, std::string>>& ruleSettings) {
   GameState state;
   std::string error;
   if (!notation::parse(position, &state, &error)) {
@@ -300,6 +342,13 @@ int runOnce(const std::string& position, int seat, int reloads, const std::strin
     std::cerr << "Modes: don, story1, story2, story3, mp.\n";
     return 1;
   }
+  std::string settingError;
+  if (!cli::applyRuleSettings(ruleSettings, &config, &settingError)) {
+    std::cerr << settingError << "\n";
+    return 1;
+  }
+  const std::string outside = itemsOutsideThePool(state, config);
+  if (!outside.empty() && !asJson) std::cerr << outside << "\n";
   const SolveResult result = solve(state, config, options);
   if (asJson) {
     printJson(result);
@@ -320,6 +369,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   std::string startPosition;
+  std::vector<std::pair<std::string, std::string>> ruleSettings;
   std::string startMode = "don";
   int startSeat = 0;
   int reloads = 2;
@@ -329,8 +379,10 @@ int main(int argc, char** argv) {
     long number = 0;
     if (arg == "--help" || arg == "-h") {
       std::cout << "advisor [--position \"<notation>\"] [--seat N] [--reloads N] "
-                   "[--mode don|story2|mp] [--json]\n\n";
+                   "[--mode don|story2|mp] [--json]\n"
+                   "        [rule settings, listed below]\n\n";
       printHelp();
+      std::cout << "\n" << cli::ruleSettingsHelp();
       return 0;
     }
     if (arg == "--position" || arg == "-p") {
@@ -350,14 +402,30 @@ int main(int argc, char** argv) {
       if (!cli::nextValue(argc, argv, &i, arg, &startMode)) return 2;
     } else if (arg == "--json") {
       asJson = true;
+    } else if (cli::isRuleSetting(arg)) {
+      std::string value;
+      if (!cli::nextValue(argc, argv, &i, arg, &value)) return 2;
+      std::string settingError;
+      RuleConfig probe;
+      if (!cli::applyRuleSetting(arg, value, &probe, &settingError)) {
+        std::cerr << settingError << "\n";
+        return 2;
+      }
+      ruleSettings.emplace_back(arg, value);
     } else {
       std::cerr << "unrecognised option " << arg << "\n";
       return 2;
     }
   }
   if (!startPosition.empty()) {
-    return runOnce(startPosition, startSeat, reloads, startMode, asJson);
+    return runOnce(startPosition, startSeat, reloads, startMode, asJson, ruleSettings);
   }
+  if (asJson) {
+    std::cerr << "--json prints one answer, so it needs --position\n";
+    return 2;
+  }
+  session.ruleSettings = ruleSettings;
+  if (!reapplySettings(&session)) return 2;
   session.options.seat = startSeat;
   session.options.reloadBudget = reloads;
 
@@ -456,7 +524,25 @@ int main(int argc, char** argv) {
         std::cout << "Modes: don, story1, story2, story3, mp.\n";
         continue;
       }
+      reapplySettings(&session);
       std::cout << session.config.describe() << "\n";
+      continue;
+    }
+    if (command == "rule" && words.size() >= 3) {
+      const std::string flag = words[1].rfind("--", 0) == 0 ? words[1] : "--" + words[1];
+      std::string settingError;
+      RuleConfig probe = session.config;
+      if (!cli::applyRuleSetting(flag, words[2], &probe, &settingError)) {
+        std::cout << settingError << "\n";
+        continue;
+      }
+      session.ruleSettings.emplace_back(flag, words[2]);
+      session.config = probe;
+      std::cout << session.config.describe() << "\n";
+      continue;
+    }
+    if (command == "rule" || command == "rules") {
+      std::cout << cli::ruleSettingsHelp() << "\n" << session.config.describe() << "\n";
       continue;
     }
     if (command == "load" && words.size() >= 2) {
@@ -711,6 +797,8 @@ int main(int argc, char** argv) {
         std::cout << "The tube is empty. Start the next load, as in load 2L3B.\n";
         continue;
       }
+      const std::string outside = itemsOutsideThePool(session.state, session.config);
+      if (!outside.empty()) std::cout << outside << "\n";
       const SolveResult result = solve(session.state, session.config, session.options);
       printRanking(result, session.state, session.options.seat);
       continue;
