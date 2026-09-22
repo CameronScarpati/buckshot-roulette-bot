@@ -80,6 +80,8 @@ p1=3/4[saw,beer] p2=2/4[mg] tube=2L3B turn=p1 cuffed=p2 sawed inverted known=p1:
 | `tube=2L3B` | two live and three blank shells remain |
 | `turn=p1` | seat 1 is to move |
 | `cuffed=p2` | seat 2 is handcuffed and will be skipped |
+| `skipped=p2` | seat 2 already lost a turn to handcuffs and is owed one back |
+| `restraintused` | the seat to move has already spent a restraint this turn |
 | `sawed` | the barrel is sawed for the next shot |
 | `inverted` | an inverter flipped a chamber nobody has seen |
 | `known=p1:0L,2B` | seat 1 has seen the chamber (live) and shell 3 (blank) |
