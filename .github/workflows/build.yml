@@ -55,6 +55,8 @@ jobs:
         run: ./build/advisor --position "p1=2/4[saw] p2=3/4[mg,beer] tube=2L2B turn=p1"
       - name: Self play
         run: ./build/play --selfplay 20 --seed 1 --charges 2 --reloads 1
+      - name: The same seed replays the same round, and the batch holds its band
+        run: ./tools/check_play.sh build
 
   format:
     # The committed clang-format config, checked against every file, so that it

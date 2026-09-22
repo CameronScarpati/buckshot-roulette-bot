@@ -237,6 +237,7 @@ next to them.
 | Unit tests | Tube arithmetic, every rule transition with its probability mass, the notation round trip |
 | Golden values | Solver values pinned to positions worked out by hand, with the arithmetic in the test |
 | Differential | An independently written Python solver in `tools/oracle/`, compared move by move over fixed and random positions by `tools/compare_solvers.py` |
+| Determinism | The same seed replays the same batch byte for byte, the same position gives the same answer, and a seeded batch is pinned to a band, by `tools/check_play.sh` |
 | Sanitizers | The suite under the address and undefined behaviour sanitizers in CI |
 | Build | Four compiler and configuration combinations, with warnings as errors |
 
