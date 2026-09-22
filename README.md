@@ -148,6 +148,10 @@ memoised. Within a load the graph is acyclic, because every move consumes a shel
 item. Across a reload the search continues for a stated number of reloads and then stops at
 a boundary value, and any answer that touched the boundary says so.
 
+**Every answer is given from what you have seen.** A shell that only the other seat has
+looked at counts as unseen, so the advisor can never tell you what is in the chamber on the
+strength of somebody else having looked.
+
 **The opponent model is stated, because the word optimal means nothing without one.** By
 default the other seat plays to minimise your chance of surviving the round, and it chooses
 from what it has seen rather than from the position as it really is. A shell you revealed

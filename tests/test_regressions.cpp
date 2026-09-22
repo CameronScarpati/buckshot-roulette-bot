@@ -160,6 +160,29 @@ TEST(Regression, PrivateKnowledgeIsNeverWorseThanNone) {
   EXPECT_GE(informed, blind - 1e-9);
 }
 
+TEST(Regression, TheAdvisedSeatCannotReadAShellItHasNotSeenEither) {
+  // The opponent knows the chamber is live and we do not. Reading the position
+  // as it really is told us that shooting the opponent wins outright, which is
+  // knowledge we have no way of having. From our own information state the
+  // chamber is an even chance and both moves are worth one half.
+  const SolveResult result = solve(parse("p1=1/2 p2=1/2 tube=1L1B turn=p2 known=p1:0L"),
+                                   RuleConfig::doubleOrNothing(2), options(1));
+  EXPECT_NEAR(result.value, 0.5, 1e-12);
+  for (const ActionValue& entry : result.ranked) {
+    EXPECT_NEAR(entry.value, 0.5, 1e-12) << entry.action.describe(result.mover);
+  }
+}
+
+TEST(Regression, WhatOneSeatSeesDoesNotChangeWhatAnotherIsTold) {
+  // Adding a reveal that belongs to somebody else must not move our number at
+  // all, in either direction.
+  const RuleConfig config = RuleConfig::doubleOrNothing(2);
+  const double plain = solve(parse("p1=2/2 p2=2/2 tube=2L2B turn=p1"), config, options(0, 1)).value;
+  const double theirs =
+      solve(parse("p1=2/2 p2=2/2 tube=2L2B turn=p1 known=p2:0L"), config, options(0, 1)).value;
+  EXPECT_NEAR(plain, theirs, 1e-12);
+}
+
 TEST(Regression, EveryValueStaysAProbability) {
   // A sweep over positions that mix knowledge, restraints, inversion and items,
   // asserting the one invariant that covers every arithmetic slip at once.

@@ -216,8 +216,9 @@ std::string describeAssumptions(const RuleConfig& config, const SolveOptions& op
   }
   out << ", and choosing from what it has seen rather than from what you have seen, "
          "picking evenly between moves it cannot tell apart";
-  out << ". Values are the probability of being the last player standing in this "
-         "round, looking through "
+  out << ". The answer is given from what the advised seat has seen, so a shell "
+         "only somebody else has looked at counts as unseen. Values are the probability "
+         "of being the last player standing in this round, looking through "
       << options.reloadBudget << " reload" << (options.reloadBudget == 1 ? "" : "s") << ".";
   return out.str();
 }
@@ -232,7 +233,10 @@ SolveResult solve(const GameState& state, const RuleConfig& config, const SolveO
     return result;
   }
 
-  GameState start = state;
+  // Answer from the information state of the seat being advised. A shell it
+  // has not seen goes back into the unresolved pool, so the search cannot tell
+  // it what is in the chamber on the strength of somebody else having looked.
+  GameState start = blindedTo(state, options.seat);
   while (rules::applyPendingSkip(&start)) {
     if (start.roundOver()) break;
   }

@@ -194,8 +194,12 @@ void printHelp() {
     shot p<N> blank       the seat to move shot p<N> and it was blank
     eject live|blank      a beer ejected a shell of that type
     mg live|blank         a magnifying glass showed the seat to move that shell
-    phone <k> live|blank  a burner phone named shell k (1 is the chamber)
+    phone <k> live|blank  a burner phone named shell k, counting from 2, since
+                          a burner phone never names the chamber
     use <item> [p<N>]     the seat to move used an item with no chance outcome
+    use adr p<N> <item> [p<M>]
+                          the seat to move stole an item and used it, on p<M>
+                          when the stolen item needs a target
 
   Other
     advise (or a blank line)   rank every move
@@ -525,8 +529,9 @@ int main(int argc, char** argv) {
     if (command == "phone" && words.size() >= 3) {
       const int position = std::atoi(words[1].c_str());
       Shell shell;
-      if (position < 1 || position > session.state.tube.size() || !parseShell(words[2], &shell)) {
-        std::cout << "Say which shell and what it is, as in phone 3 blank (1 is the chamber).\n";
+      if (position < 2 || position > session.state.tube.size() || !parseShell(words[2], &shell)) {
+        std::cout << "Say which shell and what it is, as in phone 3 blank. A burner phone "
+                     "never names the chamber, so the number starts at 2.\n";
         continue;
       }
       const int seat = session.state.current;
@@ -550,7 +555,33 @@ int main(int argc, char** argv) {
         continue;
       }
       Action action = Action::use(item);
-      if (itemNeedsTarget(item)) {
+      if (item == Item::Adrenaline) {
+        // Adrenaline is two decisions: whose item, and where the stolen item
+        // points. Without both it would silently steal whatever the default is.
+        int from = 0;
+        Item stolen;
+        if (words.size() < 4 || !parseSeat(words[2], session.state, &from) ||
+            !itemFromToken(words[3], &stolen)) {
+          std::cout << "Say whose item and which one, as in use adr p2 saw.\n";
+          continue;
+        }
+        if (stolen == Item::Adrenaline) {
+          std::cout << "Adrenaline cannot take another adrenaline.\n";
+          continue;
+        }
+        if (session.state.players[from].items[itemIndex(stolen)] == 0) {
+          std::cout << "p" << (from + 1) << " is not holding a " << itemName(stolen) << ".\n";
+          continue;
+        }
+        int victim = from;
+        if (itemNeedsTarget(stolen)) {
+          if (words.size() < 5 || !parseSeat(words[4], session.state, &victim)) {
+            std::cout << "That stolen item needs a target, as in use adr p2 cuff p3.\n";
+            continue;
+          }
+        }
+        action = Action::steal(from, stolen, victim);
+      } else if (itemNeedsTarget(item)) {
         int seat = 0;
         if (words.size() < 3 || !parseSeat(words[2], session.state, &seat)) {
           std::cout << "That item needs a target, as in use cuff p2.\n";

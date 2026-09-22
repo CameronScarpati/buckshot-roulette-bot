@@ -180,8 +180,11 @@ items randomly from the pool (`cli/play.cpp:40-51`), and only the solver rounds 
 
 ## What is not modelled
 
-The solver treats every seat other than the one it is advising as choosing from that seat's
-own information state. A shell that the advised seat has revealed privately is put back into
+The solver answers from the information state of the seat it is advising: every shell that
+seat has not seen goes back into the unresolved pool before anything is computed, so a
+position that says another seat has looked at a shell does not tell the advised seat what is
+in it. It also treats every seat other than the one it is advising as choosing from that
+seat's own information state. A shell that the advised seat has revealed privately is put back into
 the unresolved pool before the other seat picks a move, and its choice is then played out in
 the position as it really is. When two of its moves look identical from what it has seen, it
 is assumed to pick between them evenly, since nothing it knows separates them. Without this,
