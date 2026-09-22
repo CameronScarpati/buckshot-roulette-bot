@@ -1,4 +1,4 @@
-# oracle.py — independent exact solver (differential-testing oracle)
+# oracle.py, an independent exact solver used as a differential-testing oracle
 
 `oracle.py` computes, exactly, the probability that a nominated seat is the last
 seat alive in the current round of Buckshot Roulette. It exists to be compared,
@@ -48,7 +48,7 @@ A bad position exits 2 with a one-line reason on stderr.
 out in a comment above it), prints PASS or FAIL per check, and exits non-zero on
 any failure.
 
-## Approximations — shared with the C++ on purpose
+## Approximations, shared with the C++ on purpose
 
 Two parts of the model are deliberate approximations, made the same way on both
 sides so the two can be compared at all. They are not claims about the real game.
@@ -79,7 +79,7 @@ away in `oracle.py`.
 * **Inverting an unseen chamber**: the shell keeps its place in the unresolved
   pool and a flag makes it fire as the complement. The chance the chamber fires
   live becomes 1 − p. When the shell is finally drawn, the *drawn* type is what
-  leaves the tube and the complement is what fires — the net effect of the
+  leaves the tube and the complement is what fires, which is the net effect of the
   shell becoming its complement and then being consumed.
 * **Jammer and the once-per-turn cuff limit**: "only one pair of handcuffs may
   be applied per turn" is enforced as one cuff application per turn of any kind,

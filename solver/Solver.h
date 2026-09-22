@@ -17,8 +17,8 @@ struct SolveOptions {
   OpponentModel opponent = OpponentModel::Optimal;
 
   /// How many reloads the search looks through before it stops recursing. Each
-  /// extra reload multiplies the work; two is enough to rank the current move
-  /// in every position the audit measured.
+  /// extra reload multiplies the work, and two is enough to settle the ranking
+  /// in the positions this was tried on.
   int reloadBudget = 2;
 
   /// Whether other seats may spend magnifying glasses and burner phones. Off by
