@@ -1,0 +1,462 @@
+/// Position advisor. Type the position you are looking at, or narrate the round
+/// as it happens, and get every legal move ranked by the probability that you
+/// are the last player standing.
+
+#include <algorithm>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "engine/Notation.h"
+#include "engine/Rules.h"
+#include "solver/Solver.h"
+
+namespace {
+
+using namespace bsr;
+
+struct Session {
+  GameState state;
+  RuleConfig config = RuleConfig::doubleOrNothing(4);
+  SolveOptions options;
+  std::vector<GameState> history;
+};
+
+std::vector<std::string> tokenize(const std::string& line) {
+  std::vector<std::string> words;
+  std::istringstream stream(line);
+  std::string word;
+  while (stream >> word) words.push_back(word);
+  return words;
+}
+
+bool parseSeat(const std::string& text, const GameState& state, int* seat) {
+  if (text.size() >= 2 && (text[0] == 'p' || text[0] == 'P')) {
+    const int value = std::atoi(text.c_str() + 1);
+    if (value >= 1 && value <= state.playerCount) {
+      *seat = value - 1;
+      return true;
+    }
+  }
+  if (text == "self" || text == "me") {
+    *seat = state.current;
+    return true;
+  }
+  return false;
+}
+
+bool parseShell(const std::string& text, Shell* shell) {
+  if (text == "live" || text == "l") {
+    *shell = Shell::Live;
+    return true;
+  }
+  if (text == "blank" || text == "b") {
+    *shell = Shell::Blank;
+    return true;
+  }
+  return false;
+}
+
+std::uint8_t allSeats(const GameState& state) {
+  return static_cast<std::uint8_t>((1u << state.playerCount) - 1u);
+}
+
+/// Apply an action whose chance outcome is already known, by taking the branch
+/// that matches what actually happened.
+bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Shell shell) {
+  GameState before = session->state;
+  if (haveShell) {
+    if (session->state.tube.empty()) {
+      std::cout << "The tube is empty. Use load to start the next one.\n";
+      return false;
+    }
+    // Force the chamber to what was observed, honouring a pending inversion by
+    // recording the fired type directly.
+    session->state.tube.chamberInverted = false;
+    session->state.tube.resolve(0, shell, allSeats(session->state));
+    const int knownLive = [&] {
+      int count = 0;
+      for (int i = 0; i < session->state.tube.size(); ++i) {
+        if (session->state.tube.truth[i] == Shell::Live) ++count;
+      }
+      return count;
+    }();
+    const int knownBlank = [&] {
+      int count = 0;
+      for (int i = 0; i < session->state.tube.size(); ++i) {
+        if (session->state.tube.truth[i] == Shell::Blank) ++count;
+      }
+      return count;
+    }();
+    if (knownLive > session->state.tube.live || knownBlank > session->state.tube.blank) {
+      session->state = before;
+      std::cout << "That contradicts the tube: it does not hold another "
+                << (shell == Shell::Live ? "live" : "blank") << " shell.\n";
+      return false;
+    }
+  }
+  std::vector<Outcome> outcomes = rules::apply(session->state, action, session->config);
+  if (outcomes.empty()) {
+    session->state = before;
+    std::cout << "That move is not available here.\n";
+    return false;
+  }
+  // With the chamber pinned there is only one branch with any weight left.
+  const Outcome* chosen = &outcomes.front();
+  for (const Outcome& outcome : outcomes) {
+    if (outcome.probability > chosen->probability) chosen = &outcome;
+  }
+  session->history.push_back(before);
+  session->state = chosen->state;
+  return true;
+}
+
+void printRanking(const SolveResult& result, const GameState& state, int seat) {
+  if (result.ranked.empty()) {
+    std::cout << "No legal move from this position.\n";
+    return;
+  }
+  std::cout << "\nAdvising seat p" << (seat + 1) << ", to move: p"
+            << (static_cast<int>(state.current) + 1) << "\n";
+  const double top = result.ranked.front().value;
+  for (const ActionValue& entry : result.ranked) {
+    const bool best = top - entry.value < 1e-9;
+    std::cout << (best ? "  * " : "    ") << std::left << std::setw(34)
+              << entry.action.describe(state.current) << std::right << std::fixed
+              << std::setprecision(4) << entry.value;
+    if (!best) {
+      std::cout << "   (" << std::showpos << std::setprecision(4) << (entry.value - top)
+                << std::noshowpos << ")";
+    }
+    std::cout << "\n";
+  }
+  const std::vector<Action> best = result.bestActions();
+  if (best.size() > 1) {
+    std::cout << "  " << best.size() << " moves tie at the top; any of them is optimal.\n";
+  }
+  if (result.truncated) {
+    std::cout << "  Note: the search hit its reload budget in some lines, so those were "
+                 "valued by charges in hand.\n";
+  }
+  std::cout << "  " << result.assumptions << "\n";
+  std::cout << "  " << result.nodes << " states examined.\n\n";
+}
+
+void printHelp() {
+  std::cout << R"(Commands
+
+  Position
+    set <notation>        replace the position, e.g.
+                          set p1=3/4[saw,beer] p2=2/4[mg] tube=2L3B turn=p1
+    load <n>L<m>B         start a fresh load, clearing knowledge and the saw
+    state                 print the position in one line
+    board                 print the position as a board
+    seat p<N>             advise this seat (default p1)
+    mode don|story<N>|mp  rule set: double or nothing, story round N, multiplayer
+    reloads <n>           how many reloads to look through (default 2)
+
+  Edits
+    hp p<N> <charges>     set charges
+    give p<N> <item>      add an item        take p<N> <item>   remove an item
+    turn p<N>             hand the turn to a seat
+    cuff p<N>             cuff a seat        uncuff p<N>
+    saw                   mark the barrel sawed
+    invert                mark the chamber inverted
+
+  Events, as they happen
+    shot self live        you shot yourself and it was live
+    shot p<N> blank       the seat to move shot p<N> and it was blank
+    eject live|blank      a beer ejected a shell of that type
+    mg live|blank         a magnifying glass showed the seat to move that shell
+    phone <k> live|blank  a burner phone named shell k (1 is the chamber)
+    use <item> [p<N>]     the seat to move used an item with no chance outcome
+
+  Other
+    advise (or a blank line)   rank every move
+    undo    help    quit
+)";
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  Session session;
+  std::string error;
+  if (!notation::parse("p1=4/4 p2=4/4 tube=2L2B turn=p1", &session.state, &error)) {
+    std::cerr << "internal: " << error << "\n";
+    return 1;
+  }
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--help" || arg == "-h") {
+      printHelp();
+      return 0;
+    }
+  }
+
+  std::cout << "Buckshot Roulette advisor. Type help for commands, quit to leave.\n";
+  std::cout << notation::board(session.state) << "\n";
+
+  std::string line;
+  while (true) {
+    std::cout << "> " << std::flush;
+    if (!std::getline(std::cin, line)) {
+      std::cout << "\n";
+      break;
+    }
+    std::vector<std::string> words = tokenize(line);
+    if (words.empty()) words.push_back("advise");
+    std::string command = words[0];
+    std::transform(command.begin(), command.end(), command.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (command == "quit" || command == "exit") break;
+    if (command == "help") {
+      printHelp();
+      continue;
+    }
+    if (command == "state") {
+      std::cout << notation::print(session.state) << "\n";
+      continue;
+    }
+    if (command == "board") {
+      std::cout << notation::board(session.state);
+      continue;
+    }
+    if (command == "undo") {
+      if (session.history.empty()) {
+        std::cout << "Nothing to undo.\n";
+      } else {
+        session.state = session.history.back();
+        session.history.pop_back();
+        std::cout << notation::board(session.state);
+      }
+      continue;
+    }
+    if (command == "set" || command == "pos") {
+      const std::size_t pos = line.find(words[0]) + words[0].size();
+      GameState parsed;
+      if (!notation::parse(line.substr(pos), &parsed, &error)) {
+        std::cout << error << "\n";
+        continue;
+      }
+      session.history.push_back(session.state);
+      session.state = parsed;
+      std::cout << notation::board(session.state);
+      continue;
+    }
+    if (command == "seat" && words.size() >= 2) {
+      int seat = 0;
+      if (!parseSeat(words[1], session.state, &seat)) {
+        std::cout << "Name a seat, as in seat p1.\n";
+        continue;
+      }
+      session.options.seat = seat;
+      std::cout << "Advising seat p" << (seat + 1) << ".\n";
+      continue;
+    }
+    if (command == "reloads" && words.size() >= 2) {
+      session.options.reloadBudget = std::max(0, std::atoi(words[1].c_str()));
+      std::cout << "Looking through " << session.options.reloadBudget << " reloads.\n";
+      continue;
+    }
+    if (command == "mode" && words.size() >= 2) {
+      const std::string mode = words[1];
+      if (mode == "don") {
+        session.config = RuleConfig::doubleOrNothing(session.state.players[0].maxHp);
+      } else if (mode.rfind("story", 0) == 0) {
+        const int round = mode.size() > 5 ? std::atoi(mode.c_str() + 5) : 2;
+        session.config = RuleConfig::storyRound(round);
+      } else if (mode == "mp" || mode == "multiplayer") {
+        session.config = RuleConfig::multiplayer(session.state.playerCount,
+                                                 session.state.players[0].maxHp);
+        session.options.opponent = OpponentModel::Paranoid;
+      } else {
+        std::cout << "Modes: don, story1, story2, story3, mp.\n";
+        continue;
+      }
+      std::cout << session.config.describe() << "\n";
+      continue;
+    }
+    if (command == "load" && words.size() >= 2) {
+      GameState next = session.state;
+      std::string spec = "p1=1/1 p2=1/1 tube=" + words[1];
+      GameState probe;
+      if (!notation::parse(spec, &probe, &error)) {
+        std::cout << error << "\n";
+        continue;
+      }
+      next.tube = Tube{};
+      next.tube.live = probe.tube.live;
+      next.tube.blank = probe.tube.blank;
+      if (session.config.reloadClearsCuffs) {
+        for (int seat = 0; seat < next.playerCount; ++seat) {
+          next.players[seat].cuffed = false;
+          next.players[seat].skipConsumed = false;
+        }
+      }
+      session.history.push_back(session.state);
+      session.state = next;
+      std::cout << notation::board(session.state);
+      continue;
+    }
+    if (command == "hp" && words.size() >= 3) {
+      int seat = 0;
+      if (!parseSeat(words[1], session.state, &seat)) {
+        std::cout << "Name a seat, as in hp p1 3.\n";
+        continue;
+      }
+      const int charges = std::atoi(words[2].c_str());
+      PlayerState& player = session.state.players[seat];
+      if (charges < 0 || charges > player.maxHp) {
+        std::cout << "That seat holds at most " << static_cast<int>(player.maxHp)
+                  << " charges.\n";
+        continue;
+      }
+      session.history.push_back(session.state);
+      player.hp = static_cast<std::uint8_t>(charges);
+      std::cout << notation::board(session.state);
+      continue;
+    }
+    if ((command == "give" || command == "take") && words.size() >= 3) {
+      int seat = 0;
+      Item item;
+      if (!parseSeat(words[1], session.state, &seat) || !itemFromToken(words[2], &item)) {
+        std::cout << "Say which seat and which item, as in give p1 saw.\n";
+        continue;
+      }
+      session.history.push_back(session.state);
+      std::uint8_t& count = session.state.players[seat].items[itemIndex(item)];
+      if (command == "give") {
+        ++count;
+      } else if (count > 0) {
+        --count;
+      }
+      std::cout << notation::board(session.state);
+      continue;
+    }
+    if (command == "turn" && words.size() >= 2) {
+      int seat = 0;
+      if (!parseSeat(words[1], session.state, &seat)) {
+        std::cout << "Name a seat, as in turn p2.\n";
+        continue;
+      }
+      session.history.push_back(session.state);
+      session.state.current = static_cast<std::uint8_t>(seat);
+      session.state.cuffUsedThisTurn = false;
+      std::cout << notation::board(session.state);
+      continue;
+    }
+    if ((command == "cuff" || command == "uncuff") && words.size() >= 2) {
+      int seat = 0;
+      if (!parseSeat(words[1], session.state, &seat)) {
+        std::cout << "Name a seat, as in cuff p2.\n";
+        continue;
+      }
+      session.history.push_back(session.state);
+      session.state.players[seat].cuffed = command == "cuff";
+      std::cout << notation::board(session.state);
+      continue;
+    }
+    if (command == "saw" || command == "invert") {
+      session.history.push_back(session.state);
+      if (command == "saw") {
+        session.state.tube.sawed = true;
+      } else {
+        session.state.tube.invertChamber();
+      }
+      std::cout << notation::board(session.state);
+      continue;
+    }
+    if (command == "shot" && words.size() >= 3) {
+      int target = 0;
+      Shell shell;
+      if (!parseSeat(words[1], session.state, &target) || !parseShell(words[2], &shell)) {
+        std::cout << "Say who was shot and what came out, as in shot self live.\n";
+        continue;
+      }
+      if (applyWithOutcome(&session, Action::shoot(target), true, shell)) {
+        std::cout << notation::board(session.state);
+      }
+      continue;
+    }
+    if ((command == "eject" || command == "beer") && words.size() >= 2) {
+      Shell shell;
+      if (!parseShell(words[1], &shell)) {
+        std::cout << "Say what was ejected, as in eject blank.\n";
+        continue;
+      }
+      if (applyWithOutcome(&session, Action::use(Item::Beer), true, shell)) {
+        std::cout << notation::board(session.state);
+      }
+      continue;
+    }
+    if (command == "mg" && words.size() >= 2) {
+      Shell shell;
+      if (!parseShell(words[1], &shell)) {
+        std::cout << "Say what it showed, as in mg live.\n";
+        continue;
+      }
+      if (session.state.tube.empty()) {
+        std::cout << "The tube is empty.\n";
+        continue;
+      }
+      session.history.push_back(session.state);
+      const int seat = session.state.current;
+      std::uint8_t& count = session.state.players[seat].items[itemIndex(Item::MagnifyingGlass)];
+      if (count > 0) --count;
+      session.state.tube.chamberInverted = false;
+      session.state.tube.resolve(0, shell, static_cast<std::uint8_t>(1u << seat));
+      std::cout << notation::board(session.state);
+      continue;
+    }
+    if (command == "phone" && words.size() >= 3) {
+      const int position = std::atoi(words[1].c_str());
+      Shell shell;
+      if (position < 1 || position > session.state.tube.size() || !parseShell(words[2], &shell)) {
+        std::cout << "Say which shell and what it is, as in phone 3 blank (1 is the chamber).\n";
+        continue;
+      }
+      session.history.push_back(session.state);
+      const int seat = session.state.current;
+      std::uint8_t& count = session.state.players[seat].items[itemIndex(Item::BurnerPhone)];
+      if (count > 0) --count;
+      session.state.tube.resolve(position - 1, shell, static_cast<std::uint8_t>(1u << seat));
+      std::cout << notation::board(session.state);
+      continue;
+    }
+    if (command == "use" && words.size() >= 2) {
+      Item item;
+      if (!itemFromToken(words[1], &item)) {
+        std::cout << "No item is called " << words[1] << ".\n";
+        continue;
+      }
+      Action action = Action::use(item);
+      if (itemNeedsTarget(item)) {
+        int seat = 0;
+        if (words.size() < 3 || !parseSeat(words[2], session.state, &seat)) {
+          std::cout << "That item needs a target, as in use cuff p2.\n";
+          continue;
+        }
+        action.target = static_cast<std::uint8_t>(seat);
+      }
+      if (applyWithOutcome(&session, action, false, Shell::Unknown)) {
+        std::cout << notation::board(session.state);
+      }
+      continue;
+    }
+    if (command == "advise" || command == "go") {
+      if (session.state.needsReload()) {
+        std::cout << "The tube is empty. Start the next load, as in load 2L3B.\n";
+        continue;
+      }
+      const SolveResult result = solve(session.state, session.config, session.options);
+      printRanking(result, session.state, session.options.seat);
+      continue;
+    }
+    std::cout << "I do not know the command " << words[0] << ". Type help.\n";
+  }
+  return 0;
+}
