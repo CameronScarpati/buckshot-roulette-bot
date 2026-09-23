@@ -198,8 +198,12 @@ prints all of this.
   an exact minimiser instead. Against the real dealer, treat the numbers as a lower bound.
 - **The reload boundary is a cutoff.** Looking through more reloads costs more time, and at
   the end of the budget a position is valued by charges in hand.
-- **The item deal at a reload is averaged, not enumerated.** Enumerating every multiset would
-  multiply the state space by thousands without changing which move is best.
+- **The item deal at a reload is one fixed spread, not a distribution.** Inside the search,
+  each living seat is dealt the same deterministic spread over the item pool at every reload,
+  offset by its seat index, rather than a random draw. Enumerating every multiset would
+  multiply the state space by thousands, and [docs/RULES.md](docs/RULES.md) records this as an
+  approximation, along with the item count, which a live game redraws at every load and the
+  search takes at the middle of its range.
 - **Three rules are still assumptions.** Whether a restraint survives a mid-round reload, how
   many items a seat's tray holds, and the shape of the shell composition inside the range the
   game uses are all settings, because nothing reliable documents them.

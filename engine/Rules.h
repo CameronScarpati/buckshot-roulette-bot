@@ -29,10 +29,11 @@ std::vector<Action> legalActions(const GameState& state, const RuleConfig& confi
 /// live game. Probabilities in the result sum to one.
 std::vector<Outcome> apply(const GameState& state, const Action& action, const RuleConfig& config);
 
-/// Every load a reload can produce, with probabilities, for a solver. Item
-/// deals are folded in as the expected deal when `dealItems` is set, because
-/// enumerating item multisets exactly would multiply the state space by
-/// thousands for no change in the ranking of the current move.
+/// Every load a reload can produce, with probabilities, for a solver. When
+/// `dealItems` is set, each seat is dealt one deterministic spread of items
+/// from the pool rather than a distribution over deals, because enumerating
+/// item multisets would multiply the state space by thousands for no change in
+/// the ranking of the current move.
 std::vector<Outcome> reloadOutcomes(const GameState& state, const RuleConfig& config,
                                     bool dealItems);
 
