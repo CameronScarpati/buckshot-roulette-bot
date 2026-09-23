@@ -51,6 +51,7 @@ one seat is left standing (`engine/State.h:42`).
 | The saw is consumed by the next shot, live or blank | `sawed` is cleared after every shot (`engine/Rules.cpp:349`). Ejecting a shell with Beer does not clear it, because an ejection is not a shot (`engine/Rules.cpp:128-136`) | Verified | none |
 | A sawed barrel does not survive a reload | The reload clears `sawed` unless the setting says otherwise (`engine/Rules.cpp:415`) | Sourced, and the real rule is stronger | `sawSurvivesReload` |
 | A seat at zero charges is out | Damage floors at zero (`engine/Rules.cpp:17-19`) and a seat is alive while `hp > 0` (`engine/State.h:23`). Overkill from a sawed barrel does not carry over | Verified | none |
+| The third story stage's faded charges are one hit that cannot be healed | Stage 3 is modelled as five charges with `healFloor` at 2 (`engine/Config.cpp`, `storyRound`). Healing a seat below the floor does nothing (`engine/Rules.cpp`, `heal`), and cigarettes are not offered there at all (`engine/Rules.cpp`, `itemIsUseful`). See the faded band paragraph in the Modes section for what a charge count means in that stage | Sourced | `healFloor` |
 | The round ends when one seat remains | `roundOver()` is true at one or fewer living seats (`engine/State.h:42`) | Verified | none |
 | An empty tube forces a reload | `needsReload()` is the empty tube (`engine/State.h:44`); the reload itself is `rules::reloadOutcomes` for a solver (`engine/Rules.cpp:404`) and the sampling version in `cli/play.cpp:53` for a live game | Verified | none |
 | A reload deals a fresh batch of items to every living seat | Each living seat gains the same number of items, capped by the table limit (`engine/Rules.cpp:422-441`) | Verified | `itemsPerLoad`, `itemLimit`, `itemPool` |
@@ -130,16 +131,25 @@ a move there even if a position is typed in with a pair in hand
 
 **Story rounds** (`engine/Config.cpp`, `storyRound`). Three stages. Stage 1 gives 2 charges
 and deals no items at all, and uses no pool. Stage 2 gives 4 charges and deals 2 items per
-load from the base five. Stage 3 gives 4 charges and deals 4 items per load from the same
-pool. The charges and the item counts are Sourced from the Story Mode page. After a reload the
-turn returns to p1, which is Sourced from the Shotgun page and holds in every single-player
-stage.
+load from the base five. Stage 3 gives 4 normal charges **and two faded ones**, and deals 4
+items per load from the same pool. The charges and the item counts are Sourced from the Story
+Mode page. After a reload the turn returns to p1, which is Sourced from the Shotgun page and
+holds in every single-player stage.
 
-Two things on that page are deliberately not implemented. Stage 3 also shows two **faded
-charges** past the four: once a seat is down to them the game cuts its life support, any hit
-is fatal from then on, and healing items stop working. The engine models the four normal
-charges and nothing past them, which costs a seat at most one extra survivable hit and never
-lets it heal into a band the game will not heal. Stage 1 and the first round of stage 2 also
+**The faded band, and what a charge count means in stage 3.** The Story Mode page says that
+once a seat loses its last normal charge the machine cuts the cables above its side, any
+damage from then on is fatal, and healing items stop having any effect. So the faded pair is
+not two more hits: it is exactly one more hit, and it cannot be healed. The engine models the
+stage as **five charges with a heal floor of two** (`healFloor`, `engine/Config.h`), which
+reproduces that rule exactly: a seat absorbs four hits, survives on one charge, dies to the
+fifth, and cannot be healed once it is there. The arithmetic is `charges here = normal charges
+in the game + 1`, so **a seat showing 1/5 in a stage 3 position has no normal charges left and
+a seat at full health is 5/5 where the game draws four**. Cigarettes are not even offered in
+the band, because they would change nothing (`engine/Rules.cpp`, `itemIsUseful`). Expired
+Medicine stays offered, because its failing branch still kills. The floor is a setting,
+`--heal-floor`, and it is 1 everywhere else, which means healing works on any living seat.
+
+One thing on that page is deliberately not implemented. Stage 1 and the first round of stage 2
 use fixed loads rather than random ones (1 live and 2 blank, then 3 live and 2 blank, then 1
 live and 1 blank). The engine takes a load as given in a position and draws only when it looks
 past a reload, so a fixed load is typed in rather than configured, and `loadTable` is there for
@@ -181,7 +191,7 @@ rows marked Assumed is a claim about the game. Each one is a field on `RuleConfi
 (`solver/Solver.cpp`, `describeAssumptions`), so no answer is ever quoted without the
 assumptions it was computed under.
 
-Seven of these settings are also command line options on both binaries, so a rule can be
+Eight of these settings are also command line options on both binaries, so a rule can be
 checked against a real game without a compiler. The name of the option is the name of the
 field, written the way options are written.
 
@@ -194,6 +204,7 @@ field, written the way options are written.
 | `itemLimit` | `--item-limit` | 1 to 8 |
 | `medicineSuccess` | `--med-success` | 0 to 1 |
 | `medicineHeal` | `--med-heal` | 0 to 8 |
+| `healFloor` | `--heal-floor` | 1 to 8 |
 
 The advisor also takes them one at a time as `rule <name> <value>` while a round is being
 narrated, and `rules` prints what they are currently set to. The remaining assumptions in
@@ -276,13 +287,6 @@ that opponents are modelled slightly weaker than a player who tracks shells. The
 **Anything above the level of one round.** The engine solves a round. The sequence of three
 story rounds, the Double or Nothing pot and cash-out decision, and any match record across
 rounds live outside it. A round is the unit because a round is where the probabilities are.
-
-**Faded charges in the third story stage.** The threshold is now known: stage 3 gives four
-normal charges and two faded ones, and once a seat is into the faded pair any hit kills it and
-healing items stop working. The engine gives that stage four charges and stops there, so
-cigarettes and Expired Medicine heal under the same rules in every round and no seat is ever
-in the faded band. The cost is that a seat in the real stage 3 can absorb one hit the engine
-does not give it.
 
 **The dealer as a table runner in multiplayer.** Multiplayer seats are symmetric in this
 engine. There is no non-competing seat that runs the table.

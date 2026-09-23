@@ -112,3 +112,9 @@ jobs:
         run: python3 tools/oracle/oracle.py --selftest
       - name: Compare the two solvers
         run: python3 tools/compare_solvers.py --advisor build/advisor --random 60 --seed 11 --quiet
+      # The third story stage's faded band changes what healing does, so the
+      # same positions are worth comparing with it switched on.
+      - name: Compare the two solvers in the faded band
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --random 20 --seed 23
+          --heal-floor 2 --quiet

@@ -20,7 +20,10 @@ void damage(PlayerState* player, int amount) {
   player->hp = static_cast<std::uint8_t>(player->hp > amount ? player->hp - amount : 0);
 }
 
-void heal(PlayerState* player, int amount) {
+/// Healing a seat below the floor does nothing at all, which is the third story
+/// stage's faded band: a seat past its last normal charge cannot be healed.
+void heal(PlayerState* player, int amount, int floor) {
+  if (player->hp < floor) return;
   const int healed = player->hp + amount;
   player->hp = static_cast<std::uint8_t>(std::min<int>(healed, player->maxHp));
 }
@@ -138,7 +141,7 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
     case Item::Cigarettes: {
       Outcome only;
       only.state = state;
-      heal(&only.state.players[seat], 1);
+      heal(&only.state.players[seat], 1, config.healFloor);
       out.push_back(only);
       return out;
     }
@@ -212,7 +215,7 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
       Outcome good;
       good.probability = config.medicineSuccess;
       good.state = state;
-      heal(&good.state.players[seat], config.medicineHeal);
+      heal(&good.state.players[seat], config.medicineHeal, config.healFloor);
       Outcome bad;
       bad.probability = 1.0 - config.medicineSuccess;
       bad.state = state;
@@ -280,7 +283,8 @@ std::vector<Action> legalActions(const GameState& state, const RuleConfig& confi
       case Item::Beer:
         return !state.tube.empty();
       case Item::Cigarettes:
-        return me.hp < me.maxHp;
+        // Nothing to heal, or nothing healing can reach: the faded band.
+        return me.hp < me.maxHp && me.hp >= config.healFloor;
       case Item::Handcuffs:
         return !multiplayer && !state.cuffUsedThisTurn && !restrainable.empty();
       case Item::HandSaw:

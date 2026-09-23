@@ -34,6 +34,7 @@ inline const std::vector<RuleSetting>& ruleSettings() {
       {"--item-limit", "1 to 8", "how many items a seat may hold"},
       {"--med-success", "0 to 1", "the chance Expired Medicine works"},
       {"--med-heal", "0 to 8", "charges Expired Medicine returns on success"},
+      {"--heal-floor", "1 to 8", "the charge count below which healing stops working"},
   };
   return settings;
 }
@@ -162,6 +163,14 @@ inline bool applyRuleSetting(const std::string& flag, const std::string& value, 
       return false;
     }
     config->medicineHeal = static_cast<std::uint8_t>(number);
+    return true;
+  }
+  if (flag == "--heal-floor") {
+    if (!parseWholeNumber(value, 1, 8, &number)) {
+      *error = shown + "a number between 1 and 8, not " + value;
+      return false;
+    }
+    config->healFloor = static_cast<std::uint8_t>(number);
     return true;
   }
   *error = "there is no setting called " + flag;

@@ -62,6 +62,14 @@ FIXED_POSITIONS = [
     "p1=2/2[saw] p2=2/2[beer] tube=1L2B turn=p1 known=p2:2L",
     "p1=2/2 p2=2/2 tube=2L2B turn=p1 known=p1:0L known=p2:2B",
     "p1=2/2 p2=2/2 tube=2L2B turn=p2 known=p2:1B,3L",
+    # The third story stage's faded band, which only bites under --heal-floor 2:
+    # a seat on one charge there has no normal charges left, so healing cannot
+    # reach it and any hit is fatal. Under the default floor these are ordinary
+    # positions, so both runs are worth having.
+    "p1=1/5[cig] p2=2/5 tube=1L1B turn=p1",
+    "p1=1/5[med] p2=2/5 tube=1L1B turn=p1",
+    "p1=2/5[cig,med] p2=1/5 tube=1L1B turn=p1",
+    "p1=1/5[cig] p2=1/5[med] tube=2L1B turn=p2",
 ]
 
 ITEMS = ["mg", "beer", "cig", "cuff", "saw", "phone", "inv", "med"]
@@ -104,9 +112,11 @@ def random_positions(count: int, seed: int) -> list[str]:
     return out
 
 
-def run_advisor(binary: str, position: str, seat: int, reloads: int) -> dict:
+def run_advisor(binary: str, position: str, seat: int, reloads: int,
+                heal_floor: int = 1) -> dict:
     result = subprocess.run(
-        [binary, "--position", position, "--seat", str(seat), "--reloads", str(reloads), "--json"],
+        [binary, "--position", position, "--seat", str(seat), "--reloads", str(reloads),
+         "--heal-floor", str(heal_floor), "--json"],
         capture_output=True,
         text=True,
         timeout=600,
@@ -116,10 +126,10 @@ def run_advisor(binary: str, position: str, seat: int, reloads: int) -> dict:
     return json.loads(result.stdout)
 
 
-def run_oracle(position: str, seat: int, reloads: int) -> dict:
+def run_oracle(position: str, seat: int, reloads: int, heal_floor: int = 1) -> dict:
     result = subprocess.run(
         [sys.executable, str(ORACLE), "--position", position, "--seat", str(seat),
-         "--reloads", str(reloads)],
+         "--reloads", str(reloads), "--heal-floor", str(heal_floor)],
         capture_output=True,
         text=True,
         timeout=900,
@@ -129,10 +139,11 @@ def run_oracle(position: str, seat: int, reloads: int) -> dict:
     return json.loads(result.stdout)
 
 
-def compare(position: str, seat: int, reloads: int, binary: str, tolerance: float) -> list[str]:
+def compare(position: str, seat: int, reloads: int, binary: str, tolerance: float,
+            heal_floor: int = 1) -> list[str]:
     problems = []
-    mine = run_advisor(binary, position, seat, reloads)
-    theirs = run_oracle(position, seat, reloads)
+    mine = run_advisor(binary, position, seat, reloads, heal_floor)
+    theirs = run_oracle(position, seat, reloads, heal_floor)
 
     if abs(mine["value"] - theirs["value"]) > tolerance:
         problems.append(
@@ -166,6 +177,9 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--seat", type=int, default=1)
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--heal-floor", type=int, default=1,
+                        help="charges below which healing does nothing, for the "
+                             "third story stage's faded band (default 1)")
     args = parser.parse_args()
 
     if not Path(args.advisor).exists():
@@ -182,7 +196,8 @@ def main() -> int:
     failures = 0
     for position in positions:
         try:
-            problems = compare(position, args.seat, args.reloads, args.advisor, args.tolerance)
+            problems = compare(position, args.seat, args.reloads, args.advisor,
+                               args.tolerance, args.heal_floor)
         except Exception as error:  # noqa: BLE001 - report and keep going
             print(f"FAIL {position}\n     {error}")
             failures += 1

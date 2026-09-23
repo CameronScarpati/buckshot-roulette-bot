@@ -87,6 +87,22 @@ TEST(RuleFlags, TheItemCountTakesARangeBecauseTheGameRedrawsIt) {
             std::string::npos);
 }
 
+TEST(RuleFlags, TheHealFloorIsSettableBecauseOneStageHasABandNothingHeals) {
+  // One is the default everywhere: healing works on any living seat.
+  EXPECT_EQ(RuleConfig::doubleOrNothing(4).healFloor, 1);
+  EXPECT_EQ(applied("--heal-floor", "2").healFloor, 2);
+  EXPECT_EQ(applied("--heal-floor", "8").healFloor, 8);
+
+  // A floor of one is no floor at all, so the line an answer carries stays
+  // silent about it; anything higher says exactly who cannot be healed.
+  EXPECT_EQ(RuleConfig::doubleOrNothing(4).describe().find("healing does nothing"),
+            std::string::npos);
+  EXPECT_NE(RuleConfig::storyRound(3).describe().find(
+                "5 charges (healing does nothing to a seat on 1 or fewer)"),
+            std::string::npos)
+      << RuleConfig::storyRound(3).describe();
+}
+
 TEST(RuleFlags, AValueTheEngineCannotHoldIsRefused) {
   refused("--reload-turn", "sideways");
   refused("--reload-turn", "");
@@ -101,6 +117,9 @@ TEST(RuleFlags, AValueTheEngineCannotHoldIsRefused) {
   refused("--items-per-load", "1-2-3");
   refused("--item-limit", "0");
   refused("--med-heal", "9");
+  refused("--heal-floor", "0");
+  refused("--heal-floor", "9");
+  refused("--heal-floor", "none");
   refused("--med-success", "1.5");
   refused("--med-success", "-0.5");
   refused("--med-success", "half");

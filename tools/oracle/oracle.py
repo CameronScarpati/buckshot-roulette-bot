@@ -47,6 +47,12 @@ POOLS = {"don": POOL_DON, "mp": POOL_MP}
 # middle of that range, matching RuleConfig::itemsDealtPerLoad.
 ITEMS_PER_LOAD = 3
 TABLE_LIMIT = 8
+# Healing does nothing to a seat holding fewer charges than this. One means it
+# always works on a living seat. The third story stage gives four normal charges
+# and two faded ones, and a seat past its last normal charge cannot be healed and
+# dies to any hit, which is five charges with a floor of two. Mirrors
+# RuleConfig::healFloor; set from --heal-floor.
+HEAL_FLOOR = 1
 # Deterministic deal: seat i (1-based) takes items starting at pool index i.
 DEAL_INDEX_BASE = 0
 
@@ -143,6 +149,13 @@ def knowledge_branches(st: State, seat: int, limit: int = 4):
             slots[idx] = (ty, tuple(w for w in st.slots[idx][1] if w != seat))
         out.append((p, blind._replace(slots=tuple(slots))))
     return (out or [(1.0, blind)]), len(spots), False
+
+
+def healed(seat: "Seat", amount: int) -> int:
+    """Healing below the floor does nothing at all: the faded band."""
+    if seat.hp < HEAL_FLOOR:
+        return seat.hp
+    return min(seat.max_hp, seat.hp + amount)
 
 
 def unresolved_counts(st: State) -> tuple[int, int]:
@@ -398,7 +411,7 @@ class Solver:
             ul, ub = unresolved_counts(st)
             return ul > 0 and ub > 0
         if it == CIG:
-            return me.hp < me.max_hp
+            return HEAL_FLOOR <= me.hp < me.max_hp
         if it == SAW:
             return (not st.sawed) and n > 0
         if it in (CUFF, JAM):
@@ -442,7 +455,7 @@ class Solver:
                     for p, s1, ty in resolve(st, 0)]
         if it == CIG:
             me = st.seats[a]
-            return [(1.0, finish(with_seat(st, a, hp=min(me.max_hp, me.hp + 1)), False))]
+            return [(1.0, finish(with_seat(st, a, hp=healed(me, 1)), False))]
         if it in (CUFF, JAM):
             s1 = with_seat(st, tgt, cuffed=True)._replace(cuffs_used=True)
             return [(1.0, finish(s1, False))]
@@ -469,7 +482,7 @@ class Solver:
             return [(1.0, finish(s1, False))]
         if it == MED:
             me = st.seats[a]
-            good = with_seat(st, a, hp=min(me.max_hp, me.hp + 2))
+            good = with_seat(st, a, hp=healed(me, 2))
             bad = with_seat(st, a, hp=max(0, me.hp - 1))
             return [(0.5, finish(good, False)), (0.5, finish(bad, False))]
         if it == REM:
@@ -759,6 +772,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seat", type=int, default=1, help="seat solved for (default 1)")
     ap.add_argument("--reloads", type=int, default=2, help="reload budget (default 2)")
     ap.add_argument("--mode", choices=("don", "mp"), default="don")
+    ap.add_argument("--heal-floor", type=int, default=1,
+                    help="charges below which healing does nothing (default 1)")
     ap.add_argument("--json", action="store_true",
                     help="accepted for argv compatibility with the C++ advisor; "
                          "this tool always writes JSON")
@@ -771,6 +786,10 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--position is required unless --selftest is given")
     if args.reloads < 0:
         ap.error("--reloads must be >= 0")
+    if not 1 <= args.heal_floor <= 8:
+        ap.error("--heal-floor must be in 1..8")
+    global HEAL_FLOOR
+    HEAL_FLOOR = args.heal_floor
 
     st = parse_position(args.position, args.reloads)
     if not 1 <= args.seat <= len(st.seats):

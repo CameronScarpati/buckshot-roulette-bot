@@ -53,11 +53,12 @@ std::uint8_t RuleConfig::itemsDealtPerLoad() const {
 RuleConfig RuleConfig::storyRound(int round) {
   RuleConfig config;
   config.mode = Mode::Story;
-  // Two charges in stage 1 and four in each of stages 2 and 3. Stage 3 also
-  // shows two faded charges, which heal back to nothing and do not stop a
-  // fatal shot; the engine models the normal charges only. See the faded
-  // charges paragraph in docs/RULES.md.
-  config.charges = round <= 1 ? 2 : 4;
+  // Two charges in stage 1 and four in each of stages 2 and 3. Stage 3 carries
+  // two faded charges past its four, and the pair is worth exactly one more hit
+  // that no item can heal, so the stage is five charges with a heal floor of
+  // two. See the faded charges row in docs/RULES.md.
+  config.charges = round <= 1 ? 2 : (round == 2 ? 4 : 5);
+  config.healFloor = round >= 3 ? 2 : 1;
   config.itemPool = round <= 1 ? std::vector<Item>{} : basePool();
   // Stage 1 deals nothing, stage 2 deals two per load and stage 3 deals four.
   config.itemsPerLoad = round <= 1 ? 0 : (round == 2 ? 2 : 4);
@@ -103,7 +104,12 @@ std::string RuleConfig::describe() const {
       out << "multiplayer";
       break;
   }
-  out << ", " << static_cast<int>(charges) << " charges, ";
+  out << ", " << static_cast<int>(charges) << " charges";
+  if (healFloor > 1) {
+    out << " (healing does nothing to a seat on " << static_cast<int>(healFloor) - 1
+        << " or fewer)";
+  }
+  out << ", ";
   if (itemsPerLoadMax > itemsPerLoad) {
     out << static_cast<int>(itemsPerLoad) << " to " << static_cast<int>(itemsPerLoadMax)
         << " items dealt per load, modelled at " << static_cast<int>(itemsDealtPerLoad());

@@ -39,8 +39,20 @@ enum class OpponentModel : std::uint8_t {
 struct RuleConfig {
   Mode mode = Mode::DoubleOrNothing;
 
-  /// Charges each player starts a round with. Story mode uses 2, 4 then 5.
+  /// Charges each player starts a round with. Story mode uses 2, then 4, then
+  /// 5, where the fifth is the faded band described under `healFloor`.
   std::uint8_t charges = 4;
+
+  /// Healing does nothing to a seat holding fewer charges than this. One means
+  /// healing works on any living seat, which is every mode but the third story
+  /// stage. That stage gives four normal charges and two faded ones: once a
+  /// seat loses its last normal charge the machine cuts its life support, any
+  /// hit from then on is fatal, and healing items stop working. The faded pair
+  /// is therefore worth exactly one more hit that cannot be healed, so the
+  /// stage is modelled as five charges with a floor of two, and a seat showing
+  /// one charge here is a seat showing no normal charges in the game. See the
+  /// faded charges row in docs/RULES.md.
+  std::uint8_t healFloor = 1;
 
   /// Item pool for this mode, used by reload deals.
   std::vector<Item> itemPool;
