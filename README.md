@@ -103,13 +103,12 @@ playing a round and then checking the answer rather than by argument.
 | Whoever was to move | shoot p2 | 0.4506 |
 
 This is also the setting the results table further down calls the chair. The default is the
-rule the game uses, and running the self-play batch under the other value moves the result a
-long way over the same twenty rounds and the same seed, which is the clearest measure of how
-much rests on it.
+rule the game uses, and playing the same hundred rounds under the other value takes seat 1
+from 82 of 100 to 66 of 100, which is the clearest measure of how much rests on it.
 
 ```sh
-./build/play --selfplay 20 --seed 1 --charges 2 --reloads 1
-./build/play --selfplay 20 --seed 1 --charges 2 --reloads 1 --reload-turn keep
+./build/play --selfplay 100 --seed 1 --charges 2 --reloads 0
+./build/play --selfplay 100 --seed 1 --charges 2 --reloads 0 --reload-turn keep
 ```
 
 `--help` on either binary lists every setting, and
@@ -209,18 +208,18 @@ prints all of this.
 
 ## Results
 
-Two seeded batches, each a hundred rounds at two charges a seat with a reload budget of one.
-Every number comes from the command above it and reproduces exactly.
+Two seeded batches, each a hundred rounds at two charges a seat. Every number comes from the
+command above it and reproduces exactly, and both batches run in seconds.
 
 ```sh
-./build/play --selfplay 100 --seed 1 --charges 2 --reloads 1
-./build/play --baseline 100 --seed 1 --charges 2 --reloads 1
+./build/play --selfplay 100 --seed 1 --charges 2 --reloads 0
+./build/play --baseline 100 --seed 1 --charges 2 --reloads 0
 ```
 
 | Batch | Seat 1 survives |
 |---|---|
-| The solver against itself | 76 of 100 rounds |
-| The solver against the heuristic in `cli/play.cpp` | 81 of 100 rounds |
+| The solver against itself | 82 of 100 rounds |
+| The solver against the heuristic in `cli/play.cpp` | 86 of 100 rounds |
 
 Read those two rows together, because neither means much alone.
 
@@ -231,12 +230,20 @@ not a guess, and it is still a setting, which is the only way to see what it is 
 [docs/RULES.md](docs/RULES.md) names the field that changes it.
 
 The second row is the one about strength, and the claim it supports is the difference
-between the rows, not the 81. Swapping a copy of the solver for a heuristic opponent is
-worth about five points to the seat facing it. The heuristic is written out in
+between the rows, not the 86. Swapping a copy of the solver for a heuristic opponent is
+worth about four points to the seat facing it. The heuristic is written out in
 `cli/play.cpp`: it knows the odds and the obvious tactics and searches nothing, so it is a
 floor rather than a serious opponent. A hundred rounds is a small sample, and both numbers
 move with the charges, the reload budget and the seed, which is why all three are printed
 next to them.
+
+Both batches stop at the load in the tube. Reloads still happen while the round is played,
+which is why the chair shows up at all; what the budget of zero says is that the solver does
+not search past one, and values a position it reaches by charges in hand. Raising the budget
+to one is the same measurement against a stronger solver and costs about a minute and a half
+a round, because a solved reload deals every seat a fresh handful of items and each item is
+another move at every turn that does not end one. The state counts behind that are in
+[docs/RULES.md](docs/RULES.md).
 
 ## Testing
 

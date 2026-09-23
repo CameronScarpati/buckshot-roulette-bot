@@ -81,8 +81,7 @@ TEST(RuleFlags, TheItemCountTakesARangeBecauseTheGameRedrawsIt) {
   // The line every answer carries names the range and the count it used, so
   // the rounding is never hidden behind one number.
   RuleConfig shown = RuleConfig::doubleOrNothing(4);
-  EXPECT_NE(shown.describe().find("1 to 5 items dealt per load, modelled at 3"),
-            std::string::npos)
+  EXPECT_NE(shown.describe().find("1 to 5 items dealt per load, modelled at 3"), std::string::npos)
       << shown.describe();
   EXPECT_NE(applied("--items-per-load", "2").describe().find("2 items dealt per load"),
             std::string::npos);
