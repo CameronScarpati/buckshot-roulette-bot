@@ -150,6 +150,57 @@ TEST(Rules, BeerEjectsInPublicAndShortensTheTube) {
   EXPECT_EQ(branchWhereShellIs(outcomes, Shell::Blank).state.tube.blank, 0);
 }
 
+/// The third story stage gives four normal charges and two faded ones. Once a
+/// seat loses its last normal charge its life support is cut: any hit is fatal
+/// and healing items stop working. The faded pair is therefore worth exactly one
+/// more hit that nothing can heal, which is five charges with a floor of two.
+TEST(Rules, TheFadedBandIsOneChargeNothingCanHeal) {
+  const RuleConfig stage3 = RuleConfig::storyRound(3);
+  EXPECT_EQ(stage3.charges, 5);
+  EXPECT_EQ(stage3.healFloor, 2);
+
+  // Every other configuration heals a living seat, floor or no floor.
+  EXPECT_EQ(RuleConfig::storyRound(1).healFloor, 1);
+  EXPECT_EQ(RuleConfig::storyRound(2).healFloor, 1);
+  EXPECT_EQ(RuleConfig::doubleOrNothing(4).healFloor, 1);
+  EXPECT_EQ(RuleConfig::multiplayer(3, 4).healFloor, 1);
+
+  // A seat on one charge here is a seat with no normal charges left in the
+  // game, so cigarettes are not offered: they would change nothing.
+  const GameState faded = parse("p1=1/5[cig] p2=2/5 tube=1L1B turn=p1");
+  EXPECT_FALSE(contains(rules::legalActions(faded, stage3), Action::use(Item::Cigarettes)));
+
+  // One charge higher is one normal charge left, and healing works there.
+  const GameState hurt = parse("p1=2/5[cig] p2=2/5 tube=1L1B turn=p1");
+  ASSERT_TRUE(contains(rules::legalActions(hurt, stage3), Action::use(Item::Cigarettes)));
+  const std::vector<Outcome> after = rules::apply(hurt, Action::use(Item::Cigarettes), stage3);
+  ASSERT_EQ(after.size(), 1u);
+  EXPECT_EQ(after.front().state.players[0].hp, 3);
+
+  // The same seat in a configuration without a floor heals as it always did,
+  // which is what keeps this rule confined to the stage that has it.
+  const std::vector<Outcome> elsewhere =
+      rules::apply(faded, Action::use(Item::Cigarettes), config());
+  ASSERT_EQ(elsewhere.size(), 1u);
+  EXPECT_EQ(elsewhere.front().state.players[0].hp, 2);
+}
+
+/// Expired Medicine stays legal in the faded band, because its failing branch
+/// still changes the position. Its succeeding branch heals nothing at all, so
+/// the item can only cost the seat the charge it is standing on.
+TEST(Rules, MedicineInTheFadedBandCanOnlyCost) {
+  const RuleConfig stage3 = RuleConfig::storyRound(3);
+  const GameState faded = parse("p1=1/5[med] p2=2/5 tube=1L1B turn=p1");
+  const std::vector<Outcome> out = rules::apply(faded, Action::use(Item::ExpiredMedicine), stage3);
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_NEAR(totalProbability(out), 1.0, 1e-12);
+  for (const Outcome& outcome : out) {
+    EXPECT_LE(outcome.state.players[0].hp, 1) << "the faded band healed a seat it should not have";
+  }
+  // One branch killed it and the other left it exactly where it was.
+  EXPECT_NE(out.front().state.players[0].alive(), out.back().state.players[0].alive());
+}
+
 TEST(Rules, CigarettesHealOneAndAreNotOfferedAtFullCharges) {
   const GameState wounded = parse("p1=1/3[cig] p2=2/2 tube=1L1B turn=p1");
   const std::vector<Outcome> outcomes =

@@ -53,8 +53,13 @@ jobs:
         run: ctest --test-dir build --output-on-failure
       - name: Advisor
         run: ./build/advisor --position "p1=2/4[saw] p2=3/4[mg,beer] tube=2L2B turn=p1"
+      # The batch stops at the load in the tube. Looking past one costs about a
+      # minute and a half a round, because a solved reload deals every seat a
+      # fresh handful of items and each item is another move at every turn that
+      # does not end one. The advisor step above already searches through two
+      # reloads on one position, which is the cheap way to cover that path.
       - name: Self play
-        run: ./build/play --selfplay 20 --seed 1 --charges 2 --reloads 1
+        run: ./build/play --selfplay 20 --seed 1 --charges 2 --reloads 0
       - name: The same seed replays the same round, and the batch holds its band
         run: ./tools/check_play.sh build
 
@@ -107,3 +112,9 @@ jobs:
         run: python3 tools/oracle/oracle.py --selftest
       - name: Compare the two solvers
         run: python3 tools/compare_solvers.py --advisor build/advisor --random 60 --seed 11 --quiet
+      # The third story stage's faded band changes what healing does, so the
+      # same positions are worth comparing with it switched on.
+      - name: Compare the two solvers in the faded band
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --random 20 --seed 23
+          --heal-floor 2 --quiet

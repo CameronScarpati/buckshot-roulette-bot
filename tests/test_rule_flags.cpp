@@ -58,6 +58,51 @@ TEST(RuleFlags, EverySettingReachesTheFieldItNames) {
   EXPECT_DOUBLE_EQ(applied("--med-success", "0").medicineSuccess, 0.0);
 }
 
+TEST(RuleFlags, TheItemCountTakesARangeBecauseTheGameRedrawsIt) {
+  // Double or Nothing draws 1 to 5 items at every load, so the flag holds both
+  // ends. A solved reload deals the middle of the range, rounded up.
+  const RuleConfig range = applied("--items-per-load", "1-5");
+  EXPECT_EQ(range.itemsPerLoad, 1);
+  EXPECT_EQ(range.itemsPerLoadMax, 5);
+  EXPECT_EQ(range.itemsDealtPerLoad(), 3);
+
+  // A bare number is the same range with both ends equal, which is what the
+  // flag meant before ranges existed.
+  const RuleConfig fixed = applied("--items-per-load", "4");
+  EXPECT_EQ(fixed.itemsPerLoad, 4);
+  EXPECT_EQ(fixed.itemsPerLoadMax, 4);
+  EXPECT_EQ(fixed.itemsDealtPerLoad(), 4);
+
+  // Both ends the same is a fixed deal however it was typed, and a range that
+  // starts and ends at zero deals nothing.
+  EXPECT_EQ(applied("--items-per-load", "2-2").itemsDealtPerLoad(), 2);
+  EXPECT_EQ(applied("--items-per-load", "0").itemsDealtPerLoad(), 0);
+
+  // The line every answer carries names the range and the count it used, so
+  // the rounding is never hidden behind one number.
+  RuleConfig shown = RuleConfig::doubleOrNothing(4);
+  EXPECT_NE(shown.describe().find("1 to 5 items dealt per load, modelled at 3"), std::string::npos)
+      << shown.describe();
+  EXPECT_NE(applied("--items-per-load", "2").describe().find("2 items dealt per load"),
+            std::string::npos);
+}
+
+TEST(RuleFlags, TheHealFloorIsSettableBecauseOneStageHasABandNothingHeals) {
+  // One is the default everywhere: healing works on any living seat.
+  EXPECT_EQ(RuleConfig::doubleOrNothing(4).healFloor, 1);
+  EXPECT_EQ(applied("--heal-floor", "2").healFloor, 2);
+  EXPECT_EQ(applied("--heal-floor", "8").healFloor, 8);
+
+  // A floor of one is no floor at all, so the line an answer carries stays
+  // silent about it; anything higher says exactly who cannot be healed.
+  EXPECT_EQ(RuleConfig::doubleOrNothing(4).describe().find("healing does nothing"),
+            std::string::npos);
+  EXPECT_NE(RuleConfig::storyRound(3).describe().find(
+                "5 charges (healing does nothing to a seat on 1 or fewer)"),
+            std::string::npos)
+      << RuleConfig::storyRound(3).describe();
+}
+
 TEST(RuleFlags, AValueTheEngineCannotHoldIsRefused) {
   refused("--reload-turn", "sideways");
   refused("--reload-turn", "");
@@ -66,8 +111,15 @@ TEST(RuleFlags, AValueTheEngineCannotHoldIsRefused) {
   refused("--items-per-load", "9");
   refused("--items-per-load", "-1");
   refused("--items-per-load", "abc");
+  refused("--items-per-load", "5-1");
+  refused("--items-per-load", "1-9");
+  refused("--items-per-load", "1-");
+  refused("--items-per-load", "1-2-3");
   refused("--item-limit", "0");
   refused("--med-heal", "9");
+  refused("--heal-floor", "0");
+  refused("--heal-floor", "9");
+  refused("--heal-floor", "none");
   refused("--med-success", "1.5");
   refused("--med-success", "-0.5");
   refused("--med-success", "half");

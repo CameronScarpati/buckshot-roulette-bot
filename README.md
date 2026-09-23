@@ -25,8 +25,9 @@ standing, along with the assumptions that produced the number. It also plays.
   multiplayer rule sets as settings on one engine.
 
 The numbers are probabilities, not scores. A move worth 0.60 wins the round three times in
-five against the model described in [docs/RULES.md](docs/RULES.md), and that document
-separates what is verified about the game from what this engine had to assume.
+five against the model described in [docs/RULES.md](docs/RULES.md), and that document marks
+every rule as verified against the game, sourced to a citable page, or assumed by this engine
+because nothing settles it.
 
 ## Quick start
 
@@ -54,13 +55,13 @@ tube: 2 live, 3 blank
   p2  4/4 charges  items: Beer Handcuffs
 
 Advising seat p1, to move: p1
-  * shoot p2                          0.2720
-    use Magnifying Glass              0.2476   (-0.0244)
-    use Hand Saw                      0.2464   (-0.0256)
-    shoot self                        0.1532   (-0.1189)
+  * shoot p2                          0.3978
+    use Magnifying Glass              0.3666   (-0.0312)
+    use Hand Saw                      0.3607   (-0.0371)
+    shoot self                        0.2591   (-0.1387)
   Note: the search hit its reload budget in some lines, so those were valued by charges in hand.
-  Model: double or nothing, 4 charges, 2 items dealt per load, after a reload seat 1 acts first, a sawed barrel does not survive a reload, a reload clears handcuffs. The other seat plays to minimise your chance of surviving the round, spending no magnifying glasses or burner phones, so it is modelled slightly weaker than a player who tracks shells, and choosing from what it has seen rather than from what you have seen, picking evenly between moves it cannot tell apart. The answer is given from what the advised seat has seen, so a shell only somebody else has looked at counts as unseen. Values are the probability of being the last player standing in this round, looking through 1 reload.
-  434583 states examined.
+  Model: double or nothing, 4 charges, 1 to 5 items dealt per load, modelled at 3, after a reload seat 1 acts first, a sawed barrel does not survive a reload, a reload clears handcuffs. The other seat plays to minimise your chance of surviving the round, spending no magnifying glasses or burner phones, so it is modelled slightly weaker than a player who tracks shells, and choosing from what it has seen rather than from what you have seen, picking evenly between moves it cannot tell apart. The answer is given from what the advised seat has seen: a shell only somebody else has looked at is unknown to you and known to them, and the value averages over how it could have fallen. Values are the probability of being the last player standing in this round, looking through 1 reload.
+  1597228 states examined.
 ```
 
 ### The notation
@@ -84,11 +85,12 @@ p1=3/4[saw,beer] p2=2/4[mg] tube=2L3B turn=p1 cuffed=p2 sawed inverted known=p1:
 
 Item tokens: `mg`, `beer`, `cig`, `cuff`, `saw`, `phone`, `adr`, `inv`, `med`, `jam`, `rem`.
 
-### Changing an assumption
+### Changing a rule
 
-Several rules of this game are not documented anywhere reliable, so the engine had to pick a
-value and say so. Each of those is an option, which means a rule can be settled by playing a
-round and then checking the answer rather than by argument.
+Three rules of this game are documented nowhere reliable, so the engine had to pick a value
+and say so. Several more are documented and still worth being able to change, because seeing
+what a rule is worth is the point. Each is an option, which means a rule can be settled by
+playing a round and then checking the answer rather than by argument.
 
 ```sh
 ./build/advisor --position "p1=4/4[mg] p2=4/4 tube=2L3B turn=p1"
@@ -97,16 +99,16 @@ round and then checking the answer rather than by argument.
 
 | Who acts first after a mid-round reload | Best move | Its value |
 |---|---|---|
-| Seat 1, the default | shoot p2 | 0.5721 |
-| Whoever was to move | shoot p2 | 0.4054 |
+| Seat 1, the default | shoot p2 | 0.6375 |
+| Whoever was to move | shoot p2 | 0.4506 |
 
-This is also the setting the results table further down calls the chair. Running the
-self-play batch under the other assumption turns 85 percent into 60 percent over the same
-twenty rounds and the same seed, which is the clearest measure of how much rests on it.
+This is also the setting the results table further down calls the chair. The default is the
+rule the game uses, and playing the same hundred rounds under the other value takes seat 1
+from 82 of 100 to 66 of 100, which is the clearest measure of how much rests on it.
 
 ```sh
-./build/play --selfplay 20 --seed 1 --charges 2 --reloads 1
-./build/play --selfplay 20 --seed 1 --charges 2 --reloads 1 --reload-turn keep
+./build/play --selfplay 100 --seed 1 --charges 2 --reloads 0
+./build/play --selfplay 100 --seed 1 --charges 2 --reloads 0 --reload-turn keep
 ```
 
 `--help` on either binary lists every setting, and
@@ -126,19 +128,19 @@ advise
 
 ```
 Advising seat p1, to move: p1
-  * shoot p2                          0.6008
-    use Magnifying Glass              0.5922   (-0.0086)
-    use Hand Saw                      0.5443   (-0.0565)
-    shoot self                        0.4761   (-0.1247)
+  * use Magnifying Glass              0.6815
+    shoot p2                          0.6725   (-0.0090)
+    use Hand Saw                      0.6232   (-0.0583)
+    shoot self                        0.6108   (-0.0707)
 
 tube: 2 live, 2 blank
 > p1  4/4 charges  items: Hand Saw  knows: shell 1 is blank
   p2  4/4 charges  items: Beer Handcuffs
 
 Advising seat p1, to move: p1
-  * shoot self                        0.5100
-    shoot p2                          0.4038   (-0.1062)
-    use Hand Saw                      0.3469   (-0.1631)
+  * shoot self                        0.6197
+    shoot p2                          0.5303   (-0.0894)
+    use Hand Saw                      0.4824   (-0.1373)
 ```
 
 Knowing the chamber is blank turns shooting yourself from the worst move into the best one,
@@ -171,9 +173,14 @@ memoised. Within a load the graph is acyclic, because every move consumes a shel
 item. Across a reload the search continues for a stated number of reloads and then stops at
 a boundary value, and any answer that touched the boundary says so.
 
-**Every answer is given from what you have seen.** A shell that only the other seat has
-looked at counts as unseen, so the advisor can never tell you what is in the chamber on the
-strength of somebody else having looked.
+**Every answer is given from what you have seen, and the other seat gets what it has seen.**
+A shell only the other seat has looked at counts as unseen to you, so the advisor can never
+tell you what is in the chamber on the strength of somebody else having looked. Erasing it
+there would be the other mistake, because it would price the position against an opponent as
+ignorant as you are. The search instead splits the position into the ways that shell could
+have fallen, weighted by what you cannot account for, and solves each one against a seat that
+knows which it is in. What you are shown is the average, and the answer is identical whichever
+type the position names for a shell you did not see.
 
 **The opponent model is stated, because the word optimal means nothing without one.** By
 default the other seat plays to minimise your chance of surviving the round, and it chooses
@@ -193,42 +200,50 @@ prints all of this.
   the end of the budget a position is valued by charges in hand.
 - **The item deal at a reload is averaged, not enumerated.** Enumerating every multiset would
   multiply the state space by thousands without changing which move is best.
-- **Several rules are assumptions.** Who holds the turn after a mid-round reload, whether a
-  sawed barrel survives one, the shell composition generator and the odds on expired
-  medicine are all settings, and [docs/RULES.md](docs/RULES.md) lists all eleven of them with
+- **Three rules are still assumptions.** Whether a restraint survives a mid-round reload, how
+  many items a seat's tray holds, and the shape of the shell composition inside the range the
+  game uses are all settings, because nothing reliable documents them.
+  [docs/RULES.md](docs/RULES.md) marks every rule as verified, sourced or assumed, and names
   the field that changes each.
 
 ## Results
 
-Two seeded batches, each a hundred rounds at two charges a seat with a reload budget of one.
-Every number comes from the command above it and reproduces exactly.
+Two seeded batches, each a hundred rounds at two charges a seat. Every number comes from the
+command above it and reproduces exactly, and both batches run in seconds.
 
 ```sh
-./build/play --selfplay 100 --seed 1 --charges 2 --reloads 1
-./build/play --baseline 100 --seed 1 --charges 2 --reloads 1
+./build/play --selfplay 100 --seed 1 --charges 2 --reloads 0
+./build/play --baseline 100 --seed 1 --charges 2 --reloads 0
 ```
 
 | Batch | Seat 1 survives |
 |---|---|
-| The solver against itself | 76 of 100 rounds |
-| The solver against the heuristic in `cli/play.cpp` | 81 of 100 rounds |
+| The solver against itself | 82 of 100 rounds |
+| The solver against the heuristic in `cli/play.cpp` | 86 of 100 rounds |
 
 Read those two rows together, because neither means much alone.
 
 The first row is not a measure of strength. Both seats play the same way, so what it
-measures is the chair: under the default rule, seat 1 acts first after every reload and not
-only at the start of the round, and that single assumption is worth 26 points over an even
-split. It is the clearest argument for keeping the rule a setting rather than a constant,
-and [docs/RULES.md](docs/RULES.md) lists it among the eleven assumptions with the field that
-changes it.
+measures is the chair: seat 1 acts first after every reload and not only at the start of the
+round, and that one rule is worth the whole gap from an even split. The rule is the game's,
+not a guess, and it is still a setting, which is the only way to see what it is worth.
+[docs/RULES.md](docs/RULES.md) names the field that changes it.
 
 The second row is the one about strength, and the claim it supports is the difference
-between the rows, not the 81. Swapping a copy of the solver for a heuristic opponent is
-worth about five points to the seat facing it. The heuristic is written out in
+between the rows, not the 86. Swapping a copy of the solver for a heuristic opponent is
+worth about four points to the seat facing it. The heuristic is written out in
 `cli/play.cpp`: it knows the odds and the obvious tactics and searches nothing, so it is a
 floor rather than a serious opponent. A hundred rounds is a small sample, and both numbers
 move with the charges, the reload budget and the seed, which is why all three are printed
 next to them.
+
+Both batches stop at the load in the tube. Reloads still happen while the round is played,
+which is why the chair shows up at all; what the budget of zero says is that the solver does
+not search past one, and values a position it reaches by charges in hand. Raising the budget
+to one is the same measurement against a stronger solver and costs about a minute and a half
+a round, because a solved reload deals every seat a fresh handful of items and each item is
+another move at every turn that does not end one. The state counts behind that are in
+[docs/RULES.md](docs/RULES.md).
 
 ## Testing
 
@@ -236,6 +251,7 @@ next to them.
 |---|---|
 | Unit tests | Tube arithmetic, every rule transition with its probability mass, the notation round trip |
 | Golden values | Solver values pinned to positions worked out by hand, with the arithmetic in the test |
+| Invariance | A shell the advised seat never saw must give the same answer whichever type the position names it, so naming it live and naming it blank are compared directly |
 | Differential | An independently written Python solver in `tools/oracle/`, compared move by move over fixed and random positions by `tools/compare_solvers.py` |
 | Determinism | The same seed replays the same batch byte for byte, the same position gives the same answer, and a seeded batch is pinned to a band, by `tools/check_play.sh` |
 | Sanitizers | The suite under the address and undefined behaviour sanitizers in CI |
@@ -261,7 +277,7 @@ engine/          Rules as pure functions: no input, no output, no global state
   Notation.*       Positions as one line of text
 solver/          The exact search over the rules
 cli/             advisor (ranks moves) and play (plays a round)
-tests/           Unit, rule, notation and golden value tests
+tests/           Unit, rule, notation, golden value and invariance tests
 tools/           The Python oracle and the differential comparison
 docs/RULES.md    Every rule, its confidence, and the setting that controls it
 ```
