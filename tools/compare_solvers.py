@@ -53,6 +53,15 @@ FIXED_POSITIONS = [
     "p1=2/2 p2=2/2 tube=2L2B turn=p2 known=p1:1L",
     "p1=2/2 p2=2/2 tube=1L2B turn=p2 known=p1:0B,2L",
     "p1=2/2[saw] p2=2/2 tube=2L2B turn=p2 known=p1:0L",
+    # The other way round: p2 has looked at a shell and the advised seat has
+    # not. Neither solver may read it, and neither may forget that p2 can, so
+    # both have to average over the ways it could have fallen.
+    "p1=1/1 p2=1/1 tube=1L1B turn=p1 known=p2:0L",
+    "p1=2/2 p2=2/2 tube=2L2B turn=p1 known=p2:1L",
+    "p1=2/2 p2=2/2 tube=2L2B turn=p2 known=p2:0B",
+    "p1=2/2[saw] p2=2/2[beer] tube=1L2B turn=p1 known=p2:2L",
+    "p1=2/2 p2=2/2 tube=2L2B turn=p1 known=p1:0L known=p2:2B",
+    "p1=2/2 p2=2/2 tube=2L2B turn=p2 known=p2:1B,3L",
 ]
 
 ITEMS = ["mg", "beer", "cig", "cuff", "saw", "phone", "inv", "med"]
@@ -79,10 +88,13 @@ def random_positions(count: int, seed: int) -> list[str]:
         extras = []
         if rng.random() < 0.15:
             extras.append("sawed")
-        if rng.random() < 0.10 and live + blank >= 2:
+        if rng.random() < 0.20 and live + blank >= 2:
             offset = rng.randrange(live + blank)
             kind = "L" if (live > 0 and rng.random() < live / (live + blank)) else "B"
-            extras.append(f"known=p1:{offset}{kind}")
+            # Half the time the shell belongs to the seat that is not being
+            # advised, which is the case the two solvers have to average over.
+            watcher = "p1" if rng.random() < 0.5 else "p2"
+            extras.append(f"known={watcher}:{offset}{kind}")
         if rng.random() < 0.10:
             extras.append("cuffed=" + ("p2" if turn == "p1" else "p1"))
         out.append(

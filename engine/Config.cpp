@@ -44,12 +44,24 @@ const char* reloadTurnName(ReloadTurn turn) {
 
 }  // namespace
 
+std::uint8_t RuleConfig::itemsDealtPerLoad() const {
+  const int low = itemsPerLoad;
+  const int high = itemsPerLoadMax < itemsPerLoad ? itemsPerLoad : itemsPerLoadMax;
+  return static_cast<std::uint8_t>((low + high + 1) / 2);
+}
+
 RuleConfig RuleConfig::storyRound(int round) {
   RuleConfig config;
   config.mode = Mode::Story;
-  config.charges = round <= 1 ? 2 : (round == 2 ? 4 : 5);
+  // Two charges in stage 1 and four in each of stages 2 and 3. Stage 3 also
+  // shows two faded charges, which heal back to nothing and do not stop a
+  // fatal shot; the engine models the normal charges only. See the faded
+  // charges paragraph in docs/RULES.md.
+  config.charges = round <= 1 ? 2 : 4;
   config.itemPool = round <= 1 ? std::vector<Item>{} : basePool();
-  config.itemsPerLoad = round <= 1 ? 0 : 2;
+  // Stage 1 deals nothing, stage 2 deals two per load and stage 3 deals four.
+  config.itemsPerLoad = round <= 1 ? 0 : (round == 2 ? 2 : 4);
+  config.itemsPerLoadMax = config.itemsPerLoad;
   config.reloadTurn = ReloadTurn::PlayerFirst;
   return config;
 }
@@ -59,7 +71,9 @@ RuleConfig RuleConfig::doubleOrNothing(std::uint8_t charges) {
   config.mode = Mode::DoubleOrNothing;
   config.charges = charges;
   config.itemPool = doubleOrNothingPool();
-  config.itemsPerLoad = 2;
+  // The count is redrawn at every load rather than fixed.
+  config.itemsPerLoad = 1;
+  config.itemsPerLoadMax = 5;
   config.reloadTurn = ReloadTurn::PlayerFirst;
   return config;
 }
@@ -69,7 +83,9 @@ RuleConfig RuleConfig::multiplayer(std::uint8_t /*players*/, std::uint8_t charge
   config.mode = Mode::Multiplayer;
   config.charges = charges;
   config.itemPool = multiplayerPool();
+  // Nothing sourced covers the multiplayer deal, so it stays at the story size.
   config.itemsPerLoad = 2;
+  config.itemsPerLoadMax = 2;
   config.reloadTurn = ReloadTurn::KeepCurrent;
   return config;
 }
@@ -87,8 +103,13 @@ std::string RuleConfig::describe() const {
       out << "multiplayer";
       break;
   }
-  out << ", " << static_cast<int>(charges) << " charges, " << static_cast<int>(itemsPerLoad)
-      << " items dealt per load";
+  out << ", " << static_cast<int>(charges) << " charges, ";
+  if (itemsPerLoadMax > itemsPerLoad) {
+    out << static_cast<int>(itemsPerLoad) << " to " << static_cast<int>(itemsPerLoadMax)
+        << " items dealt per load, modelled at " << static_cast<int>(itemsDealtPerLoad());
+  } else {
+    out << static_cast<int>(itemsPerLoad) << " items dealt per load";
+  }
   out << ", after a reload " << reloadTurnName(reloadTurn);
   out << ", a sawed barrel " << (sawSurvivesReload ? "survives" : "does not survive")
       << " a reload";

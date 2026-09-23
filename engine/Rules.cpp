@@ -423,17 +423,19 @@ std::vector<Outcome> reloadOutcomes(const GameState& state, const RuleConfig& co
     }
     if (dealItems) {
       // The deal is modelled as the expected draw from the pool: each player
-      // gains itemsPerLoad items spread over the pool. Enumerating multisets
-      // exactly would multiply the state space by thousands without changing
-      // the ranking of the move being asked about, so the solver rounds the
-      // spread and docs/RULES.md records it as an approximation.
+      // gains itemsDealtPerLoad() items spread over the pool. Enumerating
+      // multisets exactly would multiply the state space by thousands without
+      // changing the ranking of the move being asked about, and the same
+      // argument covers the count, which the game redraws at every load and
+      // this takes at the middle of its range. docs/RULES.md records both as
+      // approximations.
       const std::vector<Item>& pool = config.itemPool;
       if (!pool.empty()) {
         for (int i = 0; i < next.playerCount; ++i) {
           PlayerState& player = next.players[i];
           if (!player.alive()) continue;
           int room = config.itemLimit - player.itemCount();
-          int toDeal = std::min<int>(config.itemsPerLoad, std::max(0, room));
+          int toDeal = std::min<int>(config.itemsDealtPerLoad(), std::max(0, room));
           for (int d = 0; d < toDeal; ++d) {
             const Item item = pool[static_cast<std::size_t>(d + i) % pool.size()];
             ++player.items[itemIndex(item)];

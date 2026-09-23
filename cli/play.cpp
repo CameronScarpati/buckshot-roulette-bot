@@ -40,12 +40,20 @@ const Outcome& sample(const std::vector<Outcome>& outcomes, std::mt19937* rng) {
 }
 
 void dealItems(GameState* state, const RuleConfig& config, std::mt19937* rng) {
-  if (config.itemPool.empty() || config.itemsPerLoad == 0) return;
+  if (config.itemPool.empty()) return;
+  // A live game can afford the real rule, which draws the count fresh at every
+  // load and hands every seat the same number. Only the solver has to take the
+  // count at the middle of its range, because there it would branch.
+  const int low = config.itemsPerLoad;
+  const int high = std::max<int>(low, config.itemsPerLoadMax);
+  std::uniform_int_distribution<int> howMany(low, high);
+  const int dealt = howMany(*rng);
+  if (dealt == 0) return;
   std::uniform_int_distribution<std::size_t> pick(0, config.itemPool.size() - 1);
   for (int seat = 0; seat < state->playerCount; ++seat) {
     PlayerState& player = state->players[seat];
     if (!player.alive()) continue;
-    for (int i = 0; i < config.itemsPerLoad; ++i) {
+    for (int i = 0; i < dealt; ++i) {
       if (player.itemCount() >= config.itemLimit) break;
       ++player.items[itemIndex(config.itemPool[pick(*rng)])];
     }

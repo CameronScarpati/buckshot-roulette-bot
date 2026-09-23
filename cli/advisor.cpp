@@ -218,9 +218,23 @@ void printRanking(const SolveResult& result, const GameState& state, int seat) {
     }
     std::cout << "\n";
   }
+  // A tie among rows that are averages is an artefact of the averaging, not a
+  // choice the seat holding the gun faces, so it is only worth saying when the
+  // rows mean what they look like.
+  const bool rowsAreAverages = result.opponentKnownShells > 0 && result.mover != seat;
   const std::vector<Action> best = result.bestActions();
-  if (best.size() > 1) {
+  if (best.size() > 1 && !rowsAreAverages) {
     std::cout << "  " << best.size() << " moves tie at the top; any of them is optimal.\n";
+  }
+  if (rowsAreAverages) {
+    // Every row above is averaged over a shell p<mover> can see and this seat
+    // cannot, so no row says what that seat will actually do. The position is
+    // worth what its choice makes it, which is lower than the rows look.
+    std::cout << "  p" << (result.mover + 1) << " has looked at " << result.opponentKnownShells
+              << " shell" << (result.opponentKnownShells == 1 ? "" : "s")
+              << " you have not, so the rows above average over what it saw and you did not. "
+                 "It does not have to average: this position is worth "
+              << std::fixed << std::setprecision(4) << result.value << " to you.\n";
   }
   if (result.truncated) {
     std::cout << "  Note: the search hit its reload budget in some lines, so those were "

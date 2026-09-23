@@ -16,6 +16,7 @@ Python 3.11, standard library only.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import re
 import sys
@@ -42,7 +43,9 @@ POOL_DON = (MG, BEER, CIG, CUFF, SAW, PHONE, ADR, INV, MED)
 POOL_MP = (MG, BEER, CIG, SAW, PHONE, ADR, INV, MED, JAM, REM)
 POOLS = {"don": POOL_DON, "mp": POOL_MP}
 
-ITEMS_PER_LOAD = 2
+# Double or Nothing draws 1 to 5 items per load; a solved reload takes the
+# middle of that range, matching RuleConfig::itemsDealtPerLoad.
+ITEMS_PER_LOAD = 3
 TABLE_LIMIT = 8
 # Deterministic deal: seat i (1-based) takes items starting at pool index i.
 DEAL_INDEX_BASE = 0
@@ -92,6 +95,54 @@ def blind_to(st: State, seat: int) -> State:
     slots = tuple((t, seen) if (t is not None and seat in seen) else (None, ())
                   for t, seen in st.slots)
     return st._replace(slots=slots)
+
+
+def foreign_known(st: State, seat: int) -> list[int]:
+    """Positions somebody else has resolved and this seat has not seen.
+
+    These are the shells an opponent has looked at.  This seat cannot read
+    them, and pretending they were never read is a different error from
+    reading them."""
+    return [i for i, (t, seen) in enumerate(st.slots)
+            if t is not None and seat not in seen and seen]
+
+
+def knowledge_branches(st: State, seat: int, limit: int = 4):
+    """The position as `seat` sees it, split into the ways the shells another
+    seat has looked at could have fallen.
+
+    Each such position goes back into the unresolved pool as far as this seat
+    is concerned, so the weights are draws without replacement from that pool;
+    inside a branch the position is pinned again and still carries the seats
+    that saw it, so they go on playing as though they know.  Returns the
+    branches, how many such shells there were, and whether the limit dropped
+    them."""
+    blind = blind_to(st, seat)
+    spots = foreign_known(st, seat)
+    if not spots:
+        return [(1.0, blind)], 0, False
+    if len(spots) > limit:
+        return [(1.0, blind)], len(spots), True
+    ul, ub = unresolved_counts(blind)
+    out = []
+    for combo in itertools.product("LB", repeat=len(spots)):
+        p, live, blank = 1.0, ul, ub
+        for ty in combo:
+            left = live + blank
+            if left <= 0:
+                p = 0.0
+                break
+            if ty == "L":
+                p, live = p * live / left, live - 1
+            else:
+                p, blank = p * blank / left, blank - 1
+        if p <= 0.0:
+            continue
+        slots = list(blind.slots)
+        for idx, ty in zip(spots, combo):
+            slots[idx] = (ty, tuple(w for w in st.slots[idx][1] if w != seat))
+        out.append((p, blind._replace(slots=tuple(slots))))
+    return (out or [(1.0, blind)]), len(spots), False
 
 
 def unresolved_counts(st: State) -> tuple[int, int]:
@@ -230,22 +281,25 @@ class Solver:
                 return st.seats[self.seat].hp / total if total else 0.0
             return sum(p * self.value(s) for p, s in self.reload_branches(st))
         vals = self.node_values(st)
-        if st.turn == self.seat:
-            return max(vals.values())
+        mine = st.turn == self.seat
+        pick = max if mine else min
         if not hidden_from(st, st.turn):
-            return min(vals.values())
+            return pick(vals.values())
         # The seat to move cannot see a shell somebody else has resolved, so it
         # has to choose from its own information state and its choice is then
         # played out in the position as it really is. Moves it cannot tell apart
         # are assumed equally likely, since nothing it knows separates them.
+        # This holds for the solved seat too: once the answer averages over a
+        # shell somebody else looked at, reading it would be advice that the
+        # seat being advised cannot follow.
         seen = blind_to(st, st.turn)
         theirs = self.node_values(seen)
         if not theirs:
-            return min(vals.values())
-        floor = min(theirs.values())
-        tied = [text for text, v in theirs.items() if abs(v - floor) <= 1e-12]
+            return pick(vals.values())
+        edge = pick(theirs.values())
+        tied = [text for text, v in theirs.items() if abs(v - edge) <= 1e-12]
         real = [vals[text] for text in tied if text in vals]
-        return sum(real) / len(real) if real else min(vals.values())
+        return sum(real) / len(real) if real else pick(vals.values())
 
     def node_values(self, st: State) -> dict[str, float]:
         """Value of every legal action text (targets of a steal are folded in)."""
@@ -566,11 +620,31 @@ def parse_position(text: str, budget: int) -> State:
 # --------------------------------------------------------------------------
 
 
+def solve_position(st: State, seat: int, mode: str = "don"):
+    """Solve `st` for the 0-based `seat`, averaging over the shells only another
+    seat has looked at.
+
+    Every branch is the same position to this seat, so the ranking is one list
+    whose rows are averaged over them.  This is the only entry point that may
+    be handed a raw parsed position: the solver itself reads a state as the
+    truth, so anything that reaches it must already have been cut down to one
+    seat's information."""
+    solver = Solver(seat, mode)
+    branches, _, _ = knowledge_branches(st, seat)
+    value = 0.0
+    rows: dict[str, float] = {}
+    for weight, branch in branches:
+        v, acts, _ = solver.analyze(branch)
+        value += weight * v
+        for text, av in acts:
+            rows[text] = rows.get(text, 0.0) + weight * av
+    order = sorted(rows.items(), key=lambda kv: (-kv[1], kv[0]))
+    return value, order, solver.nodes
+
+
 def run(pos: str, seat: int = 1, reloads: int = 2, mode: str = "don"):
-    st = parse_position(pos, reloads)
-    s = Solver(seat - 1, mode)
-    v, acts, _ = s.analyze(st)
-    return v, dict(acts), acts
+    value, order, _ = solve_position(parse_position(pos, reloads), seat - 1, mode)
+    return value, dict(order), order
 
 
 def selftest() -> int:
@@ -701,8 +775,7 @@ def main(argv: list[str] | None = None) -> int:
     st = parse_position(args.position, args.reloads)
     if not 1 <= args.seat <= len(st.seats):
         ap.error(f"--seat must be in 1..{len(st.seats)}")
-    solver = Solver(args.seat - 1, args.mode)
-    value, acts, nodes = solver.analyze(st)
+    value, acts, nodes = solve_position(st, args.seat - 1, args.mode)
     print(json.dumps({
         "value": value,
         "actions": [{"action": a, "value": v} for a, v in acts],

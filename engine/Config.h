@@ -12,10 +12,11 @@ namespace bsr {
 /// same engine; nothing about the state type changes between them.
 enum class Mode : std::uint8_t { Story, DoubleOrNothing, Multiplayer };
 
-/// Who holds the turn after a mid-round reload. The real single-player game and
-/// this repository's previous engine disagreed here, and the optimal move
-/// depends on the answer, so it is a setting with an explicit default rather
-/// than a hard-coded rule. See docs/RULES.md, rule R11.
+/// Who holds the turn after a mid-round reload. The single-player answer is
+/// sourced and is the default here; multiplayer is not, and the optimal move
+/// depends on the answer, so it stays a setting with an explicit default
+/// rather than a hard-coded rule. See the turn owner after a mid-round reload
+/// row in docs/RULES.md.
 enum class ReloadTurn : std::uint8_t {
   KeepCurrent,  ///< whoever was to move keeps the turn
   PlayerFirst,  ///< seat 0 acts first after every reload
@@ -44,9 +45,20 @@ struct RuleConfig {
   /// Item pool for this mode, used by reload deals.
   std::vector<Item> itemPool;
 
-  /// Items dealt to each player per load, and the table limit.
-  std::uint8_t itemsPerLoad = 2;
+  /// Items dealt to each player per load, as the range the game draws from,
+  /// and the table limit. Double or Nothing redraws the count at every load, so
+  /// the two ends differ there; equal ends mean a fixed deal. See the items
+  /// dealt per load row in docs/RULES.md.
+  std::uint8_t itemsPerLoad = 1;
+  std::uint8_t itemsPerLoadMax = 5;
   std::uint8_t itemLimit = 8;
+
+  /// The count a reload deal actually hands out: the middle of the range,
+  /// rounded up. The deal is already modelled at its average over which items
+  /// come out of the box, so a chance node over how many come out would
+  /// multiply the branching without making the answer any truer. The range is
+  /// what the flag sets and what `describe()` reports, so nothing is hidden.
+  std::uint8_t itemsDealtPerLoad() const;
 
   /// Shell counts a reload may produce, as (live, blank) pairs with weights.
   /// Empty means "use the default generator", which draws a total of 2 to 8
@@ -55,8 +67,10 @@ struct RuleConfig {
 
   ReloadTurn reloadTurn = ReloadTurn::PlayerFirst;
 
-  /// Whether a sawed barrel survives a reload. Unverified against the game, so
-  /// it is a setting; docs/RULES.md rule R13.
+  /// Whether a sawed barrel survives a reload. The game says it does not, and
+  /// that is the default; it stays a setting because the answer changes what
+  /// emptying a tube with Beer is worth. See the sawed barrel across a reload
+  /// row in docs/RULES.md.
   bool sawSurvivesReload = false;
 
   /// Whether handcuffs come off every player when items are dealt, including a

@@ -27,6 +27,13 @@ struct SolveOptions {
   /// public information, which understates them slightly.
   bool opponentUsesInfoItems = false;
 
+  /// How many shells that only another seat has looked at the answer averages
+  /// over. Each one splits the position in two, and no seat can realistically
+  /// look at more than a few, so the guard rail is low. Past it the extra
+  /// shells are treated as seen by nobody, which is what this solver did with
+  /// all of them before.
+  int opponentKnowledgeLimit = 4;
+
   /// Guard rail. The search reports truncation rather than running forever.
   long long nodeLimit = 40000000;
 };
@@ -45,6 +52,13 @@ struct SolveResult {
   std::vector<ActionValue> ranked;  ///< best first for `mover`
   long long nodes = 0;
   bool truncated = false;  ///< a node hit the reload budget or the node limit
+  /// Shells another seat has looked at and the advised seat has not. The value
+  /// is the average over the ways those shells could have fallen, weighted by
+  /// what the advised seat can work out about them.
+  int opponentKnownShells = 0;
+  /// Set when there were more such shells than `opponentKnowledgeLimit`, so
+  /// they were treated as seen by nobody instead of averaged over.
+  bool opponentKnowledgeDropped = false;
   std::string assumptions;
 
   bool hasTie() const;
