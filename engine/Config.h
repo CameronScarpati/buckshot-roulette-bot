@@ -28,7 +28,9 @@ enum class ReloadTurn : std::uint8_t {
 /// The scripted single-player dealer is deliberately absent: its policy would
 /// have to be re-derived rule by rule from the game before it could be called
 /// a model of the dealer, and a guess presented as one would be worse than
-/// naming the assumption honestly. Both models below are exact.
+/// naming the assumption honestly. Both models below minimise within the limits
+/// the solver states: the other seats choose from their own information state
+/// and spend no information items unless the search is told to let them.
 enum class OpponentModel : std::uint8_t {
   Optimal,   ///< the opponent minimises our win probability (two players)
   Paranoid,  ///< three or more players: everyone else plays to minimise us

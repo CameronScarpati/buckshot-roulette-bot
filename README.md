@@ -4,21 +4,22 @@
 
 # Buckshot Roulette Solver
 
-### An exact move advisor and a playable opponent
+### An expectiminimax move advisor and a playable opponent
 
 [![Build](https://github.com/CameronScarpati/buckshot-roulette-bot/actions/workflows/build.yml/badge.svg)](https://github.com/CameronScarpati/buckshot-roulette-bot/actions/workflows/build.yml)
 
 Describe any position from [Buckshot Roulette](https://store.steampowered.com/app/2537590/BUCKSHOT_ROULETTE/)
-and this prints every legal move ranked by the probability that you are the last player
-standing, along with the assumptions that produced the number. It also plays.
+and this ranks the moves worth considering by the probability that you are the last player
+standing, under a stated opponent model, along with the assumptions that produced the number.
+It also plays.
 
 </div>
 
 ## What it does
 
 - **Advises.** Give it a position, by one line of notation or by narrating the round as it
-  happens, and it ranks every legal move with a win probability, marks ties, and names the
-  opponent model it used.
+  happens, and it ranks the legal moves it considers useful with a win probability, marks
+  ties, and names the opponent model it used.
 - **Plays.** Take a seat against the solver. The shells come from a seed, so a whole round
   replays exactly.
 - **Covers the game.** Two to four seats, all eleven items, and the single-player and
@@ -167,11 +168,15 @@ live shells a seat cannot account for over the shells it cannot account for. A m
 glass tells one seat and nobody else. An inverter flips the chamber without revealing it,
 so an unseen shell keeps its place in the pool and its odds invert.
 
-**The search is exact, not a depth-limited estimate.** The value of a position is computed
-from the values of the positions it leads to, weighted by their probabilities, and
-memoised. Within a load the graph is acyclic, because every move consumes a shell or an
-item. Across a reload the search continues for a stated number of reloads and then stops at
-a boundary value, and any answer that touched the boundary says so.
+**The search is exhaustive within a set number of reloads, not sampled.** The value of a
+position is computed from the values of the positions it leads to, weighted by their
+probabilities, and memoised. Within a load the graph is acyclic, because every move consumes
+a shell or an item. Across a reload the search continues for a stated number of reloads and
+then stops at a boundary, where a position is scored by each seat's share of the charges
+left, and any answer that touched the boundary says so. Inside that budget the answer is
+still only as good as the opponent model below, the single item deal it assumes at each
+reload, and the moves it considers: an item that cannot help, such as cigarettes at full
+charges, is left out of the ranking even though the game would let you use it.
 
 **Every answer is given from what you have seen, and the other seat gets what it has seen.**
 A shell only the other seat has looked at counts as unseen to you, so the advisor can never
@@ -194,12 +199,21 @@ prints all of this.
 ## What it does not do
 
 - **The scripted dealer is not modelled.** Its policy would have to be derived rule by rule
-  from the game before it could honestly be called a model of the dealer, so the opponent is
-  an exact minimiser instead. Against the real dealer, treat the numbers as a lower bound.
+  from the game before it could honestly be called a model of the dealer, so the opponent
+  minimises your chance instead, within the limits described above: it spends no magnifying
+  glasses and no burner phones, and it picks evenly between moves it cannot tell apart. That
+  is not the strongest opponent possible, so a number is not a worst case, and it is not a
+  bound on how you would fare against the real dealer either. It is the chance of winning
+  under the stated opponent model, looking a set number of reloads ahead, with positions past
+  that horizon scored by each seat's share of the charges left.
 - **The reload boundary is a cutoff.** Looking through more reloads costs more time, and at
   the end of the budget a position is valued by charges in hand.
-- **The item deal at a reload is averaged, not enumerated.** Enumerating every multiset would
-  multiply the state space by thousands without changing which move is best.
+- **The item deal at a reload is one fixed spread, not a distribution.** Inside the search,
+  each living seat takes items from the pool in turn, starting at its own seat index and
+  stopping at the per-load count or the item limit, rather than drawing at random. Enumerating
+  every multiset would multiply the state space by thousands, and
+  [docs/RULES.md](docs/RULES.md) records this as an approximation, along with the item count,
+  which a live game redraws at every load and the search takes at the middle of its range.
 - **Three rules are still assumptions.** Whether a restraint survives a mid-round reload, how
   many items a seat's tray holds, and the shape of the shell composition inside the range the
   game uses are all settings, because nothing reliable documents them.
@@ -208,8 +222,18 @@ prints all of this.
 
 ## Results
 
-Two seeded batches, each a hundred rounds at two charges a seat. Every number comes from the
-command above it and reproduces exactly, and both batches run in seconds.
+Two seeded batches, each a hundred rounds at two charges a seat, and both run in seconds.
+Every number below comes from the command above it, measured on Linux against libstdc++ with
+a Release build from GCC 13.3.0 and again from Clang 18.1.3, which gave the same counts. The
+seed fixes the shells, so the same build prints the same count every time. The seed drives
+`std::mt19937` through the standard library's distributions, and their algorithms differ
+between standard libraries, so a build against libc++ or the MSVC library can deal different
+shells and items from the same seed and print a different count. On the same standard library,
+a different compiler can still move a count by a few rounds: when two moves are worth the same,
+rounding in the last digits can decide which is ranked first, and the batch plays whichever
+comes first. For that reason CI does not pin these counts. `tools/check_play.sh` checks that a
+seed replays byte for byte and that a shorter self-play batch (ten rounds, seed 3, a reload
+budget of zero) does not fall below 7 wins in 10 for seat 1.
 
 ```sh
 ./build/play --selfplay 100 --seed 1 --charges 2 --reloads 0
@@ -224,10 +248,23 @@ command above it and reproduces exactly, and both batches run in seconds.
 Read those two rows together, because neither means much alone.
 
 The first row is not a measure of strength. Both seats play the same way, so what it
-measures is the chair: seat 1 acts first after every reload and not only at the start of the
-round, and that one rule is worth the whole gap from an even split. The rule is the game's,
-not a guess, and it is still a setting, which is the only way to see what it is worth.
-[docs/RULES.md](docs/RULES.md) names the field that changes it.
+measures is the chair. Every round opens with a reload, so the rule that seat 1 acts first
+after a reload also decides who makes the first move of the round, and the 32 points over an
+even split are the two together. The same batch can be rerun with the reload rule changed:
+
+```sh
+./build/play --selfplay 100 --seed 1 --charges 2 --reloads 0 --reload-turn keep
+./build/play --selfplay 100 --seed 1 --charges 2 --reloads 0 --reload-turn dealer
+```
+
+With `keep`, a reload leaves the turn where it was, so seat 1 still makes the first move of the
+round and nothing more, and seat 1 survives 66 of 100. The reload rule is therefore worth about
+16 of the 32 points and the first move of the round the other 16. With `dealer`, seat 2 acts
+first at every load, including the first, and seat 1 survives 22 of 100, roughly the default
+reflected. (Same builds as above. A hundred rounds is a small sample, so read these
+as rough sizes.) The rule is the game's, not a guess, and it is still a setting, which is the
+only way to see what it is worth. [docs/RULES.md](docs/RULES.md) names the field that changes
+it.
 
 The second row is the one about strength, and the claim it supports is the difference
 between the rows, not the 86. Swapping a copy of the solver for a heuristic opponent is
@@ -275,7 +312,7 @@ engine/          Rules as pure functions: no input, no output, no global state
   Rules.*          Legal moves and transitions, each with its probability
   Config.*         Rule sets and the settings that separate them
   Notation.*       Positions as one line of text
-solver/          The exact search over the rules
+solver/          The expectiminimax search over the rules
 cli/             advisor (ranks moves) and play (plays a round)
 tests/           Unit, rule, notation, golden value and invariance tests
 tools/           The Python oracle and the differential comparison
