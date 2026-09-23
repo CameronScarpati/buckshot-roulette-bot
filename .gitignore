@@ -5,3 +5,6 @@
 /build
 
 /cmake-build-debug-coverage
+# Python bytecode
+__pycache__/
+*.pyc

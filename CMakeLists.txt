@@ -6,8 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Compiler warning flags
-add_compile_options(
+# Warning flags, carried by an interface target so that they apply to this
+# project's code and not to anything fetched into the build.
+option(WARNINGS_AS_ERRORS "Turn warnings into errors" OFF)
+
+add_library(bsr_warnings INTERFACE)
+target_compile_options(bsr_warnings INTERFACE
     -Wall
     -Wextra
     -Wpedantic
@@ -17,53 +21,44 @@ add_compile_options(
     -Wnon-virtual-dtor
     -Woverloaded-virtual
 )
+if(WARNINGS_AS_ERRORS)
+    target_compile_options(bsr_warnings INTERFACE -Werror)
+endif()
 
 # Release optimization flags
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 include_directories(.)
 
-set(SOURCES
-    BotPlayer.cpp
-    Game.cpp
-    HumanPlayer.cpp
-    Player.cpp
-    Shotgun.cpp
-    Simulations/SimulatedPlayer.cpp
-    Simulations/SimulatedGame.cpp
-    Simulations/SimulatedShotgun.cpp
-    Items/Cigarette.cpp
-    Items/Handcuffs.cpp
-    Items/MagnifyingGlass.cpp
-    Items/Beer.cpp
-    Items/Handsaw.cpp
-    Items/Item.cpp
+# ---------------------------------------------------------------------------
+# Engine and solver: rules as pure functions, an exact solver over them, and a
+# text notation for positions. No input, no output, no global state.
+# ---------------------------------------------------------------------------
+add_library(bsr_core STATIC
+    engine/Items.cpp
+    engine/Tube.cpp
+    engine/State.cpp
+    engine/Rules.cpp
+    engine/Config.cpp
+    engine/Notation.cpp
+    solver/Solver.cpp
 )
+target_include_directories(bsr_core PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(bsr_core PUBLIC bsr_warnings)
 
-set(HEADERS
-    BotPlayer.h
-    Game.h
-    HumanPlayer.h
-    Player.h
-    Shotgun.h
-    Simulations/SimulatedPlayer.h
-    Simulations/SimulatedGame.h
-    Simulations/SimulatedShotgun.h
-    Items/Cigarette.h
-    Items/Handcuffs.h
-    Items/MagnifyingGlass.h
-    Items/Beer.h
-    Items/Handsaw.h
-    Items/Item.h
-)
+# Position advisor: enter any position, get every move ranked by win probability.
+add_executable(advisor cli/advisor.cpp)
+target_link_libraries(advisor PRIVATE bsr_core bsr_warnings)
 
-add_executable(${PROJECT_NAME} main.cpp ${SOURCES} ${HEADERS})
+# Play a round against the solver.
+add_executable(play cli/play.cpp)
+target_link_libraries(play PRIVATE bsr_core bsr_warnings)
 
-# Bot vs Bot simulation
-add_executable(simulate simulate.cpp ${SOURCES} ${HEADERS})
-
-# Testing
-option(BUILD_TESTS "Build unit tests" OFF)
+# ---------------------------------------------------------------------------
+# Tests. On by default: a test suite nobody runs is not a test suite, and the
+# README's build instructions used to fail because this defaulted to OFF.
+# ---------------------------------------------------------------------------
+option(BUILD_TESTS "Build unit tests" ON)
 
 if(BUILD_TESTS)
     enable_testing()
@@ -82,9 +77,8 @@ if(BUILD_TESTS)
     file(GLOB TEST_SOURCES tests/*.cpp)
 
     if(TEST_SOURCES)
-        add_executable(tests ${TEST_SOURCES} ${SOURCES})
-        target_link_libraries(tests GTest::gtest_main)
-        target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR})
+        add_executable(tests ${TEST_SOURCES})
+        target_link_libraries(tests PRIVATE bsr_core bsr_warnings GTest::gtest_main)
         gtest_discover_tests(tests)
     endif()
 endif()

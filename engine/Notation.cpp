@@ -1,0 +1,422 @@
+#include "engine/Notation.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cerrno>
+#include <cstdlib>
+#include <sstream>
+#include <vector>
+
+namespace bsr {
+namespace notation {
+namespace {
+
+/// A seat cannot hold more charges than this. The real game never comes close;
+/// the cap exists so that a typo is refused rather than wrapped around.
+constexpr int kMaxCharges = 64;
+/// Likewise for how many items one seat may be given in a written position.
+constexpr int kMaxItemsPerSeat = 32;
+
+std::vector<std::string> split(const std::string& text, char sep) {
+  std::vector<std::string> parts;
+  std::string current;
+  for (char c : text) {
+    if (c == sep) {
+      if (!current.empty()) parts.push_back(current);
+      current.clear();
+      continue;
+    }
+    current.push_back(c);
+  }
+  if (!current.empty()) parts.push_back(current);
+  return parts;
+}
+
+std::string lower(const std::string& text) {
+  std::string out;
+  out.reserve(text.size());
+  for (char c : text) out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+  return out;
+}
+
+/// Parse a non-negative integer, refusing anything that is not all digits and
+/// anything that would not survive the conversion. Silent overflow here used to
+/// turn a long offset into a negative one, which then indexed off the front of
+/// the tube.
+bool parseInt(const std::string& text, int* out) {
+  if (text.empty() || text.size() > 9) return false;
+  for (char c : text) {
+    if (!std::isdigit(static_cast<unsigned char>(c))) return false;
+  }
+  errno = 0;
+  char* end = nullptr;
+  const long value = std::strtol(text.c_str(), &end, 10);
+  if (errno != 0 || end == text.c_str() || *end != '\0') return false;
+  if (value < 0 || value > 1000000) return false;
+  *out = static_cast<int>(value);
+  return true;
+}
+
+/// "p3" -> 2. Returns false for anything else.
+bool parseSeat(const std::string& text, int playerCount, int* seat) {
+  if (text.size() < 2 || text[0] != 'p') return false;
+  int value = 0;
+  if (!parseInt(text.substr(1), &value)) return false;
+  if (value < 1 || value > playerCount) return false;
+  *seat = value - 1;
+  return true;
+}
+
+}  // namespace
+
+bool parse(const std::string& text, GameState* state, std::string* error) {
+  GameState result;
+  result.playerCount = 0;
+  int highestSeat = -1;
+  int turnSeat = 0;
+  bool sawed = false;
+  bool inverted = false;
+  bool restraintUsed = false;
+  bool tubeGiven = false;
+  bool turnGiven = false;
+  bool dirGiven = false;
+  IndexedArray<bool, kMaxPlayers> seatGiven{};
+  std::vector<std::string> cuffTokens;
+  std::vector<std::string> skippedTokens;
+  std::vector<std::string> knownTokens;
+  std::string turnToken;
+
+  for (const std::string& rawToken : split(text, ' ')) {
+    const std::string token = lower(rawToken);
+    const std::size_t eq = token.find('=');
+    const std::string key = eq == std::string::npos ? token : token.substr(0, eq);
+    const std::string value = eq == std::string::npos ? "" : token.substr(eq + 1);
+
+    if (key == "sawed") {
+      sawed = true;
+    } else if (key == "inverted") {
+      inverted = true;
+    } else if (key == "restraintused") {
+      restraintUsed = true;
+    } else if (key == "dir") {
+      if (dirGiven) {
+        *error = "dir is given twice";
+        return false;
+      }
+      dirGiven = true;
+      if (value == "ccw" || value == "-") {
+        result.direction = -1;
+      } else if (value == "cw" || value == "+") {
+        result.direction = 1;
+      } else {
+        *error = "dir must be cw or ccw";
+        return false;
+      }
+    } else if (key == "turn") {
+      if (turnGiven) {
+        *error = "turn is given twice";
+        return false;
+      }
+      turnGiven = true;
+      turnToken = value;
+    } else if (key == "cuffed") {
+      for (const std::string& seat : split(value, ',')) cuffTokens.push_back(seat);
+    } else if (key == "skipped") {
+      for (const std::string& seat : split(value, ',')) skippedTokens.push_back(seat);
+    } else if (key == "known") {
+      knownTokens.push_back(value);
+    } else if (key == "tube") {
+      if (tubeGiven) {
+        *error = "tube is given twice";
+        return false;
+      }
+      tubeGiven = true;
+      const std::size_t livePos = value.find('l');
+      const std::size_t blankPos = value.find('b');
+      if (livePos == std::string::npos || blankPos == std::string::npos || blankPos < livePos) {
+        *error = "tube must look like tube=2L3B";
+        return false;
+      }
+      int live = 0;
+      int blank = 0;
+      if (!parseInt(value.substr(0, livePos), &live) ||
+          !parseInt(value.substr(livePos + 1, blankPos - livePos - 1), &blank)) {
+        *error = "tube counts must be numbers, as in tube=2L3B";
+        return false;
+      }
+      if (live + blank > kMaxShells) {
+        *error = "a tube holds at most " + std::to_string(kMaxShells) + " shells";
+        return false;
+      }
+      result.tube.live = static_cast<std::uint8_t>(live);
+      result.tube.blank = static_cast<std::uint8_t>(blank);
+    } else if (key.size() >= 2 && key[0] == 'p' &&
+               std::isdigit(static_cast<unsigned char>(key[1]))) {
+      int seatNumber = 0;
+      if (!parseInt(key.substr(1), &seatNumber) || seatNumber < 1 || seatNumber > kMaxPlayers) {
+        *error = "seats run from p1 to p" + std::to_string(kMaxPlayers);
+        return false;
+      }
+      const int seat = seatNumber - 1;
+      if (seatGiven[seat]) {
+        *error = "seat p" + std::to_string(seatNumber) + " is given twice";
+        return false;
+      }
+      seatGiven[seat] = true;
+      highestSeat = std::max(highestSeat, seat);
+      std::string charges = value;
+      std::string itemList;
+      const std::size_t bracket = value.find('[');
+      if (bracket != std::string::npos) {
+        charges = value.substr(0, bracket);
+        const std::size_t close = value.find(']', bracket);
+        itemList = value.substr(
+            bracket + 1, close == std::string::npos ? std::string::npos : close - bracket - 1);
+      }
+      const std::size_t slash = charges.find('/');
+      int hp = 0;
+      int maxHp = 0;
+      if (slash == std::string::npos) {
+        if (!parseInt(charges, &hp)) {
+          *error = "charges must look like p1=3/4";
+          return false;
+        }
+        maxHp = hp;
+      } else if (!parseInt(charges.substr(0, slash), &hp) ||
+                 !parseInt(charges.substr(slash + 1), &maxHp)) {
+        *error = "charges must look like p1=3/4";
+        return false;
+      }
+      if (maxHp <= 0 || maxHp > kMaxCharges) {
+        *error = "a seat holds between 1 and " + std::to_string(kMaxCharges) + " charges";
+        return false;
+      }
+      if (hp > maxHp) {
+        *error = "a seat cannot hold more charges than its maximum";
+        return false;
+      }
+      result.players[seat].hp = static_cast<std::uint8_t>(hp);
+      result.players[seat].maxHp = static_cast<std::uint8_t>(maxHp);
+      int itemsHere = 0;
+      for (const std::string& itemToken : split(itemList, ',')) {
+        Item item;
+        if (!itemFromToken(itemToken, &item)) {
+          *error = "no item is called " + itemToken;
+          return false;
+        }
+        if (++itemsHere > kMaxItemsPerSeat) {
+          *error = "a seat holds at most " + std::to_string(kMaxItemsPerSeat) + " items";
+          return false;
+        }
+        ++result.players[seat].items[itemIndex(item)];
+      }
+    } else if (!token.empty()) {
+      *error = "unrecognised token " + rawToken;
+      return false;
+    }
+  }
+
+  if (highestSeat < 1) {
+    *error = "a position needs at least two seats, as in p1=3/4 p2=3/4";
+    return false;
+  }
+  result.playerCount = static_cast<std::uint8_t>(highestSeat + 1);
+  for (int seat = 0; seat < result.playerCount; ++seat) {
+    if (!seatGiven[seat]) {
+      *error = "seat p" + std::to_string(seat + 1) + " is missing; every seat between p1 and p" +
+               std::to_string(result.playerCount) + " must be given";
+      return false;
+    }
+  }
+
+  if (!turnToken.empty() && !parseSeat(turnToken, result.playerCount, &turnSeat)) {
+    *error = "turn must name a seat, as in turn=p1";
+    return false;
+  }
+  result.current = static_cast<std::uint8_t>(turnSeat);
+
+  for (const std::string& seatToken : cuffTokens) {
+    int seat = 0;
+    if (!parseSeat(seatToken, result.playerCount, &seat)) {
+      *error = "cuffed must name seats, as in cuffed=p2";
+      return false;
+    }
+    result.players[seat].cuffed = true;
+  }
+  for (const std::string& seatToken : skippedTokens) {
+    int seat = 0;
+    if (!parseSeat(seatToken, result.playerCount, &seat)) {
+      *error = "skipped must name seats, as in skipped=p2";
+      return false;
+    }
+    result.players[seat].skipConsumed = true;
+  }
+
+  result.tube.sawed = sawed;
+  result.cuffUsedThisTurn = restraintUsed;
+
+  for (const std::string& entry : knownTokens) {
+    const std::size_t colon = entry.find(':');
+    if (colon == std::string::npos) {
+      *error = "known must look like known=p1:0L,2B";
+      return false;
+    }
+    int seat = 0;
+    if (!parseSeat(entry.substr(0, colon), result.playerCount, &seat)) {
+      *error = "known must name a seat, as in known=p1:0L";
+      return false;
+    }
+    for (const std::string& fact : split(entry.substr(colon + 1), ',')) {
+      if (fact.size() < 2) {
+        *error = "a known shell looks like 0L or 2B";
+        return false;
+      }
+      int offset = 0;
+      if (!parseInt(fact.substr(0, fact.size() - 1), &offset)) {
+        *error = "a known shell looks like 0L or 2B";
+        return false;
+      }
+      const char type = fact.back();
+      if (offset < 0 || offset >= result.tube.size()) {
+        *error = "offset " + std::to_string(offset) + " is past the end of the tube";
+        return false;
+      }
+      if (type != 'l' && type != 'b') {
+        *error = "a known shell is L or B";
+        return false;
+      }
+      const Shell shell = type == 'l' ? Shell::Live : Shell::Blank;
+      if (result.tube.truth[offset] != Shell::Unknown && result.tube.truth[offset] != shell) {
+        *error = "shell " + std::to_string(offset + 1) + " is named as both live and blank";
+        return false;
+      }
+      result.tube.resolve(offset, shell, static_cast<std::uint8_t>(1u << seat));
+    }
+  }
+
+  int knownLive = 0;
+  int knownBlank = 0;
+  for (int i = 0; i < result.tube.size(); ++i) {
+    if (result.tube.truth[i] == Shell::Live) ++knownLive;
+    if (result.tube.truth[i] == Shell::Blank) ++knownBlank;
+  }
+  if (knownLive > result.tube.live || knownBlank > result.tube.blank) {
+    *error = "more shells are known than the tube holds";
+    return false;
+  }
+
+  if (inverted) {
+    if (result.tube.empty()) {
+      *error = "an empty tube has no chamber to invert";
+      return false;
+    }
+    if (result.tube.truth[0] != Shell::Unknown) {
+      // The flag only means anything while the chamber is still an unresolved
+      // draw. Once a seat has seen the chamber, an inversion has a definite
+      // result, so the position should name the type it fires as.
+      *error =
+          "a chamber a seat has already seen cannot also be marked inverted; give the type it "
+          "fires as";
+      return false;
+    }
+    result.tube.chamberInverted = true;
+  }
+
+  // A round that is already decided may leave the turn on a seat that is out,
+  // which is exactly what the engine produces after a fatal shot.
+  if (!result.players[result.current].alive() && !result.roundOver()) {
+    *error = "the seat to move has no charges left";
+    return false;
+  }
+
+  *state = result;
+  return true;
+}
+
+std::string print(const GameState& state) {
+  std::ostringstream out;
+  for (int seat = 0; seat < state.playerCount; ++seat) {
+    const PlayerState& player = state.players[seat];
+    out << "p" << (seat + 1) << "=" << static_cast<int>(player.hp) << "/"
+        << static_cast<int>(player.maxHp);
+    if (player.itemCount() > 0) {
+      out << "[";
+      bool first = true;
+      for (int k = 0; k < kItemCount; ++k) {
+        for (int n = 0; n < player.items[k]; ++n) {
+          if (!first) out << ",";
+          out << itemToken(itemAt(k));
+          first = false;
+        }
+      }
+      out << "]";
+    }
+    out << " ";
+  }
+  out << "tube=" << static_cast<int>(state.tube.live) << "L" << static_cast<int>(state.tube.blank)
+      << "B";
+  out << " turn=p" << (static_cast<int>(state.current) + 1);
+  if (state.tube.sawed) out << " sawed";
+  if (state.tube.chamberInverted) out << " inverted";
+  if (state.cuffUsedThisTurn) out << " restraintused";
+  if (state.direction < 0) out << " dir=ccw";
+  bool anyCuffed = false;
+  for (int seat = 0; seat < state.playerCount; ++seat) {
+    if (!state.players[seat].cuffed) continue;
+    out << (anyCuffed ? "," : " cuffed=") << "p" << (seat + 1);
+    anyCuffed = true;
+  }
+  bool anySkipped = false;
+  for (int seat = 0; seat < state.playerCount; ++seat) {
+    if (!state.players[seat].skipConsumed) continue;
+    out << (anySkipped ? "," : " skipped=") << "p" << (seat + 1);
+    anySkipped = true;
+  }
+  for (int seat = 0; seat < state.playerCount; ++seat) {
+    bool anyKnown = false;
+    for (int i = 0; i < state.tube.size(); ++i) {
+      if (!state.tube.knows(seat, i)) continue;
+      out << (anyKnown ? "," : " known=p" + std::to_string(seat + 1) + ":") << i
+          << (state.tube.truth[i] == Shell::Live ? "L" : "B");
+      anyKnown = true;
+    }
+  }
+  return out.str();
+}
+
+std::string board(const GameState& state) {
+  std::ostringstream out;
+  out << "tube: " << static_cast<int>(state.tube.live) << " live, "
+      << static_cast<int>(state.tube.blank) << " blank";
+  if (state.tube.sawed) out << ", barrel sawed";
+  if (state.tube.chamberInverted) out << ", chamber inverted";
+  out << "\n";
+  for (int seat = 0; seat < state.playerCount; ++seat) {
+    const PlayerState& player = state.players[seat];
+    out << (seat == state.current ? "> " : "  ") << "p" << (seat + 1) << "  "
+        << static_cast<int>(player.hp) << "/" << static_cast<int>(player.maxHp) << " charges";
+    if (!player.alive()) out << "  out";
+    if (player.cuffed) out << "  cuffed";
+    if (player.skipConsumed) out << "  owed a turn";
+    if (player.itemCount() > 0) {
+      out << "  items:";
+      for (int k = 0; k < kItemCount; ++k) {
+        if (player.items[k] == 0) continue;
+        out << " " << itemName(itemAt(k));
+        if (player.items[k] > 1) out << " x" << static_cast<int>(player.items[k]);
+      }
+    }
+    bool anyKnown = false;
+    for (int i = 0; i < state.tube.size(); ++i) {
+      if (!state.tube.knows(seat, i)) continue;
+      out << (anyKnown ? ", " : "  knows: ") << "shell " << (i + 1) << " is "
+          << (state.tube.truth[i] == Shell::Live ? "live" : "blank");
+      anyKnown = true;
+    }
+    out << "\n";
+  }
+  return out.str();
+}
+
+}  // namespace notation
+}  // namespace bsr
