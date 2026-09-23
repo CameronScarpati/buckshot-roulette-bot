@@ -49,17 +49,17 @@ one seat is left standing (`engine/State.h:42`).
 | Any living seat may be shot, including yourself | Legal shots are self plus every other living seat (`engine/Rules.cpp:267-271`) | Verified | none |
 | A sawed barrel deals two charges | The hit is 2 when the barrel is sawed and 1 otherwise (`engine/Rules.cpp:344`) | Verified | none |
 | The saw is consumed by the next shot, live or blank | `sawed` is cleared after every shot (`engine/Rules.cpp:349`). Ejecting a shell with Beer does not clear it, because an ejection is not a shot (`engine/Rules.cpp:128-136`) | Verified | none |
-| A sawed barrel does not survive a reload | The reload clears `sawed` unless the setting says otherwise (`engine/Rules.cpp:415`) | Sourced, and the real rule is stronger | `sawSurvivesReload` |
+| A sawed barrel does not survive a reload | The reload clears `sawed` unless the setting says otherwise (`engine/Rules.cpp:421`) | Sourced, and the real rule is stronger | `sawSurvivesReload` |
 | A seat at zero charges is out | Damage floors at zero (`engine/Rules.cpp:17-19`) and a seat is alive while `hp > 0` (`engine/State.h:23`). Overkill from a sawed barrel does not carry over | Verified | none |
 | The third story stage's faded charges are one hit that cannot be healed | Stage 3 is modelled as five charges with `healFloor` at 2 (`engine/Config.cpp`, `storyRound`). Healing a seat below the floor does nothing (`engine/Rules.cpp`, `heal`), and cigarettes are not offered there at all (`engine/Rules.cpp`, `itemIsUseful`). See the faded band paragraph in the Modes section for what a charge count means in that stage | Sourced | `healFloor` |
 | The round ends when one seat remains | `roundOver()` is true at one or fewer living seats (`engine/State.h:42`) | Verified | none |
-| An empty tube forces a reload | `needsReload()` is the empty tube (`engine/State.h:44`); the reload itself is `rules::reloadOutcomes` for a solver (`engine/Rules.cpp:404`) and the sampling version in `cli/play.cpp:53` for a live game | Verified | none |
-| A reload deals a fresh batch of items to every living seat | Each living seat gains the same number of items, capped by the table limit (`engine/Rules.cpp:422-441`) | Verified | `itemsPerLoad`, `itemLimit`, `itemPool` |
+| An empty tube forces a reload | `needsReload()` is the empty tube (`engine/State.h:44`); the reload itself is `rules::reloadOutcomes` for a solver (`engine/Rules.cpp:410`) and the sampling version in `cli/play.cpp:53` for a live game | Verified | none |
+| A reload deals a fresh batch of items to every living seat | Each living seat gains the same number of items, capped by the table limit (`engine/Rules.cpp:428-450`) | Verified | `itemsPerLoad`, `itemLimit`, `itemPool` |
 | Double or Nothing redraws the item count at every load, 1 to 5 | The range is the setting, and the two seats are dealt the same count from it. A live game draws the count fresh per load (`cli/play.cpp:40-55`); the solver takes the middle of the range (`engine/Config.cpp`, `itemsDealtPerLoad`). See the items dealt per load row in the assumptions section | Sourced | `itemsPerLoad`, `itemsPerLoadMax` |
-| Items already on a table are kept across a reload | The deal adds to the existing counts and never clears them (`engine/Rules.cpp:437`) | Verified | none |
-| A seat holds at most eight items | Room is computed before the deal and the surplus is dropped (`engine/Rules.cpp:433-434`) | Verified | `itemLimit` |
-| Whoever acts first after a mid-round reload | Controlled by a setting, defaulting to seat p1 in the single-player modes and to whoever was to move in multiplayer (`engine/Rules.cpp:442-451`, `engine/Config.cpp:54, 64, 74`) | Sourced for single player, Assumed for multiplayer | `reloadTurn` |
-| A reload releases handcuffs | Every seat is uncuffed when a load is dealt (`engine/Rules.cpp:416-421`) | Verified for single player, Assumed for multiplayer | `reloadClearsCuffs` |
+| Items already on a table are kept across a reload | The deal adds to the existing counts and never clears them (`engine/Rules.cpp:446`) | Verified | none |
+| A seat holds at most eight items | Room is computed before the deal and the surplus is dropped (`engine/Rules.cpp:442-443`) | Verified | `itemLimit` |
+| Whoever acts first after a mid-round reload | Controlled by a setting, defaulting to seat p1 in the single-player modes and to whoever was to move in multiplayer (`engine/Rules.cpp:451-460`, `engine/Config.cpp:54, 64, 74`) | Sourced for single player, Assumed for multiplayer | `reloadTurn` |
+| A reload releases handcuffs | Every seat is uncuffed when a load is dealt (`engine/Rules.cpp:422-427`) | Verified for single player, Assumed for multiplayer | `reloadClearsCuffs` |
 | Shells that are fired or ejected are public | Both the shot and Beer resolve the chamber with every seat as an observer (`engine/Rules.cpp:340` and `engine/Rules.cpp:129`, mask built at `engine/Rules.cpp:13-15`) | Verified | none |
 | Using an item does not end the turn | `apply` advances the turn after an item only when the user died from it (`engine/Rules.cpp:370-376`) | Verified | none |
 | Obviously wasted item uses are not offered | A magnifying glass on a shell the seat has already placed, a saw on a sawed barrel, cigarettes at full charges and a second pair of handcuffs in one turn are all filtered out of the legal move list (`engine/Rules.cpp:276-305`) | Engine choice, see below | none |
@@ -212,22 +212,22 @@ this section have no setting behind them and are named as such in the table belo
 
 | Assumption | Current value | Field | What a different choice changes |
 |---|---|---|---|
-| Turn owner after a mid-round reload | Seat p1 acts first in the single-player modes, the seat to move keeps the turn in multiplayer (`engine/Rules.cpp:442-451`) | `reloadTurn` | No longer an assumption in single player: the player is handed the shotgun first after every load whatever happened before it. It stays a setting because multiplayer is not sourced and because it decides whether emptying the tube hands the initiative away or keeps it, which changes whether racking the last shell with Beer is good or terrible |
-| A sawed barrel across a reload | Does not survive (`engine/Rules.cpp:415`) | `sawSurvivesReload` | No longer an assumption: the barrel regrows at the end of the turn, which is stronger than clearing it at a reload and is what the engine already does. The setting stays so the other answer can be priced |
-| A reload releasing handcuffs | Releases them (`engine/Rules.cpp:416-421`) | `reloadClearsCuffs` | If cuffs survive a reload, a pair applied just before the tube empties buys a skip in the new load as well, which roughly doubles what a late pair is worth |
+| Turn owner after a mid-round reload | Seat p1 acts first in the single-player modes, the seat to move keeps the turn in multiplayer (`engine/Rules.cpp:451-460`) | `reloadTurn` | No longer an assumption in single player: the player is handed the shotgun first after every load whatever happened before it. It stays a setting because multiplayer is not sourced and because it decides whether emptying the tube hands the initiative away or keeps it, which changes whether racking the last shell with Beer is good or terrible |
+| A sawed barrel across a reload | Does not survive (`engine/Rules.cpp:421`) | `sawSurvivesReload` | No longer an assumption: the barrel regrows at the end of the turn, which is stronger than clearing it at a reload and is what the engine already does. The setting stays so the other answer can be priced |
+| A reload releasing handcuffs | Releases them (`engine/Rules.cpp:422-427`) | `reloadClearsCuffs` | If cuffs survive a reload, a pair applied just before the tube empties buys a skip in the new load as well, which roughly doubles what a late pair is worth |
 | The shell composition generator | Total uniform over 2 to 8, then live count uniform over `[1, total - 1]` (`engine/Rules.cpp:393-400`) | `loadTable` | This is the distribution every probability in the engine is conditioned on before any shell is seen. A different table changes the value of every position that looks past a reload. A fixed list of `(live, blank)` pairs in `loadTable` replaces the generator outright and is drawn uniformly (`engine/Rules.cpp:383-389`) |
 | Items dealt per load | 1 to 5 per seat in Double or Nothing, 2 in story stage 2, 4 in story stage 3, none in stage 1, and 2 in multiplayer; table limit 8 throughout (`engine/Config.cpp`) | `itemsPerLoad`, `itemsPerLoadMax`, `itemLimit`, `itemPool` | Only the multiplayer count and the table limit are still assumed. More items per load makes the item game dominate the shell game, and it raises the value of reaching a reload alive |
 | The item count a solved reload hands out | The middle of the range, rounded up, so Double or Nothing deals 3 (`engine/Config.cpp`, `itemsDealtPerLoad`) | none | A live game draws the count fresh at every load (`cli/play.cpp:40-55`). The solver takes one count because the deal is already priced at one representative outcome over which items come out of the box, so a chance node over how many come out would multiply the branching without making the answer truer. The range is what the flag sets and what `describe()` prints, so the rounding is visible in every answer |
 | Expired Medicine odds and heal | 50 percent success, 2 charges on success, 1 charge lost on failure (`engine/Config.h`, applied at `engine/Rules.cpp:209-221`) | `medicineSuccess`, `medicineHeal` | No longer an assumption: these are the numbers the game has used since version 1.2.1, before which it was 40 percent. The setting stays because the older odds make the item a last resort rather than a positive gamble, and because it is the cleanest way to see how much the ranking depends on a number |
 | Charges per round | 4 by default, 2 then 4 then 4 in the story stages (`engine/Config.h`, `engine/Config.cpp`) | `charges` | Charges set how long a round runs and therefore how many reloads a position can reach. They also set the cap on healing, since cigarettes and medicine both cap at the starting value |
 | Multiplayer item pool and the absence of handcuffs | The nine minus Handcuffs, plus Jammer and Remote (`engine/Config.cpp:22-32`) | `itemPool` | Restoring handcuffs to the multiplayer pool would restore the skip chain rules with them, since the engine applies the same code either way |
-| The item deal at a reload, inside the solver | Modelled as one deterministic spread over the pool rather than a distribution over multisets (`engine/Rules.cpp:422-441`, spread at `engine/Rules.cpp:436`) | none | See below |
+| The item deal at a reload, inside the solver | Modelled as one deterministic spread over the pool rather than a distribution over multisets (`engine/Rules.cpp:428-450`, spread at `engine/Rules.cpp:445`) | none | See below |
 | The position a Burner Phone points at | Uniform over the positions past the chamber that the user has not already seen (`engine/Rules.cpp:87-93`) | none | The exclusion is sourced: the phone never names the chamber, and the chamber is the only thing a Magnifying Glass reads, so the two descriptions cover the same set. The distribution over the rest is the assumption, and a phone that can repeat a position the user already knows is slightly worse than the engine prices it |
 | The victim of a restraint taken with Adrenaline | Chosen by the thief. Every legal victim is a separate move, so the search values each one (`engine/Rules.cpp`, the Adrenaline case, and the move generator) | none | This is no longer an assumption. It is recorded because the engine used to pick the victim itself, which with three seats meant a stolen pair of handcuffs went back on the seat it was taken from |
 
 **The item deal approximation.** When the solver looks through a reload, it does not enumerate
 the item multisets each seat might receive. It gives each living seat `itemsPerLoad` items
-spread deterministically over the pool (`engine/Rules.cpp:422-441`). The honest description is
+spread deterministically over the pool (`engine/Rules.cpp:428-450`). The honest description is
 that the solver prices the deal at one representative outcome rather than at its expectation
 over every possible deal. Enumerating exactly would multiply the state space by several
 thousand per reload, and the resulting number is a probability the search is conditioning on
@@ -272,14 +272,20 @@ any.
 
 **The scripted dealer.** The single-player dealer follows a policy the game ships. That policy
 is not implemented here, and it is deliberately absent rather than guessed
-(`engine/Config.h:27-30`). The solver's opponent is an exact minimiser of the advised seat's
-survival probability (`solver/Solver.h:17`, `solver/Solver.cpp:76-86`), which is a different
-and generally stronger opponent than the dealer. Answers are therefore worst-case answers, and
-the solver says so in every result it prints (`solver/Solver.cpp:145-151`).
+(`engine/Config.h:28-33`). The solver's opponent instead minimises the advised seat's
+survival probability (`solver/Solver.h:14-15`, `solver/Solver.cpp:202-213`), within three
+limits: it chooses from its own information state and picks evenly between moves it cannot
+tell apart (`solver/Solver.cpp:233-253`), it spends no Magnifying Glass or Burner Phone
+(`solver/Solver.cpp:263-280`), and positions past the reload budget are scored by each seat's
+share of the charges left (`solver/Solver.cpp:28-38`). That is a different opponent from the
+dealer, and it is not the strongest opponent possible either, so an answer is not a worst-case
+answer. It is the chance of winning under this stated opponent model, looking a set number of
+reloads ahead, and the solver prints the model with every result (`solver/Solver.cpp`,
+`describeAssumptions`).
 
 **Other seats spending information items.** By default the search does not let other seats use
 a Magnifying Glass or a Burner Phone (`solver/Solver.h:24-28`, filter at
-`solver/Solver.cpp:99-111`). The reason is that modelling their private knowledge inside a
+`solver/Solver.cpp:263-280`). The reason is that modelling their private knowledge inside a
 search run for one seat would let the search read shells it has no right to see. The effect is
 that opponents are modelled slightly weaker than a player who tracks shells. The flag
 `opponentUsesInfoItems` turns the behaviour back on for anybody who wants the other extreme.
@@ -293,9 +299,10 @@ engine. There is no non-competing seat that runs the table.
 
 **Search depth.** The search looks through a fixed number of reloads
 (`solver/Solver.h:19-22`). Beyond that boundary it stops and scores the position by charges in
-hand (`solver/Solver.cpp:32-38`), and it flags any result that touched the boundary as
-truncated (`solver/Solver.h:43`). That flag is part of the answer, not a detail: a truncated
-value is an estimate, and an untruncated value is exact under the stated rules.
+hand (`solver/Solver.cpp:28-38`), and it flags any result that touched the boundary as
+truncated (`solver/Solver.h:54`). That flag is part of the answer, not a detail: a truncated
+value is an estimate, and an untruncated value is the full search result under the stated rules
+and the item deal approximation.
 
 ## Sources
 

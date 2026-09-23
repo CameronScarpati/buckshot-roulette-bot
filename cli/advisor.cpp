@@ -1,6 +1,6 @@
 /// Position advisor. Type the position you are looking at, or narrate the round
-/// as it happens, and get every legal move ranked by the probability that you
-/// are the last player standing.
+/// as it happens, and get the moves worth considering ranked by the probability
+/// that you are the last player standing, under the stated opponent model.
 
 #include <algorithm>
 #include <cmath>
@@ -305,7 +305,7 @@ void printHelp() {
                           when the stolen item needs a target
 
   Other
-    advise (or a blank line)   rank every move
+    advise (or a blank line)   rank the moves worth considering
     undo    help    quit
 )";
 }
