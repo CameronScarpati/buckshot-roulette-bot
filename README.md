@@ -8,7 +8,7 @@
 
 [![Build](https://github.com/CameronScarpati/buckshot-roulette-bot/actions/workflows/build.yml/badge.svg)](https://github.com/CameronScarpati/buckshot-roulette-bot/actions/workflows/build.yml)
 
-Describe any position from [Buckshot Roulette](https://store.steampowered.com/app/2537590/BUCKSHOT_ROULETTE/)
+Describe any position from [Buckshot Roulette](https://store.steampowered.com/app/2835570/Buckshot_Roulette/)
 and this ranks the moves worth considering by the probability that you are the last player
 standing, under a stated opponent model, along with the assumptions that produced the number.
 It also plays.
@@ -332,7 +332,7 @@ Project link:
 
 ## Acknowledgments
 
-- [Buckshot Roulette](https://store.steampowered.com/app/2537590/BUCKSHOT_ROULETTE/) by Mike Klubnika
+- [Buckshot Roulette](https://store.steampowered.com/app/2835570/Buckshot_Roulette/) by Mike Klubnika
 - [Expectiminimax](https://en.wikipedia.org/wiki/Expectiminimax_tree), the classical name for
   a search over chance nodes
 
