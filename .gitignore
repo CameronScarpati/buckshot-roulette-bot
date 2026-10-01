@@ -8,3 +8,8 @@
 # Python bytecode
 __pycache__/
 *.pyc
+
+# The Emscripten build, and its two files once copied next to the page
+/build-web
+/web/js/engine.mjs
+/web/js/engine.wasm

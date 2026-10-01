@@ -7,13 +7,16 @@
 // replays each round to check that a seed always gives the same round and
 // that advance() plays the move rank() puts first, plays rounds with and
 // without rankings to check that rank() leaves the round alone, checks every
-// value against the shapes the page reads, checks the errors and refusals,
+// value against the shapes the page reads (here, and again with the page's
+// own checks in web/js/contract.js), checks the errors and refusals,
 // and compares advise() at reloads 0 with the native advisor's --json answer
 // to 1e-9.
 
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+
+import * as page from '../js/contract.js';
 
 const [folder, advisor, roundsArg] = process.argv.slice(2);
 if (!folder || !advisor) {
@@ -71,6 +74,11 @@ const MODES = ['don', 'story1', 'story2', 'story3'];
 const TOKENS = ['mg', 'beer', 'cig', 'cuff', 'saw', 'phone', 'adr', 'inv', 'med'];
 const isInt = (n) => Number.isInteger(n);
 const isObj = (o) => o !== null && typeof o === 'object' && !Array.isArray(o);
+
+/** The page's own checks (web/js/contract.js) on one value. */
+function pageReads(where, problems) {
+  expect(problems.length === 0, `the page reads the ${where}: ${problems.slice(0, 3).join(' ')}`);
+}
 
 function keysWithin(object, allowed, where) {
   for (const key of Object.keys(object)) {
@@ -132,6 +140,7 @@ function checkView(view) {
     expect(false, 'the view is not an object');
     return;
   }
+  pageReads('view', page.checkView(view));
   keysWithin(
     view,
     [
@@ -306,7 +315,10 @@ function checkEvent(event, before, after) {
 function checkStep(result, before) {
   keysWithin(result, ['events', 'view'], 'a step');
   expect(Array.isArray(result.events), 'step events');
-  for (const event of result.events) checkEvent(event, before, result.view);
+  for (const event of result.events) {
+    checkEvent(event, before, result.view);
+    pageReads(`${event.kind} event`, page.checkEvent(event));
+  }
   checkView(result.view);
   // The damage a shot reports is what its target lost, so the charges add up
   // unless something else in the step changed them.
@@ -327,7 +339,12 @@ function checkStep(result, before) {
 }
 
 function checkRanking(ranking, view) {
-  keysWithin(ranking, ['mover', 'opponent', 'refused', 'moves', 'assumptions'], 'ranking');
+  pageReads('ranking', page.checkRanking(ranking, view ?? null));
+  keysWithin(
+    ranking,
+    ['mover', 'opponent', 'refused', 'moves', 'stopped', 'assumptions'],
+    'ranking',
+  );
   expect(SEATS.includes(ranking.mover), 'ranking.mover');
   expect(['solver', 'dealer'].includes(ranking.opponent), 'ranking.opponent');
   expect(ranking.refused === null || typeof ranking.refused === 'string', 'ranking.refused');
@@ -342,8 +359,15 @@ function checkRanking(ranking, view) {
     expect(typeof move.win === 'number' && move.win >= 0 && move.win <= 1, `win is ${move.win}`);
     expect(i === 0 || move.win <= ranking.moves[i - 1].win, 'the ranking is best first');
   });
+  expect(
+    ranking.stopped === null ||
+      (/^The search stopped/.test(ranking.stopped) && ranking.moves.length > 0),
+    'ranking.stopped',
+  );
+  voice(ranking.stopped, 'ranking.stopped');
   expect(Array.isArray(ranking.assumptions), 'ranking.assumptions');
   ranking.assumptions.forEach((sentence) => voice(sentence, 'an assumption'));
+  expect(!ranking.assumptions.some((a) => /stopped/.test(a)), 'the stop sentence stands apart');
   if (view !== null && ranking.refused === null) {
     // In a round every legal move is ranked once, under its own id and label.
     const ids = ranking.moves.map((m) => m.id).sort();
@@ -574,7 +598,16 @@ expect(engine.newRound('story3', 9, 2, 'human').ok.seats[0].max === 5, 'story 3 
     cuffed.refused !== null && cuffed.mover === 'p2',
     'advise with seat 1 cuffed against the Dealer',
   );
-  for (const r of [deep, bad, ranking, cuffed]) checkRanking(r, null);
+  // Full trays through one reload reach the node limit, and the ranking says so.
+  const heavy = engine.advise(
+    'p1=3/4[saw,mg,beer,adr,cuff] p2=4/4[saw,beer,cig,adr,inv] tube=3L4B turn=p1',
+    'solver',
+    1,
+  ).ok;
+  expect(heavy.refused === null && heavy.stopped !== null, 'advise at the node limit');
+  const light = engine.advise('p1=3/4 p2=3/4 tube=2L2B turn=p1', 'solver', 1).ok;
+  expect(light.refused === null && light.stopped === null, 'advise within the node limit');
+  for (const r of [deep, bad, ranking, cuffed, heavy, light]) checkRanking(r, null);
 }
 
 // ---------------------------------------------------------------------------

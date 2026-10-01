@@ -739,9 +739,26 @@ struct RankedMove {
   double win = 0.0;
 };
 
+/// A solver's assumptions as sentences, with the sentence that says the search
+/// stopped at its node limit set apart, since the page shows it above the
+/// moves rather than among the assumptions.
+struct Notes {
+  std::vector<std::string> assumptions;
+  std::string stopped;
+};
+
+Notes notesOf(const SolveResult& result) {
+  Notes notes{sentences(result.assumptions), std::string()};
+  // The solver adds that sentence last, after the search (solver/Solver.cpp).
+  if (result.nodeLimitHit && !notes.assumptions.empty()) {
+    notes.stopped = notes.assumptions.back();
+    notes.assumptions.pop_back();
+  }
+  return notes;
+}
+
 std::string rankingResult(int mover, bool scripted, const std::string& refused,
-                          const std::vector<RankedMove>& moves,
-                          const std::vector<std::string>& assumptions) {
+                          const std::vector<RankedMove>& moves, const Notes& notes) {
   Json json;
   json.openObject();
   json.key("ok");
@@ -771,9 +788,15 @@ std::string rankingResult(int mover, bool scripted, const std::string& refused,
     json.closeObject();
   }
   json.closeArray();
+  json.key("stopped");
+  if (notes.stopped.empty()) {
+    json.null();
+  } else {
+    json.text(notes.stopped);
+  }
   json.key("assumptions");
   json.openArray();
-  for (const std::string& sentence : assumptions) json.text(sentence);
+  for (const std::string& sentence : notes.assumptions) json.text(sentence);
   json.closeArray();
   json.closeObject();
   json.closeObject();
@@ -781,7 +804,7 @@ std::string rankingResult(int mover, bool scripted, const std::string& refused,
 }
 
 std::string refusal(int mover, bool scripted, const std::string& why) {
-  return rankingResult(mover, scripted, why, {}, {});
+  return rankingResult(mover, scripted, why, {}, Notes{});
 }
 
 /// Why the solver would not answer, as a sentence.
@@ -988,7 +1011,7 @@ std::string rank() {
                                  result.ranked[r].value});
     }
   }
-  return rankingResult(kPlayer, true, "", moves, sentences(result.assumptions));
+  return rankingResult(kPlayer, true, "", moves, notesOf(result));
 }
 
 /// Rank the moves of the seat to move in a written position, under Double or
@@ -1065,7 +1088,7 @@ std::string advise(const std::string& text, const std::string& opponent, int rel
     moves.push_back(RankedMove{std::to_string(i), moveLabel(action, mover, slot, names),
                                result.ranked[i].value});
   }
-  return rankingResult(result.mover, scripted, "", moves, sentences(result.assumptions));
+  return rankingResult(result.mover, scripted, "", moves, notesOf(result));
 }
 
 }  // namespace

@@ -538,6 +538,7 @@ solver/          The expectiminimax search over the rules
 cli/             advisor (ranks moves) and play (plays a round or a batch)
 tests/           Unit, rule, notation, golden value and invariance tests
 tools/           The Python oracle and the differential comparison
+web/             The study page: Watch, Play and Advise in the browser (web/README.md)
 docs/RULES.md    Every rule, its confidence, and the setting that controls it
 ```
 

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <title>Buckshot study table</title>
+  <meta name="description" content="Watch a solver play the Dealer, play the Dealer yourself, or ask for the odds of any position, under the rules of Buckshot Roulette.">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body data-mode="watch">
+  <a class="skip" href="#table">Skip to the table</a>
+
+  <header class="top">
+    <div class="brand">
+      <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <rect x="9" y="3" width="14" height="20" rx="4" fill="#c2302f"/>
+        <rect x="9" y="21" width="14" height="8" rx="1.5" fill="#d9b56a"/>
+        <path d="M9 25h14" stroke="#8b6a2f" stroke-width="1.4"/>
+        <path d="M13 8v10" stroke="#fff" stroke-opacity=".35" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <div class="brand__text">
+        <span class="brand__name">Buckshot study table</span>
+        <span class="brand__note" id="engine-badge" hidden></span>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Mode">
+      <a class="tab" role="tab" id="tab-watch" href="#watch" aria-controls="panel-watch" aria-selected="true">
+        <span class="tab__icon" data-icon="watch"></span>
+        <span class="tab__text"><span class="tab__name">Watch</span><span class="tab__desc">The solver plays the Dealer</span></span>
+      </a>
+      <a class="tab" role="tab" id="tab-play" href="#play" aria-controls="panel-play" aria-selected="false" tabindex="-1">
+        <span class="tab__icon" data-icon="play"></span>
+        <span class="tab__text"><span class="tab__name">Play</span><span class="tab__desc">You play the Dealer</span></span>
+      </a>
+      <a class="tab" role="tab" id="tab-advise" href="#advise" aria-controls="panel-advise" aria-selected="false" tabindex="-1">
+        <span class="tab__icon" data-icon="advise"></span>
+        <span class="tab__text"><span class="tab__name">Advise</span><span class="tab__desc">Odds for any position</span></span>
+      </a>
+    </nav>
+  </header>
+
+  <main class="stage">
+    <div class="stage__main">
+      <div id="table" class="table" role="region" aria-label="The table" tabindex="-1"></div>
+      <div class="roundbar">
+        <form id="w-form" class="round-row" aria-label="New round">
+          <label class="field field--game"><span>Game</span><select name="game" aria-describedby="w-note"></select></label>
+          <label class="field field--seed"><span>Seed</span><input name="seed" type="text" inputmode="numeric" pattern="[0-9]*" value="5" autocomplete="off"></label>
+          <div class="round__actions">
+            <button type="submit" class="btn">New round</button>
+            <button type="button" id="w-replay" class="btn btn--ghost round__replay" disabled>Replay this seed</button>
+          </div>
+          <p class="round__note" id="w-note"></p>
+        </form>
+        <form id="p-form" class="round-row" aria-label="New round">
+          <label class="field field--game"><span>Game</span><select name="game" aria-describedby="p-note"></select></label>
+          <label class="field field--seed"><span>Seed</span><input name="seed" type="text" inputmode="numeric" pattern="[0-9]*" value="12" autocomplete="off"></label>
+          <div class="round__actions">
+            <button type="submit" class="btn">New round</button>
+            <button type="button" id="p-replay" class="btn btn--ghost round__replay" disabled>Replay this seed</button>
+          </div>
+          <p class="round__note" id="p-note"></p>
+        </form>
+      </div>
+      <p class="keylegend" id="p-keys">
+        <span class="keylegend__title">Keys</span>
+        <span><kbd>1</kbd> to <kbd>8</kbd> pick an item</span>
+        <span><kbd>G</kbd> the shotgun</span>
+        <span><kbd>D</kbd> aim at the Dealer</span>
+        <span><kbd>Y</kbd> aim at yourself</span>
+        <span><kbd>H</kbd> hint</span>
+        <span><kbd>Esc</kbd> put it back</span>
+      </p>
+      <noscript><p class="noscript">This page runs the table in JavaScript. Turn it on to watch, play or ask for odds.</p></noscript>
+    </div>
+
+    <aside class="side">
+      <!-- WATCH -->
+      <section class="panel" id="panel-watch" role="tabpanel" aria-labelledby="tab-watch" hidden>
+        <div class="card card--controls">
+          <h2 class="sr-only">Watch controls</h2>
+          <div class="transport">
+            <p class="transport__next" id="w-next" aria-hidden="true"></p>
+            <button type="button" id="w-play" class="btn btn--primary" aria-pressed="false" aria-keyshortcuts="P" title="Play or pause (P)"></button>
+            <button type="button" id="w-step" class="btn" aria-keyshortcuts="S" title="Step (S)" disabled><span class="btn__icon" data-icon="stepIcon"></span><span>Step</span></button>
+            <fieldset class="seg">
+              <legend class="sr-only">Speed</legend>
+              <label><input type="radio" name="w-speed" value="slow"><span>Slow</span></label>
+              <label><input type="radio" name="w-speed" value="normal" checked><span>Normal</span></label>
+              <label><input type="radio" name="w-speed" value="fast"><span>Fast</span></label>
+            </fieldset>
+          </div>
+          <p id="w-status" class="status" role="status"></p>
+          <label class="switch">
+            <input type="checkbox" id="w-spectator" role="switch">
+            <span class="switch__track" aria-hidden="true"></span>
+            <span class="switch__text"><b>Spectator view</b> Show what each seat has seen privately.</span>
+          </label>
+          <button type="button" id="w-to-advise" class="btn btn--small btn--ghost to-advise" hidden>Open this position in Advise</button>
+        </div>
+        <div class="card rank" id="w-rank"></div>
+        <div class="card card--log">
+          <h2 class="card__title" id="w-log-title">Log</h2>
+          <div class="log-scroll" tabindex="0" role="region" aria-labelledby="w-log-title"><ol class="log" id="w-log" role="log" aria-live="polite"></ol></div>
+        </div>
+      </section>
+
+      <!-- PLAY -->
+      <section class="panel" id="panel-play" role="tabpanel" aria-labelledby="tab-play" hidden>
+        <div class="card card--controls">
+          <h2 class="sr-only">Play controls</h2>
+          <div class="dock">
+            <p id="p-status" class="status" role="status"></p>
+            <button type="button" id="p-hint" class="btn" aria-keyshortcuts="H" title="Hint (H)" disabled><span class="btn__icon" data-icon="eye"></span><span>Hint</span></button>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="p-reasons" role="switch">
+            <span class="switch__track" aria-hidden="true"></span>
+            <span class="switch__text"><b>Show the Dealer's reasons</b> The rule behind each Dealer action.</span>
+          </label>
+          <button type="button" id="p-to-advise" class="btn btn--small btn--ghost to-advise" hidden>Open this position in Advise</button>
+        </div>
+        <div class="card rank" id="p-rank"></div>
+        <div class="card card--log">
+          <h2 class="card__title" id="p-log-title">Log</h2>
+          <div class="log-scroll" tabindex="0" role="region" aria-labelledby="p-log-title"><ol class="log" id="p-log" role="log" aria-live="polite"></ol></div>
+        </div>
+      </section>
+
+      <!-- ADVISE -->
+      <section class="panel" id="panel-advise" role="tabpanel" aria-labelledby="tab-advise" hidden>
+        <div class="card">
+          <h2 class="sr-only">Ask about this position</h2>
+          <div class="notation__head"><span id="a-notation-label">Notation</span><button type="button" id="a-copy-notation" class="btn btn--small btn--ghost" aria-describedby="a-notation-label">Copy</button></div>
+          <code id="a-notation" class="code" aria-labelledby="a-notation-label"></code>
+          <p id="a-copied" class="copied" role="status"></p>
+          <fieldset class="opt">
+            <legend>Opponent</legend>
+            <div class="seg seg--wide">
+              <label><input type="radio" name="a-opp" value="dealer" checked><span>The Dealer's script</span></label>
+              <label><input type="radio" name="a-opp" value="solver"><span>The solver at its best</span></label>
+            </div>
+          </fieldset>
+          <fieldset class="opt opt--row">
+            <legend>Reloads to look through</legend>
+            <div class="seg">
+              <label><input type="radio" name="a-reloads" value="0" checked><span>0</span></label>
+              <label><input type="radio" name="a-reloads" value="1"><span>1</span></label>
+            </div>
+          </fieldset>
+          <p id="a-reload-warn" class="warn" hidden><b>This can take a while.</b> Looking past the end of the tube means trying every load that could come next. The command line advisor can look through more reloads.</p>
+          <div id="a-problems" class="problems" role="alert" hidden></div>
+          <button type="button" id="a-ask" class="btn btn--primary btn--wide" aria-describedby="a-ask-why" aria-keyshortcuts="Control+Enter" title="Ask (Ctrl+Enter)"><span class="btn__label">Ask for the odds</span></button>
+          <p id="a-ask-why" class="askwhy" hidden></p>
+        </div>
+        <div class="card rank" id="a-answer"></div>
+        <div class="card">
+          <h2 class="card__title">Position as text</h2>
+          <p class="card__sub">Edit the table directly: steppers for charges and shells, a slot for an item, a shell for what is known about it. Or paste a position here.</p>
+          <form id="a-paste-form" class="paste">
+            <label for="a-paste" class="paste__label">Paste a position or a whole advisor command line</label>
+            <div class="paste__row">
+              <textarea id="a-paste" rows="2" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder='p1=4/4[mg] p2=4/4 tube=2L3B turn=p1'></textarea>
+              <button type="submit" class="btn">Fill</button>
+            </div>
+            <p class="paste__hint">A command line also sets the opponent and the reloads.</p>
+            <div id="a-paste-errors" class="errors" role="alert" hidden></div>
+            <div id="a-paste-notes" class="notes" role="status" hidden></div>
+          </form>
+          <details class="examples">
+            <summary>Example positions</summary>
+            <ul id="a-examples"></ul>
+          </details>
+          <div class="notation">
+            <div class="notation__head"><span id="a-command-label">Command line</span><button type="button" id="a-copy-command" class="btn btn--small btn--ghost" aria-describedby="a-command-label">Copy</button></div>
+            <code id="a-command" class="code code--cmd" aria-labelledby="a-command-label"></code>
+            <p id="a-copied-cmd" class="copied" role="status"></p>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="foot">
+    <p>An unofficial study of the game's rules, not affiliated with its developer. <a href="https://github.com/CameronScarpati/buckshot-roulette-bot">The solver and its source on GitHub</a>.</p>
+  </footer>
+
+  <dialog id="dlg-item" class="dlg" aria-labelledby="dlg-item-title">
+    <form method="dialog">
+      <h2 class="dlg__title" id="dlg-item-title">Slot</h2>
+      <p class="dlg__sub">Choose an item for this slot.</p>
+      <div class="dlg__items"></div>
+      <div class="dlg__actions">
+        <button type="submit" value="none" class="btn btn--ghost">Empty the slot</button>
+        <button type="submit" value="cancel" class="btn">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-shell" class="dlg dlg--narrow" aria-labelledby="dlg-shell-title">
+    <form method="dialog">
+      <h2 class="dlg__title" id="dlg-shell-title">Shell</h2>
+      <fieldset class="dlg__kind">
+        <legend>What is it?</legend>
+        <label class="choice"><input type="radio" name="kind" value="unknown"><i class="pip pip--unknown" aria-hidden="true">?</i><span>Unknown</span></label>
+        <label class="choice"><input type="radio" name="kind" value="live"><i class="pip pip--live" aria-hidden="true">L</i><span>Live</span></label>
+        <label class="choice"><input type="radio" name="kind" value="blank"><i class="pip pip--blank" aria-hidden="true">B</i><span>Blank</span></label>
+      </fieldset>
+      <fieldset class="dlg__seen">
+        <legend>Who has seen it?</legend>
+        <label class="choice"><input type="checkbox" name="seenP1"><span data-name="p1">You</span></label>
+        <label class="choice"><input type="checkbox" name="seenP2"><span data-name="p2">The Dealer</span></label>
+        <p class="dlg__hint">With neither ticked, a known shell counts as seen by you. The answer uses only what the seat to move has seen.</p>
+      </fieldset>
+      <div class="dlg__actions">
+        <button type="submit" value="cancel" class="btn btn--ghost">Cancel</button>
+        <button type="submit" value="save" class="btn btn--primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
