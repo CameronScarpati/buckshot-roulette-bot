@@ -530,8 +530,9 @@ int main(int argc, char** argv) {
     const std::string arg = argv[i];
     long number = 0;
     if (arg == "--seed") {
-      if (!cli::nextNumber(argc, argv, &i, arg, 0, 4294967295L, &number)) return 2;
-      options.seed = static_cast<unsigned>(number);
+      long long seed = 0;
+      if (!cli::nextNumber(argc, argv, &i, arg, 0LL, 4294967295LL, &seed)) return 2;
+      options.seed = static_cast<unsigned>(seed);
     } else if (arg == "--charges") {
       if (!cli::nextNumber(argc, argv, &i, arg, 1, 8, &number)) return 2;
       options.charges = static_cast<int>(number);
