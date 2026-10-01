@@ -41,6 +41,21 @@ export function updateSpent(spent, ev) {
   spent.inverted = false;
 }
 
+/**
+ * The text of the rule event that explains the action at events[i], or null.
+ * A batch holds one action, and the bridge puts its rule event after the
+ * events of that action (an Adrenaline and the item it took are one action),
+ * so the rule is known while the action is still on the table.
+ */
+export function ruleAhead(events, i) {
+  for (let j = i + 1; j < events.length; j += 1) {
+    const e = events[j];
+    if (e.kind === 'rule') return e.text;
+    if (e.kind === 'shot' || e.kind === 'skip' || e.kind === 'load' || e.kind === 'over') return null;
+  }
+  return null;
+}
+
 function stampHtml(ev, ctx, loadNo) {
   if (ev.kind === 'shot') {
     const live = ev.shell === 'live';
@@ -77,14 +92,16 @@ function stampHtml(ev, ctx, loadNo) {
  * opts.pace     ms per visible event
  * opts.alive    () => boolean, false stops early (the round was replaced)
  * opts.visible  () => boolean, false logs the rest without effects (mode left)
- * opts.onEvent  (ev) => void, called as each event plays
+ * opts.onEvent  (ev, why) => void, called as each event plays, with the
+ *               text of the rule event that explains it, or null
  */
 export async function playEvents(events, opts) {
-  for (const ev of events) {
+  for (let i = 0; i < events.length; i += 1) {
+    const ev = events[i];
     if (!opts.alive()) return;
     opts.log.push(ev);
     updateSpent(opts.spent, ev);
-    opts.onEvent?.(ev);
+    opts.onEvent?.(ev, ruleAhead(events, i));
     if (opts.visible && !opts.visible()) continue;
     const html = stampHtml(ev, opts.ctx, opts.log.loadCount());
     if (!html) continue;

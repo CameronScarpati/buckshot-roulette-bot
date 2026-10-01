@@ -280,7 +280,7 @@ function centreHtml(m, o) {
   const selection = o.selectionBar
     ? `<div class="selbar" role="status">
          <span class="selbar__text">${o.selectionBar}</span>
-         <button type="button" class="btn btn--ghost btn--small" data-act="cancel" data-key="cancel" aria-keyshortcuts="Escape">Put it back</button>
+         <button type="button" class="btn btn--ghost btn--small" data-act="cancel" data-key="cancel" aria-keyshortcuts="Escape">Put ${ITEMS[o.selected?.token]?.plural ? 'them' : 'it'} back</button>
        </div>`
     : '';
   const overlay = o.overlay

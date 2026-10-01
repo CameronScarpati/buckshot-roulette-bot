@@ -247,8 +247,8 @@ export function createWatch({ table, panel, openInAdvise }) {
         pace: speed().pace,
         alive: alive(gen),
         visible,
-        onEvent: (ev) => {
-          st.dnote = nextDealerNote(st.dnote, ev, ctx());
+        onEvent: (ev, why) => {
+          st.dnote = nextDealerNote(st.dnote, ev, ctx(), why);
           if (visible()) patchDnote(table, { ...st.dnote, showWhy: true });
         },
       });

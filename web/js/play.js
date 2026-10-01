@@ -72,6 +72,17 @@ export function createPlay({ table, panel, openInAdvise }) {
     return own.map((m) => ({ ...m, use: null }));
   }
 
+  /** What a healing item does for seat 1 now: nothing at full charges or in the faded band. */
+  function doesNow(token) {
+    const me = st.view?.seats[0];
+    if (!me || (token !== 'cig' && token !== 'med')) return ITEMS[token].does;
+    let when = '';
+    if (me.charges >= me.max) when = 'at full charges';
+    else if (me.charges <= me.faded) when = `on ${me.faded === 1 ? 'the last charge' : `the last ${me.faded} charges`} in this stage`;
+    if (!when) return ITEMS[token].does;
+    return token === 'cig' ? `Healing does nothing ${when}.` : `Even odds: no charge comes back ${when}, or one is lost.`;
+  }
+
   /** The target buttons for the current selection, with their keys. */
   function selectionTargets() {
     const out = { targets: { p1: [], p2: [] }, steal: { p2: {} }, bar: '' };
@@ -96,7 +107,7 @@ export function createPlay({ table, panel, openInAdvise }) {
           : `<b>${esc(it.name)}.</b> Nothing in the Dealer’s tray can be taken. You can use it and take nothing.`;
       } else {
         for (const m of moves) out.targets[m.target ?? 'p1'].push(m);
-        out.bar = `<b>${esc(it.name)}.</b> ${esc(it.does)}`;
+        out.bar = `<b>${esc(it.name)}.</b> ${esc(doesNow(token))}`;
       }
     }
     // D reaches the first choice on the Dealer's side, Y the first on yours.
@@ -130,7 +141,7 @@ export function createPlay({ table, panel, openInAdvise }) {
     if (st.busy) return 'Your move is playing out.';
     if (st.sel?.kind === 'gun') return 'Shotgun in hand. Choose a target.';
     if (st.sel?.token === 'adr') return 'Adrenaline in hand. Choose an item in the Dealer’s tray, or take nothing.';
-    if (st.sel) return `${ITEMS[st.sel.token].name} in hand. Choose where to use it.`;
+    if (st.sel) return `${ITEMS[st.sel.token].name} in hand. Choose where to use ${ITEMS[st.sel.token].plural ? 'them' : 'it'}.`;
     return 'Your turn. Pick up the shotgun or an item.';
   }
 
@@ -284,8 +295,8 @@ export function createPlay({ table, panel, openInAdvise }) {
     }
   }
 
-  function onEvent(ev) {
-    st.dnote = nextDealerNote(st.dnote, ev, ctx());
+  function onEvent(ev, why) {
+    st.dnote = nextDealerNote(st.dnote, ev, ctx(), why);
     if (visible()) patchDnote(table, dnoteNow());
   }
 

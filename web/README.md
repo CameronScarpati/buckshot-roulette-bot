@@ -111,7 +111,8 @@ the advisor's tokens: `mg`, `beer`, `cig`, `cuff`, `saw`, `phone`, `adr`, `inv` 
 - **Seat**: `id`, `name`, `charges`, `max`, `faded` (healing does nothing at this many charges
   or fewer; 0 when it always works), `items` (the eight tray slots, a token or null), `hand`
   (the same items in the order they were picked up) and `restraint` (null, `cuffed` or
-  `lost a turn`).
+  `lost a turn`). A seat the turn passed over as the tube ran out stays `cuffed` until the
+  reload takes the handcuffs off, since it loses no turn to them.
 - **Tube**: `live`, `blank` and `total` count the shells by the type they were loaded as;
   `sawed`; `shells` lists each shell from the chamber on with its `offset`, its type once a
   seat has seen it (`known`, or null) and the seats that know it (`knownBy`).
@@ -121,10 +122,11 @@ the advisor's tokens: `mg`, `beer`, `cig`, `cuff`, `saw`, `phone`, `adr`, `inv` 
   seat it takes from, `item` set to the item taken and `slot` set to that seat's slot.
   Adrenaline used alone has `item` set to `adr` and no target.
 - **Step**: `events` and the new `view`. Events are `load` (`live`, `blank`, `dealt` per seat,
-  `first`), `shot` (`by`, `target`, `shell`, `damage`, the charges it took), `item` (`by`,
-  `item`, `target` when it has one, `text`), `learned` (`by`, `offset`, `shell`), `rule` (the
-  Dealer's reason, `text`), `skip` (`seat`) and `over` (`winner`). An Adrenaline that takes an
-  item is an `adr` event with a target, followed by the event of the item taken.
+  `first`, and `freed`, the seats the reload takes the handcuffs off), `shot` (`by`, `target`,
+  `shell`, `damage`, the charges it took), `item` (`by`, `item`, `target` when it has one,
+  `text`), `learned` (`by`, `offset`, `shell`), `rule` (the Dealer's reason, `text`), `skip`
+  (`seat`) and `over` (`winner`). An Adrenaline that takes an item is an `adr` event with a
+  target, followed by the event of the item taken.
 - **Ranking**: `mover`, `opponent`, `refused` (null, or why there is nothing to rank),
   `moves` (best first, each `id`, `label` and `win`, the chance of being the last seat
   standing), `stopped` (null, or the sentence above) and `assumptions`.

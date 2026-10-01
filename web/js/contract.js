@@ -8,7 +8,7 @@ import { ITEM_TOKENS } from './vocab.js';
 const SEATS = ['p1', 'p2'];
 const MODES = ['don', 'story1', 'story2', 'story3'];
 const EVENT_KEYS = {
-  load: ['kind', 'live', 'blank', 'dealt', 'first'],
+  load: ['kind', 'live', 'blank', 'dealt', 'first', 'freed'],
   shot: ['kind', 'by', 'target', 'shell', 'damage'],
   item: ['kind', 'by', 'item', 'target', 'text'],
   learned: ['kind', 'by', 'offset', 'shell', 'private'],
@@ -135,6 +135,7 @@ export function checkEvent(ev) {
       if (!isInt(ev.live) || !isInt(ev.blank) || ev.live + ev.blank < 1) out.push(`${w} has bad counts.`);
       if (!isObj(ev.dealt) || !SEATS.every((s) => Array.isArray(ev.dealt[s]) && ev.dealt[s].every((x) => ITEM_TOKENS.includes(x)))) out.push(`${w}.dealt is not two item lists.`);
       if (!seat(ev.first)) out.push(`${w}.first is ${ev.first}.`);
+      if (!Array.isArray(ev.freed) || !ev.freed.every(seat)) out.push(`${w}.freed is not a list of seats.`);
       break;
     case 'shot':
       if (!seat(ev.by) || !seat(ev.target)) out.push(`${w} has bad seats.`);

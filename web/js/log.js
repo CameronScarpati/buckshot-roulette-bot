@@ -50,6 +50,8 @@ export function describe(ev, ctx, loadNo) {
         const got = ev.dealt?.[s] ?? [];
         if (got.length) parts.push(`${w.subj(s)} ${w.verb(s, 'get')} ${itemNames(got)}.`);
       }
+      // A seat still in handcuffs when the tube ran out loses no turn to them.
+      for (const s of ev.freed ?? []) parts.push(`The reload takes the handcuffs off ${w.obj(s)}.`);
       parts.push(`${w.subj(ev.first)} ${w.verb(ev.first, 'move')} first.`);
       return { who: `Load ${loadNo}`, cls: 'load', html: esc(parts.join(' ')) };
     }
@@ -123,11 +125,13 @@ export function dealerLine(ev, ctx) {
 
 /**
  * The Dealer's note on the table after one more event: its last action in a
- * few words and the rule text that came with it. Adrenaline and the item it
- * took read as one action. An Adrenaline that takes an item names the seat it
- * takes from; one used alone names none.
+ * few words and the rule text that came with it. `why` is the text of the
+ * rule event later in the batch that explains this action, so the note never
+ * shows an action without its rule while the action plays. Adrenaline and the
+ * item it took read as one action. An Adrenaline that takes an item names the
+ * seat it takes from; one used alone names none.
  */
-export function nextDealerNote(note, ev, ctx) {
+export function nextDealerNote(note, ev, ctx, why = null) {
   const cur = note ?? { last: '', why: '', adr: false };
   if (ev.kind === 'rule') return { ...cur, why: ev.text };
   const by = ev.kind === 'skip' ? ev.seat : ev.by;
@@ -138,7 +142,7 @@ export function nextDealerNote(note, ev, ctx) {
     const whose = ctx.human ? 'your' : 'the solver’s';
     last = `Used Adrenaline to take ${whose} ${ITEMS[ev.item]?.name ?? ev.item}.`;
   }
-  return { last, why: '', adr: ev.kind === 'item' && ev.item === 'adr' && Boolean(ev.target) };
+  return { last, why: why ?? '', adr: ev.kind === 'item' && ev.item === 'adr' && Boolean(ev.target) };
 }
 
 export class Log {

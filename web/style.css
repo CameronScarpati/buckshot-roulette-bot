@@ -634,6 +634,11 @@ button.slot:disabled {
   white-space: nowrap;
 }
 
+/* "In hand" takes the place of the key number; the same key puts the item back. */
+.slot.is-selected .slot__key {
+  visibility: hidden;
+}
+
 .slot.is-steal {
   border: 2px dashed var(--brass);
   cursor: pointer;
@@ -1059,14 +1064,15 @@ button.gun:hover {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
+/* Even the lightest band of a hull keeps the white letter on it at 4.5 to 1. */
 .shell--live .shell__body {
-  background: linear-gradient(90deg, #a52222, #e0463f 45%, #8a1717);
+  background: linear-gradient(90deg, #a52222, #d4403a 45%, #8a1717);
 }
 
 .shell--blank .shell__body {
   background:
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0 3px, transparent 3px 7px),
-    linear-gradient(90deg, #1f4aa0, #4a82e6 45%, #183a80);
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0 3px, transparent 3px 7px),
+    linear-gradient(90deg, #1f4aa0, #2f63c9 45%, #183a80);
 }
 
 .shell--unknown .shell__body {
@@ -3013,6 +3019,11 @@ body[data-mode="play"] #p-form {
 @media (max-width: 920px) {
   :root {
     --gutter: 16px;
+  }
+
+  /* A control reached with Tab scrolls clear of the dock. */
+  html {
+    scroll-padding-bottom: calc(var(--dock-h, 0px) + 12px);
   }
 
   .top {

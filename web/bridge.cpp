@@ -167,6 +167,10 @@ struct Round {
   std::uint32_t seed = 0;
   bool solverSeat = false;
   std::unique_ptr<Table> table;
+  /// Seats that keep their handcuffs until the coming reload takes them off,
+  /// one bit each: the move that emptied the tube passed the turn over them,
+  /// and the reload names who moves first, so they lose no turn.
+  unsigned heldCuffs = 0;
 };
 
 Round current;
@@ -404,7 +408,7 @@ void writeSeat(Json& json, int seat, const Round& round) {
   }
   json.closeArray();
   json.key("restraint");
-  if (player.cuffed) {
+  if (player.cuffed || ((round.heldCuffs >> seat) & 1u) != 0u) {
     json.text("cuffed");
   } else if (player.skipConsumed) {
     json.text("lost a turn");
@@ -512,6 +516,15 @@ Shell rackedShell(const Event& event, const GameState& before, const GameState& 
   return liveLeft != flipped ? Shell::Live : Shell::Blank;
 }
 
+/// Whether a load took the handcuffs off `seat`, as the table narrated it
+/// (Table::load). A seat freed this way loses no turn.
+bool reloadFrees(const Event& event, int seat) {
+  const std::string lead = "The reload takes the handcuffs off ";
+  if (seat == kPlayer) return event.text.find(lead + "p1.") != std::string::npos;
+  return event.text.find(lead + "the dealer.") != std::string::npos ||
+         event.text.find(lead + "p2.") != std::string::npos;
+}
+
 /// What an item event says after "X uses the Item.", from what the table
 /// shows every seat. Only a person in seat 1 reads its own results here; any
 /// other seat's private result travels in a learned event.
@@ -530,8 +543,9 @@ std::string itemText(const Event& event, const std::vector<Event>& batch, const 
   if (event.item == Item::Adrenaline) {
     if (!event.steal) return "Nothing is taken.";
     const std::string what = possessive(event.target, names) + " " + itemName(event.stolen);
-    return mine ? "You take " + what + " and use it now."
-                : "It takes " + what + " and uses it now.";
+    const bool plural = event.stolen == Item::Handcuffs || event.stolen == Item::Cigarettes;
+    const std::string them = plural ? " them now." : " it now.";
+    return mine ? "You take " + what + " and use" + them : "It takes " + what + " and uses" + them;
   }
   const PlayerState& was = before.players[actor];
   const PlayerState& now = after.players[actor];
@@ -612,6 +626,12 @@ void writeEvent(Json& json, const Event& event, const std::vector<Event>& batch,
       json.closeObject();
       json.key("first");
       json.text(seatId(event.first));
+      json.key("freed");
+      json.openArray();
+      for (int seat = kPlayer; seat <= kDealer; ++seat) {
+        if (reloadFrees(event, seat)) json.text(seatId(seat));
+      }
+      json.closeArray();
       break;
     case Event::Kind::Shot:
       json.key("kind");
@@ -677,6 +697,24 @@ void writeEvent(Json& json, const Event& event, const std::vector<Event>& batch,
       break;
   }
   json.closeObject();
+}
+
+/// The seats a step left holding handcuffs until the reload, one bit each:
+/// the step emptied the tube and passed the turn over them, and the table
+/// logged no lost turn for it (Table::noteSkips).
+unsigned cuffsHeldForReload(const Table& table, std::size_t from, const GameState& before) {
+  if (table.next() != Step::Load) return 0;
+  unsigned seats = 0;
+  for (int seat = kPlayer; seat <= kDealer; ++seat) {
+    if (before.players[seat].skipConsumed || !table.state().players[seat].skipConsumed) continue;
+    bool said = false;
+    for (std::size_t i = from; i < table.log().size(); ++i) {
+      const Event& event = table.log()[i];
+      if (event.kind == Event::Kind::Skip && event.seat == seat) said = true;
+    }
+    if (!said) seats |= 1u << seat;
+  }
+  return seats;
 }
 
 /// The events the table logged from `from` on. A learned event that names no
@@ -895,6 +933,7 @@ std::string newRound(const std::string& mode, double seed, int charges, const st
   current.seed = options.seed;
   current.solverSeat = seat == "solver";
   current.table = std::make_unique<Table>(options);
+  current.heldCuffs = 0;
   Json json;
   json.openObject();
   json.key("ok");
@@ -928,6 +967,7 @@ std::string act(const std::string& id, int slot) {
   const std::size_t from = table.log().size();
   const GameState before = table.state();
   table.play(action, traySlot);
+  current.heldCuffs = cuffsHeldForReload(table, from, before);
   return stepResult(current, from, before);
 }
 
@@ -959,6 +999,7 @@ std::string advance() {
       break;
     }
   }
+  current.heldCuffs = cuffsHeldForReload(table, from, before);
   return stepResult(current, from, before);
 }
 

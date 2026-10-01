@@ -234,7 +234,7 @@ function checkView(view) {
 }
 
 const EVENT_KEYS = {
-  load: ['kind', 'live', 'blank', 'dealt', 'first'],
+  load: ['kind', 'live', 'blank', 'dealt', 'first', 'freed'],
   shot: ['kind', 'by', 'target', 'shell', 'damage'],
   item: ['kind', 'by', 'item', 'target', 'text'],
   learned: ['kind', 'by', 'offset', 'shell', 'private'],
@@ -253,6 +253,20 @@ function checkEvent(event, before, after) {
     case 'load': {
       expect(event.live + event.blank >= 2 && event.live >= 1 && event.blank >= 1, 'load counts');
       expect(SEATS.includes(event.first), 'load.first');
+      // The reload takes the handcuffs off every seat the view showed cuffed,
+      // and off no other.
+      expect(
+        Array.isArray(event.freed) && event.freed.every((s) => SEATS.includes(s)),
+        'load.freed',
+      );
+      for (const [i, seat] of SEATS.entries()) {
+        expect(
+          (before.seats[i].restraint === 'cuffed') === (event.freed ?? []).includes(seat),
+          `load.freed and ${seat}'s restraint ${before.seats[i].restraint}`,
+        );
+        expect(after.seats[i].restraint === null, `${seat} keeps a restraint past a reload`);
+      }
+      if (event.freed?.length) meet('a reload that takes handcuffs off');
       const most = { don: 5, story1: 0, story2: 2, story3: 4 }[after.mode];
       const least = { don: 2, story1: 0, story2: 2, story3: 4 }[after.mode];
       for (const [i, seat] of SEATS.entries()) {
@@ -496,6 +510,7 @@ const MET = [
   'shoot the other seat',
   'steal',
   'Adrenaline alone',
+  'a reload that takes handcuffs off',
   ...TOKENS.filter((t) => t !== 'adr').map((t) => `use ${t}`),
   ...Object.keys(EVENT_KEYS).map((kind) => `${kind} event`),
 ];
