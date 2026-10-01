@@ -218,6 +218,53 @@ TEST(ExactValues, AnUnseenDealerReadIsAveragedTheSameWay) {
   EXPECT_NEAR(result.value, mean, kTight);
 }
 
+TEST(ExactValues, InvertingAChamberOnlyTheOtherSeatSawIsWorthWhatItIsUnseen) {
+  // p1's one item is an Inverter, so the chamber fires before p2 moves again,
+  // and nothing p2 saw of it can change a move p2 makes. The flip shows
+  // nobody the type (ItemInteraction.gd 165-171), so p1 cannot learn it from
+  // the flip either: every row is worth the same whether or not p2 looked.
+  struct Case {
+    std::string text;
+    SolveOptions options;
+  };
+  for (const Case& one : {Case{"p1=2/2[inv] p2=2/2 tube=2L2B turn=p1", optimal()},
+                          Case{"p1=1/2[inv] p2=2/2 tube=3L1B turn=p1", dealer()}}) {
+    const RuleConfig config = doubleOrNothing(position(one.text));
+    const SolveResult unseen = solveText(one.text, config, one.options);
+    for (const char* seen : {"0L", "0B"}) {
+      const SolveResult looked = solveText(one.text + " known=p2:" + seen, config, one.options);
+      ASSERT_EQ(looked.ranked.size(), unseen.ranked.size()) << one.text << " " << seen;
+      for (const ActionValue& row : unseen.ranked) {
+        const std::string text = row.action.describe(0);
+        EXPECT_NEAR(valueOf(looked, text), row.value, kTight)
+            << one.text << " " << seen << ": " << text;
+      }
+    }
+    // A read p2 made at five shells, one shot ago, named each of the four
+    // shells left a quarter of the time. Naming the chamber is worth what
+    // nobody looking is, and naming one of the other three is a read made at
+    // four shells.
+    const SolveResult atFive = solveText(one.text + " phoned=p2@5", config, one.options);
+    const SolveResult atFour = solveText(one.text + " phoned=p2@4", config, one.options);
+    ASSERT_EQ(atFive.ranked.size(), unseen.ranked.size()) << one.text;
+    for (const ActionValue& row : unseen.ranked) {
+      const std::string text = row.action.describe(0);
+      EXPECT_NEAR(valueOf(atFive, text), row.value / 4.0 + 3.0 * valueOf(atFour, text) / 4.0,
+                  kTight)
+          << one.text << ": " << text;
+    }
+  }
+  const std::string text = "p1=2/2[inv] p2=2/2 tube=2L2B turn=p1";
+  const RuleConfig config = doubleOrNothing(position(text));
+  EXPECT_NEAR(valueOf(solveText(text, config, optimal()), "use Inverter"), 5.0 / 9.0, kTight);
+  EXPECT_NEAR(valueOf(solveText(text + " known=p2:0L", config, optimal()), "use Inverter"),
+              5.0 / 9.0, kTight);
+  EXPECT_NEAR(valueOf(solveText(text + " phoned=p2@4", config, optimal()), "use Inverter"),
+              29.0 / 54.0, kTight);
+  EXPECT_NEAR(valueOf(solveText(text + " phoned=p2@5", config, optimal()), "use Inverter"),
+              13.0 / 24.0, kTight);
+}
+
 // ---------------------------------------------------------------------------
 // Hand order and the dealer's list
 // ---------------------------------------------------------------------------
