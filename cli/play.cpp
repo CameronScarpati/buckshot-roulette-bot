@@ -38,6 +38,8 @@ struct Options {
   int players = 2;
   int you = 0;
   int reloadBudget = 2;
+  /// The node limit every solve the program makes stops at.
+  long long nodeLimit = SolveOptions{}.nodeLimit;
   bool quiet = false;
   std::string mode = "don";
   /// Empty when the command line did not name one, so that a flag which needs
@@ -109,6 +111,17 @@ std::string chargesText(const Options& options, const RuleConfig& config) {
   if (options.charges > 0) return std::to_string(options.charges);
   if (config.mode == Mode::Multiplayer) return "4";
   return "2 to 4";
+}
+
+/// What a solve for `seat` is asked: the command line's reload budget and node
+/// limit, with `opponent` playing the other seats.
+SolveOptions solveOptionsFor(const Options& options, int seat, OpponentModel opponent) {
+  SolveOptions solveOptions;
+  solveOptions.seat = seat;
+  solveOptions.reloadBudget = options.reloadBudget;
+  solveOptions.nodeLimit = options.nodeLimit;
+  solveOptions.opponent = opponent;
+  return solveOptions;
 }
 
 /// A plain heuristic opponent, written out so that the solver has something
@@ -243,17 +256,16 @@ void printNew(const Table& table, std::size_t* printed, Audience audience) {
 /// Moves that tie at the top are starred as the advisor stars them, and every
 /// starred row prints the same value. The values carry enough decimals that an
 /// unstarred row never prints the same number as a starred one. A weighing
-/// whose values stop at the reload budget says it is estimated, and the first
-/// such weighing in a round sets `budgetNoted` and adds a note saying what
-/// that means. The solver weighs the position p1 can see, not the table's.
-Action watchedSolverMove(const Table& table, const RuleConfig& config, int reloadBudget,
+/// whose values were not all searched to the end of the round says it is
+/// estimated. The first weighing in a round that stops at the reload budget
+/// sets `budgetNoted` and adds a note saying what that means, and every
+/// weighing that stops at the node limit says so. The solver weighs the
+/// position p1 can see, not the table's.
+Action watchedSolverMove(const Table& table, const RuleConfig& config, const Options& options,
                          bool* budgetNoted, bool* found) {
   constexpr double kTie = 1e-9;  // the tolerance of SolveResult::bestActions
-  SolveOptions solveOptions;
-  solveOptions.seat = kPlayerSeat;
-  solveOptions.reloadBudget = reloadBudget;
-  solveOptions.opponent = OpponentModel::Dealer;
-  const SolveResult result = solve(table.view(kPlayerSeat), config, solveOptions);
+  const SolveResult result = solve(table.view(kPlayerSeat), config,
+                                   solveOptionsFor(options, kPlayerSeat, OpponentModel::Dealer));
   Action action;
   *found =
       !result.ranked.empty() && matchLegal(table.legal(), result.ranked.front().action, &action);
@@ -291,13 +303,40 @@ Action watchedSolverMove(const Table& table, const RuleConfig& config, int reloa
     if (tied > shown) std::cout << " (" << shown << " shown)";
     std::cout << ", and p1 plays the first one listed.\n";
   }
-  if (result.truncated && !*budgetNoted) {
+  if (result.budgetReached && !*budgetNoted) {
     printWrapped("  Note: ",
                  "some lines hit the reload budget and were valued by each seat's share of the "
                  "charges in hand. Every weighing marked estimated holds values like these.");
     *budgetNoted = true;
   }
+  if (result.nodeLimitHit) {
+    printWrapped("  Note: ", "the search stopped at the node limit of " +
+                                 std::to_string(options.nodeLimit) +
+                                 " positions, and valued every line it had not finished by each "
+                                 "seat's share of the charges in hand, so these values may be "
+                                 "wrong.");
+  }
   return action;
+}
+
+/// Whether the chance `seat` gives itself is worked out only from what p1 can
+/// see that it knows, so that the number tells p1 nothing the game keeps from
+/// it. The game shows what a Burner Phone names and what a Magnifying Glass
+/// shows only to the seat that used it (BurnerPhone.gd 6-35,
+/// DealerIntelligence.gd 151-158 and 187-194). So the chance is kept back once
+/// `seat` has heard a shell on a phone in this load, since p1 cannot tell
+/// which shell the phone named or when that shell left the tube, and while
+/// `seat` knows a shell that p1 cannot see it know.
+bool chanceIsShared(const Table& table, int seat) {
+  const Position mine = table.view(kPlayerSeat);
+  for (const UnseenRead& read : mine.unseenReads) {
+    if (read.seat == seat) return false;
+  }
+  const Tube theirs = table.view(seat).state.tube;
+  for (int offset = 0; offset < theirs.size(); ++offset) {
+    if (theirs.knows(seat, offset) && !mine.state.tube.knows(seat, offset)) return false;
+  }
+  return true;
 }
 
 /// Run rounds with nobody watching and report how often seat 1 survives.
@@ -310,6 +349,8 @@ int runBatch(int rounds, const Options& options, BatchOpponent opponent, const R
   int capped = 0;
   long long moves = 0;
   long long nodes = 0;
+  long long searches = 0;
+  long long stopped = 0;
   for (int round = 0; round < rounds; ++round) {
     Table table(
         tableOptions(options, config, options.seed + static_cast<unsigned>(round), scripted));
@@ -329,13 +370,13 @@ int runBatch(int rounds, const Options& options, BatchOpponent opponent, const R
       const int seat = table.state().current;
       Action wanted;
       if (seat == kPlayerSeat || opponent == BatchOpponent::Solver) {
-        SolveOptions solveOptions;
-        solveOptions.seat = seat;
-        solveOptions.reloadBudget = reloadBudget;
-        solveOptions.opponent = players > 2 ? OpponentModel::Paranoid : OpponentModel::Optimal;
-        if (scripted) solveOptions.opponent = OpponentModel::Dealer;
-        const SolveResult result = solve(table.view(seat), config, solveOptions);
+        OpponentModel model = players > 2 ? OpponentModel::Paranoid : OpponentModel::Optimal;
+        if (scripted) model = OpponentModel::Dealer;
+        const SolveResult result =
+            solve(table.view(seat), config, solveOptionsFor(options, seat, model));
         nodes += result.nodes;
+        ++searches;
+        if (result.nodeLimitHit) ++stopped;
         if (result.ranked.empty()) {
           std::cerr << "the solver gave no move for p" << (seat + 1) << " in round " << (round + 1)
                     << ": " << result.assumptions << "\n";
@@ -370,6 +411,11 @@ int runBatch(int rounds, const Options& options, BatchOpponent opponent, const R
   if (opponent == BatchOpponent::Dealer) against = "(solver, against the scripted dealer)";
   std::cout << cli::survivalLines(against, wins, rounds, capped, scripted);
   std::cout << moves << " moves played, " << nodes << " states examined\n";
+  if (stopped > 0) {
+    std::cout << stopped << " of the solver's " << searches
+              << " searches stopped at the node limit of " << options.nodeLimit
+              << " positions, so the moves they chose may not be its best\n";
+  }
   return 0;
 }
 
@@ -393,7 +439,7 @@ int chooseFromMenu(const std::vector<Action>& actions, const GameState& state) {
 
 void printHelp() {
   std::cout << "play [--seed N] [--charges N] [--players N] [--reloads N] [--mode MODE]\n"
-               "     [--opponent solver|dealer] [--watch] [--pace MS]\n"
+               "     [--opponent solver|dealer] [--watch] [--pace MS] [--node-limit N]\n"
                "     [--selfplay ROUNDS | --baseline ROUNDS | --dealer ROUNDS] [--quiet]\n"
                "     [rule settings, listed below]\n\n"
                "With no batch flag and no --watch, play one round yourself as p1. The same\n"
@@ -411,6 +457,13 @@ void printHelp() {
                "                      every seat but yours, each for its own survival.\n"
                "  --reloads N         how many reloads the solver looks through, 0 to 6\n"
                "                      (default 2).\n"
+               "  --node-limit N      stop each search once it has met N positions, 1 to\n"
+               "                      10000000000 (default 40000000). A search that stops\n"
+               "                      there values every line it has not finished by each\n"
+               "                      seat's share of the charges in hand, so its values,\n"
+               "                      and the move it picks, may be wrong. A weighing in\n"
+               "                      --watch, a chance the solver gives itself and a\n"
+               "                      batch each say when that happened.\n"
                "  --opponent solver   p2 is the solver, playing to minimise your chance of\n"
                "                      surviving the round. The default.\n"
                "  --opponent dealer   p2 is the game's scripted dealer, its coins and the\n"
@@ -433,7 +486,12 @@ void printHelp() {
                "  --quiet             in a round you play against the solver, leave out the\n"
                "                      chance it gives itself with each of its moves. It\n"
                "                      changes nothing else, and a batch prints the same\n"
-               "                      lines with or without it.\n\n"
+               "                      lines with or without it. Without it, a seat still\n"
+               "                      keeps its chance back whenever the number could tell\n"
+               "                      you what only it has seen: for the rest of a load\n"
+               "                      once it has heard a shell on a Burner Phone, and\n"
+               "                      while it knows a shell its Magnifying Glass showed\n"
+               "                      it that you have not seen.\n\n"
                "Every seat the solver plays chooses from what that seat can see: the shells\n"
                "it has seen, and the fact that another seat used a Burner Phone but not\n"
                "what it heard.\n\n"
@@ -483,6 +541,8 @@ int main(int argc, char** argv) {
     } else if (arg == "--reloads") {
       if (!cli::nextNumber(argc, argv, &i, arg, 0, 6, &number)) return 2;
       options.reloadBudget = static_cast<int>(number);
+    } else if (arg == "--node-limit") {
+      if (!cli::nextNumber(argc, argv, &i, arg, 1LL, 10000000000LL, &options.nodeLimit)) return 2;
     } else if (arg == "--quiet") {
       options.quiet = true;
     } else if (arg == "--mode") {
@@ -622,7 +682,7 @@ int main(int argc, char** argv) {
     if (options.watch) {
       pause(options.paceMs);
       bool found = false;
-      action = watchedSolverMove(table, config, options.reloadBudget, &budgetNoted, &found);
+      action = watchedSolverMove(table, config, options, &budgetNoted, &found);
       if (!found) break;
     } else {
       // Whoever the other seats are, the board you see leaves out what they
@@ -637,16 +697,18 @@ int main(int argc, char** argv) {
         action = actions[static_cast<std::size_t>(choice)];
       } else {
         pause(options.paceMs);
-        SolveOptions solveOptions;
-        solveOptions.seat = seat;
-        solveOptions.reloadBudget = options.reloadBudget;
-        solveOptions.opponent =
+        const OpponentModel model =
             options.players > 2 ? OpponentModel::Paranoid : OpponentModel::Optimal;
-        const SolveResult result = solve(table.view(seat), config, solveOptions);
+        const SolveResult result =
+            solve(table.view(seat), config, solveOptionsFor(options, seat, model));
         if (!result.ranked.empty()) matchLegal(actions, result.ranked.front().action, &action);
-        if (!options.quiet && !result.ranked.empty()) {
+        if (!options.quiet && !result.ranked.empty() && chanceIsShared(table, seat)) {
           std::cout << "p" << (seat + 1) << " rates its chances at " << std::fixed
-                    << std::setprecision(3) << result.ranked.front().value << ".\n";
+                    << std::setprecision(3) << result.ranked.front().value;
+          if (result.nodeLimitHit) {
+            std::cout << ", from a search that stopped at the node limit, so it may be off";
+          }
+          std::cout << ".\n";
         }
       }
     }

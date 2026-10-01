@@ -2,7 +2,9 @@
 # What a seeded program owes a reader: the same seed replays the same round
 # exactly, against either opponent, and the batch it reports keeps landing in
 # the same place. A game against the dealer in double or nothing is also held
-# to the loads the game's script draws.
+# to the loads the game's script draws, a round played against the solver
+# tells the player nothing the game keeps from them, and every search that
+# stops at the node limit says so.
 #
 #     tools/check_play.sh [path-to-build-directory]
 #
@@ -87,22 +89,82 @@ count=$(grep -cE "^$worked" "$work/watched")
 echo "ok   $count chambers the dealer worked out, each printed before the item it led to"
 
 # Against the dealer in double or nothing a load is drawn the way the game's
-# script draws one, with the live count half the total, so live shells never
-# outnumber blanks. Every load of the watched round is checked, and the first
-# load of a run of seeded rounds against the dealer, which a closed input
-# leaves straight after the deal.
+# script draws one: 2 to 8 shells, with the live count half the total, rounded
+# down and at least 1 (RoundManager.gd 148-152). Every load of the watched
+# round is checked, and the first load of a run of seeded rounds against the
+# dealer, which a closed input leaves straight after the deal.
 cp "$work/w1" "$work/loads"
 for seed in $(seq 1 40); do
   "$PLAY" --opponent dealer --seed "$seed" < /dev/null >> "$work/loads"
 done
 loads=$(grep -c "^The gun is loaded with" "$work/loads")
-heavy=$(grep "^The gun is loaded with" "$work/loads" | awk '$6 > $9' || true)
-if [ -n "$heavy" ]; then
-  echo "a double or nothing load against the dealer has more live shells than blanks:" >&2
-  echo "$heavy" >&2
+drawn=$(grep "^The gun is loaded with" "$work/loads" | awk '{
+  total = $6 + $9
+  live = int(total / 2)
+  if (live < 1) live = 1
+  if (total < 2 || total > 8 || $6 != live) print
+}' || true)
+if [ -n "$drawn" ]; then
+  echo "a double or nothing load against the dealer is not one the game's script draws:" >&2
+  echo "$drawn" >&2
   exit 1
 fi
-echo "ok   $loads loads against the dealer, none with more live shells than blanks"
+echo "ok   $loads loads against the dealer, each one the game's script can draw"
+
+# The game shows what a Burner Phone names and what a Magnifying Glass shows
+# only to the seat that used it (BurnerPhone.gd 6-35). The chance a solver
+# seat gives itself is worked out from what that seat knows, so it is kept
+# back for the rest of a load once p2 has heard a shell on a phone, and until
+# the chamber leaves once p2 has looked at it. p1 only ever shoots p2 here, so
+# it never sees a shell for itself. The seeds are ones where p2 moves again
+# after each.
+for seed in 5 6 9 11 12; do
+  printf '2\n%.0s' $(seq 1 60) |
+    "$PLAY" --seed "$seed" --charges 2 --reloads 0 >> "$work/against"
+done
+if ! awk '
+  /^The gun is loaded with/ { phone = 0; glass = 0 }
+  /^(> )?p[0-9] (shoots|uses)/ { actor = ($1 == ">") ? $2 : $1 }
+  /^  The shell (was|it racked out was)/ { glass = 0 }
+  /^  It listens to the type of one shell/ && actor == "p2" { phone = 1 }
+  /^  It looks into the chamber/ && actor == "p2" { glass = 1 }
+  /^> p2 / { if (phone) afterPhone++; if (glass) afterGlass++ }
+  /^p2 rates its chances/ {
+    rated++
+    if (phone || glass) { print "after a shell only p2 saw: " $0; bad = 1 }
+  }
+  END {
+    if (afterPhone == 0) { print "p2 never moves after hearing a shell on its phone"; bad = 1 }
+    if (afterGlass == 0) { print "p2 never moves after looking at the chamber"; bad = 1 }
+    if (rated == 0) { print "p2 never gives its chance"; bad = 1 }
+    exit bad
+  }
+' "$work/against" >&2; then
+  echo "a round against the solver gives a chance worked out from a shell only p2 saw" >&2
+  exit 1
+fi
+rated=$(grep -c "^p2 rates its chances" "$work/against")
+echo "ok   $rated chances p2 gave itself, none after a shell only it had seen"
+
+# A search that stops at the node limit says so, in a watched weighing, in the
+# chance a solver seat gives itself and in a batch.
+"$PLAY" --watch --seed 3 --reloads 0 --node-limit 1000 > "$work/limited"
+printf '2\n%.0s' $(seq 1 60) |
+  "$PLAY" --seed 2 --charges 2 --reloads 0 --node-limit 50 >> "$work/limited"
+"$PLAY" --dealer 2 --seed 3 --reloads 0 --node-limit 1000 >> "$work/limited"
+for said in "Note: the search stopped at the node limit of 1000 positions" \
+  "rates its chances at [0-9.]+, from a search that stopped at the node limit" \
+  "^[0-9]+ of the solver's [0-9]+ searches stopped at the node limit of 1000 positions"; do
+  if ! grep -qE "$said" "$work/limited"; then
+    echo "a search that stopped at the node limit does not say so: no line matches $said" >&2
+    exit 1
+  fi
+done
+if grep -q "node limit" "$work/w1"; then
+  echo "a watched round says the search stopped at the node limit when it did not" >&2
+  exit 1
+fi
+echo "ok   a search that stops at the node limit says so, and one that does not is silent"
 
 "$ADVISOR" --position "$POSITION" --reloads 1 > "$work/a1"
 "$ADVISOR" --position "$POSITION" --reloads 1 > "$work/a2"
