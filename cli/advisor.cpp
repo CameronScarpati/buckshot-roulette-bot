@@ -1582,6 +1582,9 @@ int main(int argc, char** argv) {
       }
       session.history.push_back(snapshot(session));
       session.state.current = static_cast<std::uint8_t>(seat);
+      // A seat that is handed the turn plays it, so it is no longer owed the
+      // turn a restraint took.
+      session.state.players[seat].skipConsumed = false;
       session.state.cuffUsedThisTurn = false;
       session.narration.dealerMidTurn = false;
       session.narration.dealerMemory = dealer::Memory{};
@@ -1596,6 +1599,8 @@ int main(int argc, char** argv) {
       }
       session.history.push_back(snapshot(session));
       session.state.players[seat].cuffed = command == "cuff";
+      // A seat waiting to lose a turn has not lost one yet.
+      if (command == "cuff") session.state.players[seat].skipConsumed = false;
       printBoard(session);
       continue;
     }

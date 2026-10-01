@@ -42,6 +42,32 @@ TEST(Reloads, ASawedBarrelSurvivesAReloadExceptInMultiplayer) {
   }
 }
 
+TEST(Reloads, ARestraintKeptThroughAReloadStillEndsAtTheSeatsNextTurn) {
+  // The game clears restraints at a load, and a rule set that keeps them still
+  // frees a seat once its next turn starts (RoundManager.gd 308-325): p1 lost
+  // its last turn and moves first after the load, so that turn is behind it,
+  // while p2 stays restrained.
+  RuleConfig config = RuleConfig::doubleOrNothing(2);
+  config.reloadClearsCuffs = false;
+  const std::vector<Outcome> outcomes =
+      rules::reloadOutcomes(parse("p1=2/2 p2=2/2 tube=0L0B turn=p2 skipped=p1"), config, false);
+  ASSERT_FALSE(outcomes.empty());
+  for (const Outcome& outcome : outcomes) {
+    EXPECT_EQ(outcome.state.current, 0);
+    EXPECT_FALSE(outcome.state.players[0].skipConsumed);
+    const std::string printed = notation::print(outcome.state);
+    EXPECT_EQ(printed.find("skipped="), std::string::npos) << printed;
+    GameState again;
+    std::string error;
+    EXPECT_TRUE(notation::parse(printed, &again, &error)) << error << " in: " << printed;
+  }
+
+  for (const Outcome& outcome :
+       rules::reloadOutcomes(parse("p1=2/2 p2=2/2 tube=0L0B turn=p1 cuffed=p2"), config, false)) {
+    EXPECT_TRUE(outcome.state.players[1].cuffed) << notation::print(outcome.state);
+  }
+}
+
 TEST(Reloads, DoubleOrNothingDealsFourItemsAfterWhatEachSeatHolds) {
   const RuleConfig don = RuleConfig::doubleOrNothing(4);
   for (const Outcome& outcome :

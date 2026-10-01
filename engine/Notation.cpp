@@ -390,6 +390,24 @@ bool parseText(const std::string& text, bool whole, Position* position, std::str
     }
     result.players[seat].skipConsumed = true;
   }
+  // A restrained seat loses one turn and is freed when its next turn starts
+  // (RoundManager.gd 308-325, DealerIntelligence.gd 39-57), so the seat to
+  // move is never still marked as having lost one, and a seat cannot be both
+  // waiting to lose a turn and past losing it.
+  for (int seat = 0; seat < result.playerCount; ++seat) {
+    if (result.players[seat].cuffed && result.players[seat].skipConsumed) {
+      *error = "p" + std::to_string(seat + 1) +
+               " is named in both cuffed and skipped; a seat still waiting to lose a turn has "
+               "not lost one yet";
+      return false;
+    }
+  }
+  if (result.players[result.current].skipConsumed && !result.roundOver()) {
+    *error =
+        "skipped names the seat to move, which has its turn back; skipped is for a seat that "
+        "lost its last turn and has not moved since";
+    return false;
+  }
 
   result.tube.sawed = sawed;
   result.cuffUsedThisTurn = restraintUsed;

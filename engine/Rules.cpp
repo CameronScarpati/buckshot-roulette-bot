@@ -442,6 +442,10 @@ void reloadInto(GameState* state, std::uint8_t live, std::uint8_t blank, const R
   if (!state->players[state->current].alive()) {
     state->current = static_cast<std::uint8_t>(state->nextSeat(state->current));
   }
+  // The seat that moves first plays its turn, so a turn it lost before the
+  // reload is behind it, as when advanceTurn hands it the turn. This only
+  // matters when a reload keeps restraints.
+  state->players[state->current].skipConsumed = false;
   state->cuffUsedThisTurn = false;
 }
 

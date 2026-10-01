@@ -2,8 +2,8 @@
 # Narrated sessions piped into the advisor, each held to the exact position it
 # must print afterwards: fresh loads, which copy of an item leaves a hand, steals
 # in both directions, phone reads nobody else heard, the shells a phone can
-# name, medicine that heals nothing, and the dealer's memory part-way through
-# its turn.
+# name, medicine that heals nothing, turn and restraint edits, and the dealer's
+# memory part-way through its turn.
 #
 #     tools/check_advisor_session.sh [path-to-build-directory]
 #
@@ -156,6 +156,15 @@ session "medicine in the faded band" "--reloads 0 --opponent dealer --mode story
 session "stolen medicine at full charges" "$PLAIN" \
   "set p1=4/4[adr] p2=3/4[med] tube=1L1B turn=p1\nuse adr p2 med ok\nstate\n" \
   "p1=4/4 p2=3/4 tube=1L1B turn=p1"
+
+# A seat handed the turn has its lost turn behind it, and a seat marked as
+# restrained is still waiting to lose a turn, so it has not lost one.
+session "handing the turn to a seat that lost one" "$PLAIN" \
+  "set p1=2/2 p2=2/2[cuff] tube=1L2B turn=p2 skipped=p1\nturn p1\nstate\n" \
+  "p1=2/2 p2=2/2[cuff] tube=1L2B turn=p1"
+session "restraining a seat that lost a turn" "$PLAIN" \
+  "set p1=2/2 p2=2/2 tube=1L2B turn=p1 skipped=p2\ncuff p2\nstate\n" \
+  "p1=2/2 p2=2/2 tube=1L2B turn=p1 cuffed=p2"
 
 # The dealer's memory part-way through its turn.
 session "a glass then a Beer on a blank leaves the endless dealer aiming at itself" "$DEALER" \
