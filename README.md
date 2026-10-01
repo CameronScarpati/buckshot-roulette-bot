@@ -52,7 +52,7 @@ The page runs entirely in the browser. It is static files and the compiled engin
 requests nothing from any other site. [web/README.md](web/README.md) has the commands to build
 the engine with Emscripten and to serve the page locally.
 
-The page is published with GitHub Pages from this repository.
+`.github/workflows/pages.yml` builds the page and publishes it with GitHub Pages.
 
 ## Quick start
 

@@ -30,9 +30,9 @@ export const GAMES = [
   { value: 'don:2', mode: 'don', charges: 2, label: 'Double or Nothing, 2 charges', note: '2 to 5 items each load.' },
   { value: 'don:3', mode: 'don', charges: 3, label: 'Double or Nothing, 3 charges', note: '2 to 5 items each load.' },
   { value: 'don:4', mode: 'don', charges: 4, label: 'Double or Nothing, 4 charges', note: '2 to 5 items each load.' },
-  { value: 'story1', mode: 'story1', charges: null, label: 'Story, stage 1', note: '2 charges. No items.' },
-  { value: 'story2', mode: 'story2', charges: null, label: 'Story, stage 2', note: '4 charges. 2 items each load.' },
-  { value: 'story3', mode: 'story3', charges: null, label: 'Story, stage 3', note: '5 charges, and the last one cannot be healed. 4 items each load.' },
+  { value: 'story1', mode: 'story1', charges: null, label: 'Story, stage 1', note: '2 charges. No items. The story values are assumed until the stage data is read from the game.' },
+  { value: 'story2', mode: 'story2', charges: null, label: 'Story, stage 2', note: '4 charges. 2 items each load. The story values are assumed until the stage data is read from the game.' },
+  { value: 'story3', mode: 'story3', charges: null, label: 'Story, stage 3', note: '5 charges, and the last one cannot be healed. 4 items each load. The story values are assumed until the stage data is read from the game.' },
 ];
 
 export const other = (seat) => (seat === 'p1' ? 'p2' : 'p1');
