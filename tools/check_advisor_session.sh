@@ -142,6 +142,36 @@ session "the dealer's phone can name shell 8 of 8" "$PLAIN --seat 2" \
   "set p1=2/2 p2=2/2[phone] tube=4L4B turn=p2\nphone 8 live\nstate\n" \
   "p1=2/2 p2=2/2 tube=4L4B turn=p2 known=p2:7L"
 
+# With one shell left a phone names nothing (BurnerPhone.gd 13, 32), so any
+# seat's use is recorded with no result, and an example names a shell that
+# can still be there.
+session "a phone on the last shell names nothing" "$PLAIN" \
+  "set p1=2/2[phone,phone] p2=2/2 tube=1L0B turn=p1\nphone 2 live\nphone\nstate\nphone unseen\nstate\n" \
+  "With one shell left a burner phone names nothing, so type phone on its own." \
+  "p1=2/2[phone] p2=2/2 tube=1L0B turn=p1" \
+  "p1=2/2 p2=2/2 tube=1L0B turn=p1"
+session "another seat's phone on the last shell" "$PLAIN" \
+  "set p1=2/2 p2=2/2[phone] tube=1L0B turn=p2\nphone\nstate\n" \
+  "p1=2/2 p2=2/2 tube=1L0B turn=p2"
+session "with two shells left the example names shell 2" "$PLAIN" \
+  "set p1=2/2[phone] p2=2/2 tube=1L1B turn=p1\nphone\nphone unseen\n" \
+  "~as in phone 2 blank, or phone unseen for another seat's phone." \
+  "You heard what your own phone said, so say which, as in phone 2 live."
+
+# The dealer's script uses a phone, its own or a stolen one, only with more
+# than two shells in the tube (DealerIntelligence.gd 187). The solver's p2 is
+# not held to that.
+session "the dealer never uses a phone on two shells" "$DEALER" \
+  "set p1=2/2[phone] p2=2/2[phone,adr] tube=1L1B turn=p2\nphone unseen\nuse adr p1 phone unseen\nstate\n" \
+  "The dealer uses a burner phone only with more than two shells in the tube." \
+  "p1=2/2[phone] p2=2/2[phone,adr] tube=1L1B turn=p2"
+session "the solver's p2 may use a phone on two shells" "$PLAIN" \
+  "set p1=2/2 p2=2/2[phone] tube=1L1B turn=p2\nphone unseen\nstate\n" \
+  "p1=2/2 p2=2/2 tube=1L1B turn=p2 phoned=p2@2"
+answer "a dealer read on two shells cannot happen" \
+  "p1=2/2 p2=2/2 tube=1L1B turn=p2 phoned=p2@2" "$DEALER" \
+  "Not solved: phoned=p2@2 cannot happen: the dealer uses a burner phone only with more than two shells in the tube"
+
 # Expired Medicine that works heals nothing at full charges or in the faded
 # band, and a failure always costs a charge (MedicineManager.gd 17-38,
 # HealthCounter.gd 141-153), so the two outcomes stay apart there too.

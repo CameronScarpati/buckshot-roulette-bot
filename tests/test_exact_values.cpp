@@ -405,6 +405,30 @@ TEST(ExactValues, ReadsByTheAdvisedSeatAreRefused) {
             "looked; give known=p1 instead");
 }
 
+TEST(ExactValues, ADealerReadAtTwoShellsIsRefused) {
+  // The dealer's script uses a phone, its own or a stolen one, only with more
+  // than two shells in the tube (DealerIntelligence.gd 187). A read it made
+  // at two cannot arise against it, though the solver's p2 may make one.
+  const std::string atTwo = "p1=2/2 p2=2/2 tube=1L1B turn=p2 phoned=p2@2";
+  const SolveResult refused = solveText(atTwo, doubleOrNothing(position(atTwo)), dealer());
+  EXPECT_TRUE(refused.refused);
+  EXPECT_EQ(refused.assumptions,
+            "Not solved: phoned=p2@2 cannot happen: the dealer uses a burner phone only with "
+            "more than two shells in the tube");
+  const SolveResult bySolver = solveText(atTwo, doubleOrNothing(position(atTwo)), optimal());
+  ASSERT_FALSE(bySolver.refused) << bySolver.assumptions;
+  EXPECT_NEAR(bySolver.value, 1.0 / 3.0, kTight);
+
+  // A read the dealer made at three shells, one shot ago, named one of the
+  // two left, so it knows both: p1 loses a charge whichever is chambered.
+  const std::string atThree = "p1=2/2 p2=2/2 tube=1L1B turn=p2 phoned=p2@3";
+  const SolveResult answered = solveText(atThree, doubleOrNothing(position(atThree)), dealer());
+  ASSERT_FALSE(answered.refused) << answered.assumptions;
+  EXPECT_NEAR(answered.value, 1.0 / 3.0, kTight);
+  const std::string stolen = "p1=2/2 p2=2/2[saw] tube=1L1B turn=p2 phoned=p2@4,2";
+  EXPECT_TRUE(solveText(stolen, doubleOrNothing(position(stolen)), dealer()).refused);
+}
+
 TEST(ExactValues, TheChamberTheDealerSawIsKeptPastTheLimit) {
   // Five other shells the dealer looked at are more than the limit of four,
   // so they are treated as seen by nobody, but the chamber it saw is still

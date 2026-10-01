@@ -579,6 +579,14 @@ std::string refusalFor(const Position& position, const RuleConfig& config,
     dealer::brainFor(config, &brain);
     std::string error;
     if (!dealer::validateMemory(position, brain, &error)) return error;
+    // The dealer's script uses a phone, its own or a stolen one, only with
+    // more than two shells in the tube (DealerIntelligence.gd 187).
+    for (const UnseenRead& read : position.unseenReads) {
+      if (read.seat != kDealerSeat || read.sizeAtUse > 2) continue;
+      return "phoned=p2@" + std::to_string(read.sizeAtUse) +
+             " cannot happen: the dealer uses a burner phone only with more than two shells in "
+             "the tube";
+    }
   }
   for (const UnseenRead& read : position.unseenReads) {
     if (read.seat != options.seat) continue;

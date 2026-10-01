@@ -648,6 +648,12 @@ void sayNotAvailable() {
                "item or cannot use it in this position.\n";
 }
 
+/// Whether p2 is to move and plays the game's dealer script.
+bool scriptedDealerToMove(const Session& session) {
+  return session.scriptedDealer && session.state.playerCount == 2 &&
+         session.state.current == kDealerSeat;
+}
+
 /// A Magnifying Glass, the seat's own or stolen. `rest` is what it showed:
 /// live, blank, or unseen when only the seat using it saw.
 bool recordGlass(Session* session, const Action& action, const std::string& form,
@@ -734,17 +740,26 @@ bool recordGlass(Session* session, const Action& action, const std::string& form
 /// A Burner Phone, the seat's own or stolen. The advised seat heard its own
 /// phone, so it says which shell and what it is; any other seat's read is
 /// recorded as unseen, because the game never shows it (BurnerPhone.gd 6,
-/// DealerIntelligence.gd 187-194).
+/// DealerIntelligence.gd 187-194). With one shell left a phone names nothing
+/// (BurnerPhone.gd 13, 32), so any seat's use is recorded with no result. The
+/// dealer's script uses a phone, its own or a stolen one, only with more than
+/// two shells in the tube (DealerIntelligence.gd 187).
 bool recordPhone(Session* session, const Action& action, const std::string& form,
                  const std::vector<std::string>& rest) {
   const int seat = session->state.current;
   const bool own = seat == session->options.seat;
   const int size = session->state.tube.size();
-  if (rest.size() == 1 && rest[0] == "unseen") {
-    // A phone with one shell left names nothing, so it needs no result.
+  // The shell an example names: shell 3, or shell 2 when only two are left.
+  const std::string example = std::to_string(std::min(3, std::max(2, size)));
+  if (scriptedDealerToMove(*session) && size <= 2) {
+    std::cout << "The dealer uses a burner phone only with more than two shells in the tube.\n";
+    return false;
+  }
+  const bool unseen = rest.size() == 1 && rest[0] == "unseen";
+  if (unseen || (rest.empty() && size < 2)) {
     if (own && size >= 2) {
-      std::cout << "You heard what your own phone said, so say which, as in " << form
-                << " 3 live.\n";
+      std::cout << "You heard what your own phone said, so say which, as in " << form << " "
+                << example << " live.\n";
       return false;
     }
     if (!isLegal(*session, action)) {
@@ -771,6 +786,11 @@ bool recordPhone(Session* session, const Action& action, const std::string& form
     finishEvent(session, point.state, point.state, action, Shell::Unknown);
     return true;
   }
+  if (size < 2) {
+    std::cout << "With one shell left a burner phone names nothing, so type " << form
+              << " on its own.\n";
+    return false;
+  }
   if (rest.empty() && !own) {
     std::cout << whoseItem(*session) << " phone is private: type " << form << " unseen.\n";
     return false;
@@ -783,14 +803,15 @@ bool recordPhone(Session* session, const Action& action, const std::string& form
     return false;
   }
   if (number && rest[1] == "unseen") {
-    std::cout << "You heard what your own phone said, so say which, as in " << form << " 3 live.\n";
+    std::cout << "You heard what your own phone said, so say which, as in " << form << " "
+              << example << " live.\n";
     return false;
   }
   const int position = number ? static_cast<int>(parsed) : 0;
   Shell shell = Shell::Unknown;
   if (!number || position < 2 || position > size || !parseShell(rest[1], &shell)) {
-    std::cout << "Say which shell your phone named and what it is, as in " << form
-              << " 3 blank, or " << form
+    std::cout << "Say which shell your phone named and what it is, as in " << form << " " << example
+              << " blank, or " << form
               << " unseen for another seat's phone. A burner phone never names the chamber, so "
                  "the number starts at 2.\n";
     return false;
@@ -838,12 +859,6 @@ bool recordPhone(Session* session, const Action& action, const std::string& form
   pay(&session->state, action);
   finishEvent(session, point.state, before, action, Shell::Unknown);
   return true;
-}
-
-/// Whether p2 is to move and plays the game's dealer script.
-bool scriptedDealerToMove(const Session& session) {
-  return session.scriptedDealer && session.state.playerCount == 2 &&
-         session.state.current == kDealerSeat;
 }
 
 /// Take the one branch an item use has once its outcome is settled, keeping
@@ -1225,9 +1240,13 @@ void printHelp() {
     mg live|blank|unseen  a magnifying glass showed the seat to move that
                           shell; unseen when only that seat saw it
     phone <k> live|blank  your burner phone named shell k, counting from 2,
-                          since a burner phone never names the chamber
+                          since a burner phone never names the chamber; with
+                          8 shells loaded only the dealer's phone names
+                          shell 8
     phone unseen          another seat used a burner phone; the game never
                           shows which shell it named
+    phone                 any seat used a burner phone with one shell left,
+                          when it names nothing
     use <item> [p<N>]     the seat to move used an item with no chance outcome
     use med ok|bad        expired medicine, and how it went
     use adr               adrenaline spent on its own, taking nothing
