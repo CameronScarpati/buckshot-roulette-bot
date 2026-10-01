@@ -679,6 +679,13 @@ SolveResult solve(const Position& position, const RuleConfig& config, const Solv
   // opponent that knows which one it is in. Phone reads it never saw the result
   // of split it first, into the shells each read could have named.
   const bool keepChamber = dealerSawChamber(position);
+  // A dealer that has seen the chamber saws the barrel only when it is live
+  // (DealerIntelligence.gd 181 and 203-215), so a sawed barrel in front of it
+  // tells every seat what the chamber holds.
+  GameState rooted = state;
+  if (keepChamber && rooted.tube.sawed) {
+    rooted.tube.knownBy[0] = static_cast<std::uint8_t>((1u << rooted.playerCount) - 1u);
+  }
   std::vector<GameState> starts;
   std::vector<double> weights;
   std::vector<dealer::Memory> memories;
@@ -686,7 +693,7 @@ SolveResult solve(const Position& position, const RuleConfig& config, const Solv
     int counted = 0;
     bool dropped = false;
     const std::vector<KnowledgeBranch> branches =
-        knowledgeBranches(state, options.seat, options.opponentKnowledgeLimit, reads, keepChamber,
+        knowledgeBranches(rooted, options.seat, options.opponentKnowledgeLimit, reads, keepChamber,
                           &counted, &dropped);
     if (reads.weight > 0.0) {
       result.opponentKnownShells = std::max(result.opponentKnownShells, counted);

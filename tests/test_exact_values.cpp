@@ -378,6 +378,34 @@ TEST(ExactValues, TheChamberTheDealerSawIsKeptPastTheLimit) {
   EXPECT_NEAR(result.value, 0.5 * live + 0.5 * blank, kTight);
 }
 
+TEST(ExactValues, ASawedBarrelShowsEverySeatTheChamberTheDealerSaw) {
+  // A dealer that has seen the chamber saws only a live one
+  // (DealerIntelligence.gd 181 and 203-215), so p1 knows the sawed shot is
+  // live. On two charges it takes both: 0, at any budget and under either rule
+  // set, with no shell left for the answer to average over.
+  for (const std::string tube : {"1L2B", "2L2B"}) {
+    const std::string text =
+        "p1=2/2 p2=2/2 tube=" + tube + " turn=p2 sawed known=p2:0L dealer=seen";
+    for (const int reloads : {0, 2}) {
+      const SolveResult result = solveText(text, doubleOrNothing(position(text)), dealer(reloads));
+      ASSERT_FALSE(result.refused) << result.assumptions;
+      EXPECT_NEAR(result.value, 0.0, kTight) << tube << " at " << reloads;
+      EXPECT_EQ(result.opponentKnownShells, 0) << tube << " at " << reloads;
+    }
+    EXPECT_NEAR(solveText(text, RuleConfig::storyRound(2), dealer()).value, 0.0, kTight) << tube;
+  }
+
+  // On three charges p1 is left on one with 1L2B and nobody knowing the order.
+  // Shooting the dealer: live (1/3) leaves two blanks the dealer works out and
+  // fires into itself, and the empty tube scores 1 of 3; blank (2/3) hands the
+  // dealer a fair coin on 1L1B, where either aim is worth 1/2 * 1/3, so 1/6.
+  // That is 1/9 + 1/9 = 2/9, above shooting itself, 2/3 * 1/6 = 1/9.
+  const std::string spare = "p1=3/3 p2=3/3 tube=2L2B turn=p2 sawed known=p2:0L dealer=seen";
+  const SolveResult result = solveText(spare, doubleOrNothing(position(spare)), dealer());
+  ASSERT_FALSE(result.refused) << result.assumptions;
+  EXPECT_NEAR(result.value, 2.0 / 9.0, kTight);
+}
+
 // ---------------------------------------------------------------------------
 // The node limit
 // ---------------------------------------------------------------------------
