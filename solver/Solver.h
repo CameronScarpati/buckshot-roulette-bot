@@ -129,7 +129,9 @@ double solveValue(const GameState& state, const RuleConfig& config, const SolveO
 bool dealerSupported(const GameState& state, const RuleConfig& config, const SolveOptions& options,
                      std::string* reason);
 
-/// One line naming every assumption that could change the answer.
+/// One line naming every assumption that could change the answer. Its
+/// approximations are entries 1 to 7 of the list in docs/RULES.md, in the same
+/// order; the answer adds entries 8 and 9 when they apply.
 std::string describeAssumptions(const RuleConfig& config, const SolveOptions& options);
 
 }  // namespace bsr

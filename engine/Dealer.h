@@ -33,12 +33,14 @@ struct Position;
 /// the player's when the dealer holds Adrenaline, and whether it holds
 /// cigarettes is read from the list its previous pass built, which
 /// `GameState::dealerListCigs` carries between passes (DealerIntelligence.gd
-/// 113-149). Two things differ from the script on purpose, and the solver
-/// states them with every answer they can change. The list is taken to be
-/// empty at the start of every round. And a failed Expired Medicine always
-/// costs a charge, where the script leaves a dealer below the heal floor where
-/// it was; its guard against taking medicine on one charge means this can only
-/// arise with a floor above two.
+/// 113-149). Two things differ from the script on purpose, and docs/RULES.md
+/// lists both with the solver's approximations. The list is taken to be empty
+/// at the start of every round, which only `play` meets, since a solved
+/// position carries its list in `listcigs`. And a failed Expired Medicine
+/// always costs a charge, where the script leaves a dealer below the heal
+/// floor where it was; its guard against taking medicine on one charge means
+/// this can only arise with a floor above two, and the solver says so with
+/// every answer it can change.
 namespace dealer {
 
 /// Which of the script's two sets of decision rules is in force. Double or

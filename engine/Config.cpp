@@ -61,6 +61,8 @@ RuleConfig RuleConfig::storyRound(int round) {
   config.healFloor = round >= 3 ? 2 : 1;
   config.itemPool = round <= 1 ? std::vector<Item>{} : basePool();
   // Stage 1 deals nothing, stage 2 deals two per load and stage 3 deals four.
+  // The story charges, loads and deals are assumed until the stage data is
+  // extracted (docs/RULES.md, Assumptions pending extraction).
   config.itemsPerLoad = round <= 1 ? 0 : (round == 2 ? 2 : 4);
   config.itemsPerLoadMax = config.itemsPerLoad;
   config.reloadTurn = ReloadTurn::PlayerFirst;

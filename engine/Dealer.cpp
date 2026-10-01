@@ -162,8 +162,9 @@ void useItem(const Partial& pass, Item item, bool stolen, Reason reason, const R
              Brain brain, std::vector<Branch>* out) {
   if (item == Item::BurnerPhone) {
     // Any position past the chamber, whether or not somebody has already seen
-    // it (DealerIntelligence.gd lines 187-194). The engine's own phone skips
-    // positions its user has seen, which is not what the script does.
+    // it (DealerIntelligence.gd lines 187-194). Unlike the player's phone, a
+    // pick of the eighth shell is not moved to the seventh (BurnerPhone.gd
+    // 13-15).
     GameState paid = pass.state;
     pay(&paid, item, stolen);
     const int positions = paid.tube.size() - 1;

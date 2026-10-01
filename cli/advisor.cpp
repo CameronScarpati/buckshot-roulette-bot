@@ -1,6 +1,6 @@
 /// Position advisor. Type the position you are looking at, or narrate the round
-/// as it happens, and get the moves worth considering ranked by the probability
-/// that you are the last player standing, under the stated opponent model.
+/// as it happens, and get the legal moves ranked by the probability that you
+/// are the last player standing, under the stated opponent model.
 
 #include <algorithm>
 #include <array>
@@ -1220,7 +1220,7 @@ void printHelp() {
                           story or double or nothing, and seat p1 advised.
                           opponent alone says which is in force
     reloads <n>           how many reloads to look through (default 2)
-    rule <name> <value>   change a rule this engine had to assume, as in
+    rule <name> <value>   change a rule setting, as in
                           rule reload-turn keep. rules lists them all
     rules                 the rule settings and what they are set to
 
@@ -1265,7 +1265,7 @@ void printHelp() {
                           place. Without #k the first copy goes.
 
   Other
-    advise (or a blank line)   rank the moves worth considering
+    advise (or a blank line)   rank the legal moves
     undo    help    quit
 
   Tokens only a written position carries
@@ -1399,7 +1399,7 @@ int main(int argc, char** argv) {
                    "command\nof the same name below (seat p1, 2 reloads, don and solver by "
                    "default).\n--position answers that one position and exits; --json prints "
                    "that answer as\nJSON and needs --position.\n"
-                   "--node-limit stops a search from looking further once it has met N\n"
+                   "--node-limit stops a search from looking further once it has met N new\n"
                    "positions (1 to 10000000000, 40000000 by default) and says so, since\n"
                    "the values it gives then may be wrong. Each new position the lines\n"
                    "still open reach is then scored by charges in hand and counted once,\n"

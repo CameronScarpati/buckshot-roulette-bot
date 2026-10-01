@@ -1,8 +1,8 @@
-/// The rules this engine had to assume are settings, and until they could be
-/// typed on a command line, checking one against a real game meant editing C++
-/// and rebuilding. These tests cover the parsing of those settings, including
-/// the values that must be refused: a probability outside zero to one, or a
-/// count the engine cannot hold, would describe a game that cannot happen.
+/// The rule settings can be typed on a command line, where checking one
+/// against a real game once meant editing C++ and rebuilding. These tests cover
+/// the parsing of those settings, including the values that must be refused: a
+/// probability outside zero to one, or a count the engine cannot hold, would
+/// describe a game that cannot happen.
 
 #include <gtest/gtest.h>
 
@@ -173,8 +173,8 @@ TEST(RuleFlags, TheHelpTextNamesEverySettingThatCanBeTyped) {
   EXPECT_FALSE(isRuleSetting("--reload-turn=keep")) << "the value is a separate word";
 }
 
-/// The setting that docs/RULES.md calls the largest of the assumptions has to
-/// reach the printed model line, since that line is what a reader checks.
+/// A rule setting has to reach the printed model line, since that line is what
+/// a reader checks.
 TEST(RuleFlags, TheAssumptionLineFollowsTheSetting) {
   RuleConfig config = RuleConfig::doubleOrNothing(4);
   const std::string before = config.describe();

@@ -147,9 +147,11 @@ std::vector<Outcome> applyItemEffect(const GameState& state, const Action& actio
       return out;
     }
     case Item::Inverter: {
-      // Nobody learns anything: a chamber the user had already seen flips
-      // outright, and an unseen one records the flip and keeps its odds
-      // inverted without resolving.
+      // Nobody learns anything. A chamber somebody had pinned down flips and
+      // the counts move with it; a seat that had not seen it still holds the
+      // counts from before, with the flip pending (`Tube::unflipFor`). A
+      // chamber nobody had seen records the flip and keeps its odds inverted
+      // without resolving.
       Outcome only;
       only.state = state;
       only.state.tube.invertChamber();
@@ -403,9 +405,10 @@ std::vector<std::tuple<std::uint8_t, std::uint8_t, double>> loadDistribution(
     }
     return table;
   }
-  // Default, documented in docs/RULES.md as unverified: a total of two to eight
-  // shells, uniform, then a live count uniform in [1, total - 1] so that every
-  // load holds at least one of each and blank-heavy loads really occur.
+  // The default for story and multiplayer, an assumption in docs/RULES.md: a
+  // total of two to eight shells, uniform, then a live count uniform in
+  // [1, total - 1] so that every load holds at least one of each and
+  // blank-heavy loads really occur.
   const double totalShare = 1.0 / 7.0;
   for (int total = 2; total <= kMaxShells; ++total) {
     const double liveShare = totalShare / static_cast<double>(total - 1);
@@ -484,11 +487,10 @@ std::vector<Outcome> reloadOutcomes(const GameState& state, const RuleConfig& co
       // items taken in turn from the pool, starting at its own seat index and
       // added after what it already holds, which is one deterministic spread
       // rather than a distribution over deals. Enumerating them would multiply
-      // the state space by thousands without changing the ranking of the move
-      // being asked about, and the same argument covers the count, which the
-      // game draws at every load and this takes at the middle of its range
-      // (2 to 5 in Double or Nothing, modelled at 4). docs/RULES.md records
-      // both as approximations.
+      // the state space by thousands per reload. The count, which the game
+      // draws at every load, is taken at the middle of its range (2 to 5 in
+      // Double or Nothing, modelled at 4). docs/RULES.md lists both among the
+      // approximations.
       const std::vector<Item>& pool = config.itemPool;
       if (!pool.empty()) {
         const int limit = std::min<int>(config.itemLimit, kMaxItemsPerSeat);

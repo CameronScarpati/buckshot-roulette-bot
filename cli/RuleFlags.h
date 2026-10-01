@@ -12,13 +12,14 @@
 namespace bsr {
 namespace cli {
 
-/// The rules this engine had to assume, as command line settings.
+/// The rule settings, as command line options.
 ///
-/// docs/RULES.md lists eleven assumptions and names the field that changes
-/// each. Until these flags existed, changing one meant editing C++ and
-/// rebuilding, so nobody without a compiler could check a rule against their
-/// own game. Every answer already prints the assumptions it used, so a flag
-/// here and the line under the ranking describe the same thing.
+/// docs/RULES.md lists them under Settings, with the default each mode uses
+/// and the field each one changes. Without these flags, changing one meant
+/// editing C++ and rebuilding, so nobody without a compiler could check a rule
+/// against their own game. Every answer already prints the rules it used, so a
+/// flag here and the model line at the head of the answer describe the same
+/// thing.
 struct RuleSetting {
   const char* flag;
   const char* values;
@@ -187,7 +188,7 @@ inline bool applyRuleSettings(const std::vector<std::pair<std::string, std::stri
 }
 
 inline std::string ruleSettingsHelp() {
-  std::string text = "  Rules that this engine had to assume (docs/RULES.md)\n";
+  std::string text = "  Rule settings (docs/RULES.md, Settings)\n";
   for (const RuleSetting& setting : ruleSettings()) {
     std::string line = "    ";
     line += setting.flag;

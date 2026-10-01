@@ -35,15 +35,16 @@ std::vector<Action> legalActions(const GameState& state, const RuleConfig& confi
 /// Expired Medicine.
 ///
 /// The returned states may have an empty tube, in which case the caller decides
-/// how the reload happens: `reloadOutcomes` for a solver, `sampleReload` for a
+/// how the reload happens: `reloadOutcomes` for a solver, `Table::load` for a
 /// live game. Probabilities in the result sum to one.
 std::vector<Outcome> apply(const GameState& state, const Action& action, const RuleConfig& config);
 
 /// Every load a reload can produce, with probabilities, for a solver. When
 /// `dealItems` is set, each seat is dealt one deterministic spread of items
 /// from the pool rather than a distribution over deals, because enumerating
-/// item multisets would multiply the state space by thousands for no change in
-/// the ranking of the current move.
+/// item multisets would multiply the state space by thousands per reload. The
+/// game draws every item at random; docs/RULES.md lists this spread, and the
+/// one count it deals, among the approximations.
 std::vector<Outcome> reloadOutcomes(const GameState& state, const RuleConfig& config,
                                     bool dealItems);
 
