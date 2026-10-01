@@ -429,24 +429,43 @@ TEST(ExactValues, ADealerReadAtTwoShellsIsRefused) {
   EXPECT_TRUE(solveText(stolen, doubleOrNothing(position(stolen)), dealer()).refused);
 }
 
-TEST(ExactValues, TheChamberTheDealerSawIsKeptPastTheLimit) {
-  // Five other shells the dealer looked at are more than the limit of four,
-  // so they are treated as seen by nobody, but the chamber it saw is still
-  // drawn from p1's pool and stays pinned, with the memory following it.
-  const std::string over = "p1=2/2 p2=2/2 tube=4L4B turn=p2 known=p2:0L,1L,2B,3B,4L,5B dealer=seen";
-  const RuleConfig config = doubleOrNothing(position(over));
-  const SolveResult result = solveText(over, config, dealer());
-  ASSERT_FALSE(result.refused) << result.assumptions;
-  EXPECT_TRUE(result.opponentKnowledgeDropped);
-  const double live =
-      solveText("p1=2/2 p2=2/2 tube=4L4B turn=p2 known=p1:0L known=p2:0L dealer=seen", config,
-                dealer())
-          .value;
-  const double blank =
-      solveText("p1=2/2 p2=2/2 tube=4L4B turn=p2 known=p1:0B known=p2:0B dealer=seen", config,
-                dealer())
-          .value;
-  EXPECT_NEAR(result.value, 0.5 * live + 0.5 * blank, kTight);
+TEST(ExactValues, TheDealerActsOnEveryShellItHasSeen) {
+  // The dealer subtracts every shell it has seen from the counts when it works
+  // out the chamber (DealerIntelligence.gd 96-104 and 282-303). Here it has
+  // seen five of six shells, so it knows all six however they fell for p1, and
+  // the answer has to draw all of them. It fires each blank into itself and
+  // the first live at p1, who is left on one charge holding the gun with two
+  // lives in the tube. p1 needs two hits, and the first one, or any blank at
+  // the dealer, hands the gun back with a live still in the tube: 0, at any
+  // budget. Forgetting the shells would make the dealer guess.
+  const std::string text = "p1=2/2 p2=2/2 tube=3L3B turn=p2 known=p2:1L,2L,3L,4B,5B";
+  const RuleConfig config = doubleOrNothing(position(text));
+  for (const int reloads : {0, 1}) {
+    const SolveResult result = solveText(text, config, dealer(reloads));
+    ASSERT_FALSE(result.refused) << result.assumptions;
+    EXPECT_EQ(result.opponentKnownShells, 5);
+    EXPECT_FALSE(result.opponentKnowledgeDropped);
+    EXPECT_NEAR(result.value, 0.0, kTight) << "at " << reloads;
+  }
+
+  // p1 to move on one charge, with the same dealer: every line hands the
+  // dealer the gun with a live left before p1 can land two hits.
+  const std::string first = "p1=1/2 p2=2/2 tube=3L3B turn=p1 known=p2:1L,2L,3B,4B,5L";
+  const SolveResult moving = solveText(first, doubleOrNothing(position(first)), dealer());
+  ASSERT_FALSE(moving.refused) << moving.assumptions;
+  EXPECT_FALSE(moving.opponentKnowledgeDropped);
+  EXPECT_NEAR(moving.value, 0.0, kTight);
+  EXPECT_NEAR(valueOf(moving, "shoot p2"), 0.0, kTight);
+  EXPECT_NEAR(valueOf(moving, "shoot self"), 0.0, kTight);
+
+  // In the middle of its turn, having seen the chamber and every shell behind
+  // it, the dealer knows the whole tube in every branch, the chamber included.
+  const std::string seen = "p1=2/2 p2=2/2 tube=3L3B turn=p2 known=p2:0L,1L,2L,3B,4B,5B dealer=seen";
+  const SolveResult midTurn = solveText(seen, doubleOrNothing(position(seen)), dealer());
+  ASSERT_FALSE(midTurn.refused) << midTurn.assumptions;
+  EXPECT_EQ(midTurn.opponentKnownShells, 6);
+  EXPECT_FALSE(midTurn.opponentKnowledgeDropped);
+  EXPECT_NEAR(midTurn.value, 0.0, kTight);
 }
 
 TEST(ExactValues, ASawedBarrelShowsEverySeatTheChamberTheDealerSaw) {

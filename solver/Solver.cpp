@@ -135,14 +135,11 @@ struct KnowledgeBranch {
 /// with the reading seats among its observers. A shell this seat has seen
 /// itself is not drawn again; the reading seats simply see it too.
 ///
-/// `keepChamber` is set when the dealer is in the middle of its turn having
-/// seen the chamber. The chamber is then always drawn, whatever the limit,
-/// because forgetting it would contradict the memory the turn goes on with,
-/// and only the other shells count towards the limit. `counted` gets how many
-/// shells counted towards it.
+/// `counted` gets how many shells there are to draw. Past `limit` none of
+/// them is drawn and `dropped` is set.
 std::vector<KnowledgeBranch> knowledgeBranches(const GameState& state, int seat, int limit,
-                                               const ReadExpansion& reads, bool keepChamber,
-                                               int* counted, bool* dropped) {
+                                               const ReadExpansion& reads, int* counted,
+                                               bool* dropped) {
   GameState blind = blindedTo(state, seat);
   const int shells = std::min<int>(state.tube.size(), kMaxShells);
   std::vector<int> positions = foreignKnown(state, seat);
@@ -155,17 +152,14 @@ std::vector<KnowledgeBranch> knowledgeBranches(const GameState& state, int seat,
       positions.push_back(i);
     }
   }
-  if (keepChamber && shells > 0 && !state.tube.knows(seat, 0)) positions.push_back(0);
   std::sort(positions.begin(), positions.end());
   positions.erase(std::unique(positions.begin(), positions.end()), positions.end());
 
-  const bool chamberKept = keepChamber && !positions.empty() && positions.front() == 0;
-  *counted = static_cast<int>(positions.size()) - (chamberKept ? 1 : 0);
+  *counted = static_cast<int>(positions.size());
   *dropped = false;
   if (*counted > std::max(0, limit)) {
     *dropped = true;
     positions.clear();
-    if (chamberKept) positions.push_back(0);
   }
   std::vector<KnowledgeBranch> branches;
   if (positions.empty()) {
@@ -538,12 +532,15 @@ std::string describeAssumptions(const RuleConfig& config, const SolveOptions& op
          "a reload deals each seat one fixed set of items, taken from the pool in order, "
          "rather than a random draw; every reload deals the same number of items, the one "
          "named above; a choice does not infer a shell's type from what another seat chose to "
-         "do; at most "
-      << options.opponentKnowledgeLimit
-      << " shells that only another seat has looked at are averaged over, and past that they "
-         "are treated as seen by nobody; and a seat that has not seen a shell picks evenly "
-         "between moves it cannot tell apart, ranking them as though no other seat had seen "
-         "that shell either. ";
+         "do; ";
+  // The dealer acts on every shell it has seen, so its memory has no limit.
+  if (!scripted) {
+    out << "at most " << options.opponentKnowledgeLimit
+        << " shells that only another seat has looked at are averaged over, and past that they "
+           "are treated as seen by nobody; ";
+  }
+  out << "and a seat that has not seen a shell picks evenly between moves it cannot tell apart, "
+         "ranking them as though no other seat had seen that shell either. ";
   // The script's own guard keeps the dealer off medicine at one charge, so a
   // failed dose can only cross the heal floor when the floor is above two.
   if (scripted && config.healFloor > 2) {
@@ -692,12 +689,18 @@ SolveResult solve(const Position& position, const RuleConfig& config, const Solv
   // into the ways it could have fallen, and every branch is solved against an
   // opponent that knows which one it is in. Phone reads it never saw the result
   // of split it first, into the shells each read could have named.
-  const bool keepChamber = dealerSawChamber(position);
+  //
+  // The dealer works out the chamber from every shell it has seen
+  // (DealerIntelligence.gd 96-104 and 282-303), so against the dealer every
+  // one of them is drawn, however many there are. The limit is for the
+  // minimising opponent.
+  const int limit =
+      options.opponent == OpponentModel::Dealer ? kMaxShells : options.opponentKnowledgeLimit;
   // A dealer that has seen the chamber saws the barrel only when it is live
   // (DealerIntelligence.gd 181 and 203-215), so a sawed barrel in front of it
   // tells every seat what the chamber holds.
   GameState rooted = state;
-  if (keepChamber && rooted.tube.sawed) {
+  if (dealerSawChamber(position) && rooted.tube.sawed) {
     rooted.tube.knownBy[0] = static_cast<std::uint8_t>((1u << rooted.playerCount) - 1u);
   }
   std::vector<GameState> starts;
@@ -707,8 +710,7 @@ SolveResult solve(const Position& position, const RuleConfig& config, const Solv
     int counted = 0;
     bool dropped = false;
     const std::vector<KnowledgeBranch> branches =
-        knowledgeBranches(rooted, options.seat, options.opponentKnowledgeLimit, reads, keepChamber,
-                          &counted, &dropped);
+        knowledgeBranches(rooted, options.seat, limit, reads, &counted, &dropped);
     if (reads.weight > 0.0) {
       result.opponentKnownShells = std::max(result.opponentKnownShells, counted);
       if (dropped) result.opponentKnowledgeDropped = true;

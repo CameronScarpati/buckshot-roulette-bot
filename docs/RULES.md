@@ -360,7 +360,7 @@ the sense defined above: a statement about this engine, not a claim about the ga
 | A sawed barrel after a blank into itself | Keeps the barrel sawed, because the next turn starts at [321][di321] without the end of turn that regrows it ([RoundManager.gd 269-273][rm269], [SegmentManager.gd 16-17][sm16]) | Clears the saw on every shot, as everywhere else in the engine. The two differ only when the dealer shoots itself with a sawed barrel, which no position reached in play produces, since every saw the dealer uses also aims it at the player; only a written position can start there |
 | What the player reads into the dealer's moves | Not a rule of the script | p1's own moves are chosen from what p1 has seen (`solver/Solver.cpp`, `blindChoiceValue`), and that choice does not infer a shell's type from what the dealer chose to do, such as an Inverter used only on a chamber it knows is blank. Against the real dealer a player who makes that inference can do better than the value says |
 | A written position with the dealer to move | Not a rule of the script; partway through a turn the dealer may already know the chamber, hold a target, or have taken Expired Medicine ([DealerIntelligence.gd 71-77][di71]) | Treats the position as the start of a dealer turn with a fresh memory, keeping only the shells written as seen by p2, ranks no moves and prints p1's chance (`solver/Solver.cpp`, `solve`, the branch for the dealer to move) |
-| A written dealer memory | Not a rule of the script | A position can write `known=p2:...`, which records only that the dealer has seen that shell. Unless p1 has also seen it, the solver puts it back into p1's pool and averages over how it could have fallen, with the dealer remembering it in every branch (`solver/Solver.cpp`, `knowledgeBranches`). Writing the same shell for both seats pins it. Past `opponentKnowledgeLimit` such shells, the dealer is treated as having seen none of them |
+| A written dealer memory | Not a rule of the script | A position can write `known=p2:...`, which records only that the dealer has seen that shell. Unless p1 has also seen it, the solver puts it back into p1's pool and averages over how it could have fallen, with the dealer remembering it in every branch (`solver/Solver.cpp`, `knowledgeBranches`). Writing the same shell for both seats pins it. Every such shell is drawn, however many there are, since the dealer works out the chamber from all of them ([DealerIntelligence.gd 282-303][di282]) |
 | Expired Medicine below the heal floor | A failed dose leaves a dealer with its wire cut where it was ([HealthCounter.gd 131-134][hc131]) | A failed dose always costs one charge. The script's own guard, never at one charge, means this never arises at the heal floors the modes use; it can arise only with `--heal-floor` set above 2 |
 
 <a id="script-reloads"></a>
@@ -462,9 +462,10 @@ never reads the shell, so naming it live or blank in the position gives byte-ide
 answers, which is what the invariance test in `tests/test_opponent_knowledge.cpp` checks.
 And only the move being asked about gets the treatment: deeper in the search the advised seat
 picks as though nobody had looked, which understates the other seat in those lines. The number
-of such shells the solver will enumerate is capped by `opponentKnowledgeLimit`
-(`solver/Solver.h`), and a result says how many it averaged over and whether the cap dropped
-any.
+of such shells the solver will enumerate against the minimising opponent is capped by
+`opponentKnowledgeLimit` (`solver/Solver.h`), and a result says how many it averaged over and
+whether the cap dropped any. Against the dealer there is no cap, because the dealer works out
+the chamber from every shell it has seen.
 
 **The default opponent.** Unless `--opponent dealer` is given, the other seat is not the
 game's dealer. It minimises the advised seat's survival probability (`engine/Config.h`,

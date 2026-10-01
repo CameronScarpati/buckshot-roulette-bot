@@ -35,7 +35,9 @@ struct SolveOptions {
   /// over. Each one splits the position in two, and no seat can realistically
   /// look at more than a few, so the guard rail is low. Past it the extra
   /// shells are treated as seen by nobody, which is what this solver did with
-  /// all of them before.
+  /// all of them before. Under `OpponentModel::Dealer` it does not apply: the
+  /// dealer works out the chamber from every shell it has seen
+  /// (DealerIntelligence.gd 282-303), so all of them are averaged over.
   int opponentKnowledgeLimit = 4;
 
   /// Guard rail. The search counts the positions it has not met before, and
