@@ -188,25 +188,56 @@ session "the saw coin aims at p1" "$DEALER" \
   "set p1=2/2 p2=2/2[saw,cig] tube=2L2B turn=p2\nuse saw\nstate\nshot p1 blank\nstate\n" \
   "p1=2/2 p2=2/2[cig] tube=2L2B turn=p2 sawed dealer=aim:p1" \
   "p1=2/2 p2=2/2[cig] tube=2L1B turn=p1"
+# The dealer saws only a chamber it knows is live (DealerIntelligence.gd 181),
+# so its saw after its own glass shows p1 the chamber too.
 session "a saw on a live chamber the dealer saw keeps what it saw" "$DEALER" \
   "set p1=2/2 p2=2/2[mg,saw] tube=2L2B turn=p2\nmg live\nuse saw\nstate\n" \
-  "p1=2/2 p2=2/2 tube=2L2B turn=p2 sawed known=p2:0L dealer=seen"
+  "p1=2/2 p2=2/2 tube=2L2B turn=p2 sawed known=p1:0L known=p2:0L dealer=seen"
+session "a saw after an unseen glass leaves p1 nothing" "$DEALER" \
+  "set p1=2/2 p2=2/2[mg,saw] tube=2L2B turn=p2\nmg unseen\nuse saw\nadvise\n" \
+  "~Your chance of being the last player standing: 0.0000"
+session "a saw after an unseen glass at one charge leaves p1 nothing" "$DEALER" \
+  "set p1=1/2 p2=2/2[mg,saw] tube=1L2B turn=p2\nmg unseen\nuse saw\nadvise\n" \
+  "~Your chance of being the last player standing: 0.0000"
+session "the dealer never saws a chamber it believes blank" "$STORY" \
+  "set p1=2/2 p2=2/2[mg,beer,saw] tube=2L2B turn=p2\nmg blank\neject blank\nuse saw\nstate\n" \
+  "The dealer saws only a chamber it takes to be live, and it takes this one to be blank." \
+  "p1=2/2 p2=2/2[saw] tube=2L1B turn=p2 dealer=believes:B"
 session "medicine is remembered for the rest of the turn" "$DEALER" \
   "set p1=4/4 p2=2/4[med] tube=2L2B turn=p2\nuse med ok\nstate\n" \
   "p1=4/4 p2=4/4 tube=2L2B turn=p2 dealer=med"
+# The dealer's Inverter writes a live shell into a chamber it knows is blank
+# (DealerIntelligence.gd 195-201), and p1 sees it used, so every seat knows
+# the chamber is live and the counts move by one blank to live.
 session "the dealer's Inverter turns a blank it saw live" "$DEALER" \
   "set p1=2/2 p2=2/2[mg,inv] tube=2L2B turn=p2\nmg blank\nuse inv\nstate\nshot p1 live\nstate\n" \
-  "p1=2/2 p2=2/2 tube=3L1B turn=p2 known=p2:0L dealer=seen" \
+  "p1=2/2 p2=2/2 tube=3L1B turn=p2 known=p1:0L known=p2:0L dealer=seen" \
   "p1=1/2 p2=2/2 tube=2L1B turn=p1"
-# p1 was shown neither what the glass saw nor what the flip made of it
-# (ItemInteraction.gd 165-171), so it holds 2L2B with the chamber flipped.
-session "the dealer's Inverter shows p1 nothing" "$DEALER" \
-  "set p1=2/2 p2=2/2[mg,inv] tube=2L2B turn=p2\nmg blank\nuse inv\nadvise\n" \
-  "~Your chance of being the last player standing: 0.4444"
-# Flipping it back leaves p1 the 2L2B it was loaded with.
-session "p1 flips back what the dealer's Inverter flipped" "$DEALER" \
+session "the dealer's Inverter shows p1 a live chamber" "$DEALER" \
+  "set p1=2/2 p2=2/2[mg,inv] tube=2L2B turn=p2\nmg unseen\nuse inv\nadvise\n" \
+  "~Your chance of being the last player standing: 0.3333"
+session "the dealer's Inverter after a glass p1 did not see" "$DEALER" \
+  "set p1=2/2 p2=2/2[mg,inv] tube=1L2B turn=p2\nmg unseen\nuse inv\nstate\nadvise\n" \
+  "p1=2/2 p2=2/2 tube=2L1B turn=p2 known=p1:0L known=p2:0L dealer=seen" \
+  "~Your chance of being the last player standing: 0.2500"
+# The counts alone tell p1 the chamber is blank, so the Inverter changes
+# nothing p1 could not foresee.
+session "a dealer Inverter the counts foretold keeps the value" "$DEALER" \
+  "set p1=2/2 p2=2/2[inv] tube=0L3B turn=p2\nadvise\nuse inv\nstate\nadvise\n" \
+  "p1=2/2 p2=2/2 tube=1L2B turn=p2 known=p1:0L known=p2:0L dealer=seen" \
+  "~Your chance of being the last player standing: 0.3333"
+session "p1 flips the live chamber the dealer's Inverter wrote" "$DEALER" \
   "set p1=2/2[inv] p2=2/2[mg,inv] tube=2L2B turn=p2\nmg blank\nuse inv\nturn p1\nuse inv\nstate\n" \
-  "p1=2/2 p2=2/2 tube=2L2B turn=p1"
+  "p1=2/2 p2=2/2 tube=2L2B turn=p1 known=p1:0B known=p2:0B"
+# The story rules keep a blank the dealer saw before its Beer, so it can
+# invert a chamber it never looked at; a live one stays live.
+session "the dealer's Inverter keeps a live chamber it believed blank" "$STORY" \
+  "set p1=2/2 p2=2/2[mg,beer,inv] tube=2L2B turn=p2 known=p1:1L\nmg blank\neject blank\nuse inv\nstate\n" \
+  "p1=2/2 p2=2/2 tube=2L1B turn=p2 known=p1:0L known=p2:0L dealer=seen"
+session "an Inverter on a chamber nobody saw is refused" "$STORY" \
+  "set p1=2/2 p2=2/2[mg,beer,inv] tube=2L2B turn=p2\nmg blank\neject blank\nuse inv\nstate\n" \
+  "~The advisor cannot follow that." \
+  "p1=2/2 p2=2/2[inv] tube=2L1B turn=p2 dealer=believes:B"
 session "the dealer's pass writes the stale list" "$DEALER" \
   "set p1=2/3[cig] p2=2/3[adr,mg] tube=2L2B turn=p2\nmg unseen\nstate\nuse adr p1 cig\nstate\n" \
   "p1=2/3[cig] p2=2/3[adr] tube=2L2B turn=p2 known=p2:0L listcigs dealer=seen" \

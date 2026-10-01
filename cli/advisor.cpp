@@ -297,6 +297,46 @@ bool fitChamber(Session* session, Shell fired) {
   return false;
 }
 
+/// Show every seat a chamber that the dealer's script says is `type`. A type
+/// only other seats saw gives way to it where the counts allow, and a flip the
+/// advised seat did not see is first undone for it, as it now sees the chamber
+/// itself. Returns false, changing nothing, with the reason in `why` when the
+/// record rules it out.
+bool showChamber(Session* session, Shell type, std::string* why) {
+  const Snapshot point = snapshot(*session);
+  session->state.tube.unflipFor(session->options.seat);
+  const Tube& fitted = session->state.tube;
+  if (fitted.truth[0] != Shell::Unknown && fitted.truth[0] != type &&
+      typeUnseenByAdvised(*session, 0) && !repin(session, 0, type)) {
+    restore(session, point);
+    *why = contradictionMessage(type);
+    return false;
+  }
+  if (fitted.truth[0] == Shell::Unknown) {
+    makeRoomFor(session, fitted.chamberInverted ? opposite(type) : type, 0);
+  }
+  if (!chamberCanFire(session->state.tube, type, why)) {
+    restore(session, point);
+    return false;
+  }
+  Tube& tube = session->state.tube;
+  if (tube.truth[0] == Shell::Unknown) {
+    tube.resolveChamberDraw(tube.chamberInverted ? opposite(type) : type, allSeats(session->state));
+  } else {
+    tube.resolve(0, type, allSeats(session->state));
+  }
+  // Every seat has now seen the chamber, so nobody holds the counts from
+  // before a flip.
+  tube.pinnedFlip = false;
+  if (!tubeStillFits(tube)) {
+    restore(session, point);
+    *why = contradictionMessage(type);
+    return false;
+  }
+  session->narration.unseen = static_cast<std::uint8_t>(session->narration.unseen & ~1u);
+  return true;
+}
+
 /// An inversion is about to flip a chamber whose type only other seats saw.
 /// Flipping the type on record would move the public counts by whichever type
 /// was recorded, which the advised seat cannot know, so the chamber goes back
@@ -800,12 +840,77 @@ bool recordPhone(Session* session, const Action& action, const std::string& form
   return true;
 }
 
-/// The dealer's Inverter, against its script. The script turns only a chamber
-/// it knows is blank, and then knows it is live (DealerIntelligence.gd
-/// 195-201), so the chamber is recorded as a blank the dealer saw, turned
-/// live. A chamber nobody recorded gets a blank pinned as a stand-in, as the
-/// dealer's glass does, and a stand-in typed live gives way to a blank where
-/// the counts allow.
+/// Whether p2 is to move and plays the game's dealer script.
+bool scriptedDealerToMove(const Session& session) {
+  return session.scriptedDealer && session.state.playerCount == 2 &&
+         session.state.current == kDealerSeat;
+}
+
+/// Take the one branch an item use has once its outcome is settled, keeping
+/// `point` as the place `undo` returns to.
+bool settleItem(Session* session, const Snapshot& point, const Action& action) {
+  const GameState before = session->state;
+  std::vector<Outcome> outcomes = rules::apply(before, action, session->config);
+  if (outcomes.empty()) {
+    restore(session, point);
+    sayNotAvailable();
+    return false;
+  }
+  const Outcome* chosen = &outcomes.front();
+  for (const Outcome& outcome : outcomes) {
+    if (outcome.probability > chosen->probability) chosen = &outcome;
+  }
+  session->history.push_back(point);
+  session->state = chosen->state;
+  finishEvent(session, point.state, before, action, Shell::Unknown);
+  return true;
+}
+
+/// The dealer's saw, its own or stolen, against its script. A dealer that
+/// knows the chamber saws only a live one (DealerIntelligence.gd 181), and the
+/// saw coin needs a chamber it does not take to be blank (203-215), so a saw
+/// from a dealer that saw the chamber, or holds the last shell, shows every
+/// seat a live chamber. The endless rules also count a chamber the dealer saw
+/// before its turn (96-104, 282-283). A dealer that only believes a blank
+/// never saws, and any other saw is the coin's, which says nothing about the
+/// chamber.
+bool recordDealerSaw(Session* session, const Action& action) {
+  const Tube& tube = session->state.tube;
+  const dealer::Memory& memory = session->narration.dealerMemory;
+  dealer::Brain brain = dealer::Brain::Endless;
+  dealer::brainFor(session->config, &brain);
+  const bool sawChamber =
+      tube.knows(kDealerSeat, 0) && (memory.knows || brain == dealer::Brain::Endless);
+  const bool lastShell = tube.size() == 1;
+  if (!memory.knows && !sawChamber && !lastShell) {
+    return applyWithOutcome(session, action, false, Shell::Unknown);
+  }
+  if (!isLegal(*session, action)) {
+    sayNotAvailable();
+    return false;
+  }
+  if (memory.knows && !sawChamber && !lastShell) {
+    std::cout << "The dealer saws only a chamber it takes to be live, and it takes this one to "
+                 "be blank.\n";
+    return false;
+  }
+  const Snapshot point = snapshot(*session);
+  std::string why;
+  if (!showChamber(session, Shell::Live, &why)) {
+    std::cout << "The dealer saws only a chamber it knows is live. " << why;
+    return false;
+  }
+  return settleItem(session, point, action);
+}
+
+/// The dealer's Inverter, against its script. The script uses it only on a
+/// chamber it takes to be blank, and then writes the chamber live rather than
+/// flipping it (DealerIntelligence.gd 195-201), so every seat sees a live
+/// chamber afterwards. Where the dealer knows the chamber, it was blank and
+/// the counts move by one blank to live: the endless rules never keep a stale
+/// shell (96-104, 170-176), and the last shell is always known (106-112).
+/// Where it only believes a blank, the counts move only if the chamber was
+/// blank, which the record settles only when the advised seat has seen it.
 bool recordDealerInversion(Session* session, const Action& action) {
   if (!isLegal(*session, action)) {
     sayNotAvailable();
@@ -815,30 +920,35 @@ bool recordDealerInversion(Session* session, const Action& action) {
     std::cout << "The tube is empty.\n";
     return false;
   }
-  if (session->state.tube.truth[0] == Shell::Unknown && session->state.tube.chamberInverted) {
-    return applyWithOutcome(session, action, false, Shell::Unknown);
-  }
   const Snapshot point = snapshot(*session);
-  constexpr std::uint8_t dealerBit = 1u << kDealerSeat;
-  if (session->state.tube.truth[0] == Shell::Unknown) {
-    makeRoomFor(session, Shell::Blank, 0);
-    const Shell standIn = session->state.tube.unresolvedBlank() > 0 ? Shell::Blank : Shell::Live;
-    session->state.tube.resolve(0, standIn, dealerBit);
-    session->narration.unseen = static_cast<std::uint8_t>(session->narration.unseen | 1u);
-  } else {
-    if (session->state.tube.truth[0] == Shell::Live && typeUnseenByAdvised(*session, 0)) {
-      repin(session, 0, Shell::Blank);
+  const Tube& tube = session->state.tube;
+  dealer::Brain brain = dealer::Brain::Endless;
+  dealer::brainFor(session->config, &brain);
+  const bool knowsChamber = brain == dealer::Brain::Endless || tube.size() == 1 ||
+                            (session->narration.dealerMemory.knows && tube.knows(kDealerSeat, 0));
+  if (knowsChamber) {
+    std::string why;
+    if (!showChamber(session, Shell::Blank, &why)) {
+      std::cout << "The dealer inverts only a chamber it knows is blank. " << why;
+      return false;
     }
-    session->state.tube.knownBy[0] =
-        static_cast<std::uint8_t>(session->state.tube.knownBy[0] | dealerBit);
-  }
-  if (!tubeStillFits(session->state.tube)) {
-    restore(session, point);
-    std::cout << contradictionMessage(Shell::Blank);
+  } else if (!tube.knows(session->options.seat, 0)) {
+    std::cout << "The dealer has not looked at this chamber in its turn, so whether its Inverter "
+                 "turned a blank live, and so moved the counts, rests on a shell nobody saw. The "
+                 "advisor cannot follow that.\n";
     return false;
   }
   const GameState before = session->state;
-  session->state.tube.invertChamber();
+  Tube& written = session->state.tube;
+  if (written.truth[0] == Shell::Blank) {
+    ++written.live;
+    --written.blank;
+  }
+  written.truth[0] = Shell::Live;
+  written.knownBy[0] = allSeats(session->state);
+  written.chamberInverted = false;
+  written.pinnedFlip = false;
+  session->narration.unseen = static_cast<std::uint8_t>(session->narration.unseen & ~1u);
   pay(&session->state, action);
   session->history.push_back(point);
   finishEvent(session, point.state, before, action, Shell::Unknown);
@@ -886,11 +996,11 @@ bool runItem(Session* session, Action action, const std::string& form,
       }
       return applyMedicine(session, action, outcome == "ok");
     }
+    case Item::HandSaw:
+      if (scriptedDealerToMove(*session)) return recordDealerSaw(session, action);
+      break;
     case Item::Inverter:
-      if (session->scriptedDealer && session->state.playerCount == 2 &&
-          session->state.current == kDealerSeat) {
-        return recordDealerInversion(session, action);
-      }
+      if (scriptedDealerToMove(*session)) return recordDealerInversion(session, action);
       break;
     default:
       break;

@@ -1135,6 +1135,141 @@ TEST(DealerAdvisor, TheDealersTurnMemoryFollowsTheNarration) {
       << shot.output;
 }
 
+TEST(DealerAdvisor, TheDealersSawAfterItsGlassShowsP1ALiveChamber) {
+  // A dealer that saw the chamber saws only a live one (DealerIntelligence.gd
+  // 181 and 203-215), so p1 learns the chamber from the saw. On two charges,
+  // or on one, the sawed live takes everything p1 has: 0, whatever the glass
+  // showed and however many reloads the search looks through.
+  for (const std::string tube : {"1L2B", "2L2B"}) {
+    for (const std::string reloads : {"0", "2"}) {
+      const AdvisorRun run = advisor("--reloads " + reloads + " --opponent dealer",
+                                     "set p1=2/2 p2=2/2[mg,saw] tube=" + tube +
+                                         " turn=p2\nmg unseen\nuse saw\nstate\nadvise\n");
+      ASSERT_EQ(run.code, 0);
+      EXPECT_NE(run.output.find("p1=2/2 p2=2/2 tube=" + tube +
+                                " turn=p2 sawed known=p1:0L known=p2:0L dealer=seen\n"),
+                std::string::npos)
+          << run.output;
+      EXPECT_EQ(chanceAfter(run.output, 0), "0.0000") << tube << " at " << reloads << "\n"
+                                                      << run.output;
+    }
+  }
+  const AdvisorRun one = advisor("--reloads 0 --opponent dealer",
+                                 "set p1=1/2 p2=2/2[mg,saw] tube=1L2B turn=p2\n"
+                                 "mg unseen\nuse saw\nadvise\n");
+  EXPECT_EQ(chanceAfter(one.output, 0), "0.0000") << one.output;
+
+  // A blank p1 knows is in the chamber rules that saw out.
+  const AdvisorRun blank =
+      advisor("--reloads 0 --opponent dealer",
+              "set p1=2/2 p2=2/2[saw] tube=1L2B turn=p2 known=p1:0B known=p2:0B dealer=seen\n"
+              "use saw\nstate\n");
+  EXPECT_NE(blank.output.find("The dealer saws only a chamber it knows is live. That contradicts "
+                              "the chamber, which is already recorded as blank.\n"),
+            std::string::npos)
+      << blank.output;
+  EXPECT_NE(blank.output.find(
+                "p1=2/2 p2=2/2[saw] tube=1L2B turn=p2 known=p1:0B known=p2:0B dealer=seen\n"),
+            std::string::npos)
+      << blank.output;
+
+  // A story dealer that only believes a blank never saws.
+  const AdvisorRun believes = advisor("--reloads 0 --opponent dealer --mode story2",
+                                      "set p1=2/2 p2=2/2[mg,beer,saw] tube=2L2B turn=p2\n"
+                                      "mg blank\neject blank\nuse saw\nstate\n");
+  EXPECT_NE(believes.output.find("The dealer saws only a chamber it takes to be live, and it "
+                                 "takes this one to be blank.\n"),
+            std::string::npos)
+      << believes.output;
+  EXPECT_NE(believes.output.find("p1=2/2 p2=2/2[saw] tube=2L1B turn=p2 dealer=believes:B\n"),
+            std::string::npos)
+      << believes.output;
+
+  // A dealer that has not seen the chamber saws only on the coin, which says
+  // nothing about it, so a blank p1 knows of stands.
+  const AdvisorRun coin = advisor("--reloads 0 --opponent dealer",
+                                  "set p1=2/2 p2=2/2[saw] tube=1L2B turn=p2 known=p1:0B\n"
+                                  "use saw\nstate\n");
+  EXPECT_NE(coin.output.find("p1=2/2 p2=2/2 tube=1L2B turn=p2 sawed known=p1:0B dealer=aim:p1\n"),
+            std::string::npos)
+      << coin.output;
+}
+
+TEST(DealerAdvisor, TheDealersInverterWritesALiveChamberEverySeatSees) {
+  // The script inverts only a chamber it knows is blank and writes a live
+  // shell into it (DealerIntelligence.gd 195-201), and p1 sees the Inverter
+  // used, so the blank it was moves to the live count.
+  //
+  // 1L2B after a glass p1 did not see becomes 2L1B with the chamber live. The
+  // dealer shoots p1 down to one, and on 1L1B either of p1's shots is worth
+  // 1/2 * 1/2: 1/4.
+  const AdvisorRun small = advisor("--reloads 0 --opponent dealer",
+                                   "set p1=2/2 p2=2/2[mg,inv] tube=1L2B turn=p2\n"
+                                   "mg unseen\nuse inv\nstate\nadvise\n");
+  EXPECT_NE(small.output.find("p1=2/2 p2=2/2 tube=2L1B turn=p2 known=p1:0L known=p2:0L "
+                              "dealer=seen\n"),
+            std::string::npos)
+      << small.output;
+  EXPECT_EQ(chanceAfter(small.output, 0), "0.2500") << small.output;
+
+  // 2L2B becomes 3L1B. After the live shot p1 is on one with 2L1B. Shooting
+  // the dealer: live (2/3) leaves 1L1B to a fair endless coin, worth 1/2;
+  // blank (1/3) leaves two lives the dealer works out, 0. So 1/3, above
+  // shooting itself, which can only lose.
+  const AdvisorRun even = advisor("--reloads 0 --opponent dealer",
+                                  "set p1=2/2 p2=2/2[mg,inv] tube=2L2B turn=p2\n"
+                                  "mg unseen\nuse inv\nadvise\n");
+  EXPECT_EQ(chanceAfter(even.output, 0), "0.3333") << even.output;
+
+  // 0L3B: the counts already tell p1 the chamber is blank, so the dealer's
+  // Inverter is no news and the value stays where it was. The live shot puts
+  // p1 on one, the two blanks run the tube out, and the charges score 1 of 3.
+  const AdvisorRun foretold = advisor("--reloads 0 --opponent dealer",
+                                      "set p1=2/2 p2=2/2[inv] tube=0L3B turn=p2\n"
+                                      "advise\nuse inv\nadvise\n");
+  const std::size_t used = foretold.output.find("tube: 1 live, 2 blank");
+  ASSERT_NE(used, std::string::npos) << foretold.output;
+  EXPECT_EQ(chanceAfter(foretold.output, 0), "0.3333") << foretold.output;
+  EXPECT_EQ(chanceAfter(foretold.output, used), "0.3333") << foretold.output;
+  EXPECT_NE(foretold.output.find("p1  2/2 charges  knows: shell 1 is live", used),
+            std::string::npos)
+      << foretold.output;
+  EXPECT_EQ(foretold.output.find("unseen by you"), std::string::npos) << foretold.output;
+}
+
+TEST(DealerAdvisor, TheStoryDealersInverterOnABeliefStillWritesALiveChamber) {
+  // The story rules keep a blank the dealer saw before its Beer
+  // (DealerIntelligence.gd 170-176), so it can invert a chamber it never
+  // looked at. The script writes the chamber live all the same: a live one p1
+  // knows of stays live with the counts as they were, and a blank one turns
+  // live and moves them.
+  const AdvisorRun live = advisor("--reloads 0 --opponent dealer --mode story2",
+                                  "set p1=2/2 p2=2/2[mg,beer,inv] tube=2L2B turn=p2 known=p1:1L\n"
+                                  "mg blank\neject blank\nuse inv\nstate\n");
+  EXPECT_NE(live.output.find("p1=2/2 p2=2/2 tube=2L1B turn=p2 known=p1:0L known=p2:0L "
+                             "dealer=seen\n"),
+            std::string::npos)
+      << live.output;
+  const AdvisorRun blank = advisor("--reloads 0 --opponent dealer --mode story2",
+                                   "set p1=2/2 p2=2/2[mg,beer,inv] tube=2L3B turn=p2 known=p1:1B\n"
+                                   "mg blank\neject blank\nuse inv\nstate\n");
+  EXPECT_NE(blank.output.find("p1=2/2 p2=2/2 tube=3L1B turn=p2 known=p1:0L known=p2:0L "
+                              "dealer=seen\n"),
+            std::string::npos)
+      << blank.output;
+
+  // When nobody saw the chamber, whether the counts moved rests on a shell
+  // nobody saw, which the record cannot hold.
+  const AdvisorRun unseen = advisor("--reloads 0 --opponent dealer --mode story2",
+                                    "set p1=2/2 p2=2/2[mg,beer,inv] tube=2L2B turn=p2\n"
+                                    "mg blank\neject blank\nuse inv\nstate\n");
+  EXPECT_NE(unseen.output.find("The advisor cannot follow that.\n"), std::string::npos)
+      << unseen.output;
+  EXPECT_NE(unseen.output.find("p1=2/2 p2=2/2[inv] tube=2L1B turn=p2 dealer=believes:B\n"),
+            std::string::npos)
+      << unseen.output;
+}
+
 #endif
 
 }  // namespace
