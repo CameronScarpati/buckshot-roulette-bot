@@ -80,9 +80,12 @@ bool hasHiddenShell(const GameState& state, int seat) {
 }
 
 /// The position as `seat` sees it: every shell it has not observed goes back
-/// into the unresolved pool, where it is exchangeable again.
+/// into the unresolved pool, where it is exchangeable again, and a chamber
+/// flipped after somebody else pinned it down is a pending flip of a draw from
+/// the counts before it, since the flip showed this seat nothing.
 GameState blindedTo(const GameState& state, int seat) {
   GameState blind = state;
+  blind.tube.unflipFor(seat);
   const int shells = std::min<int>(blind.tube.size(), kMaxShells);
   for (int i = 0; i < shells; ++i) {
     if (blind.tube.knows(seat, i)) continue;

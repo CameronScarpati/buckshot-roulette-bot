@@ -305,8 +305,16 @@ bool fitChamber(Session* session, Shell fired) {
 /// says. Returns whether anything was unpinned.
 bool unpinBeforeInversion(Session* session) {
   if (session->state.tube.empty() || !typeUnseenByAdvised(*session, 0)) return false;
-  session->state.tube.truth[0] = Shell::Unknown;
-  session->state.tube.knownBy[0] = 0;
+  Tube& tube = session->state.tube;
+  if (tube.pinnedFlip) {
+    // The chamber was already flipped after another seat pinned it down, so
+    // the counts go back to the ones the advised seat holds, with that flip
+    // pending.
+    tube.unflipFor(session->options.seat);
+  } else {
+    tube.truth[0] = Shell::Unknown;
+    tube.knownBy[0] = 0;
+  }
   session->narration.unseen = static_cast<std::uint8_t>(session->narration.unseen & ~1u);
   return true;
 }

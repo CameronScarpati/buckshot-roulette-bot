@@ -198,6 +198,15 @@ session "the dealer's Inverter turns a blank it saw live" "$DEALER" \
   "set p1=2/2 p2=2/2[mg,inv] tube=2L2B turn=p2\nmg blank\nuse inv\nstate\nshot p1 live\nstate\n" \
   "p1=2/2 p2=2/2 tube=3L1B turn=p2 known=p2:0L dealer=seen" \
   "p1=1/2 p2=2/2 tube=2L1B turn=p1"
+# p1 was shown neither what the glass saw nor what the flip made of it
+# (ItemInteraction.gd 165-171), so it holds 2L2B with the chamber flipped.
+session "the dealer's Inverter shows p1 nothing" "$DEALER" \
+  "set p1=2/2 p2=2/2[mg,inv] tube=2L2B turn=p2\nmg blank\nuse inv\nadvise\n" \
+  "~Your chance of being the last player standing: 0.4444"
+# Flipping it back leaves p1 the 2L2B it was loaded with.
+session "p1 flips back what the dealer's Inverter flipped" "$DEALER" \
+  "set p1=2/2[inv] p2=2/2[mg,inv] tube=2L2B turn=p2\nmg blank\nuse inv\nturn p1\nuse inv\nstate\n" \
+  "p1=2/2 p2=2/2 tube=2L2B turn=p1"
 session "the dealer's pass writes the stale list" "$DEALER" \
   "set p1=2/3[cig] p2=2/3[adr,mg] tube=2L2B turn=p2\nmg unseen\nstate\nuse adr p1 cig\nstate\n" \
   "p1=2/3[cig] p2=2/3[adr] tube=2L2B turn=p2 known=p2:0L listcigs dealer=seen" \

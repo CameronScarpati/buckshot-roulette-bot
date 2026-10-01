@@ -123,6 +123,32 @@ TEST(OpponentKnowledge, KnowledgeIsWorthSomethingToTheSeatThatHasIt) {
   }
 }
 
+TEST(OpponentKnowledge, InvertingAShellTheOtherSeatSawTellsTheInverterNothing) {
+  // 2L2B, both seats on their last charge, p1 to move with an Inverter, and p2
+  // has looked at the chamber. The Inverter shows nobody the type
+  // (ItemInteraction.gd 165-171), so p1 has to choose as though the counts had
+  // not moved, whichever type p2 saw.
+  //   Shoot p2: live half the time and p1 wins. Blank, and p2 moves in 2L1B,
+  //   where shooting p1 leaves p1 a third. 1/2 + 1/2 * 1/3 = 2/3.
+  //   Shoot self: blank half the time, and p1 goes on in 2L1B with the
+  //   Inverter, which is worth 2/3. 1/2 * 2/3 = 1/3.
+  //   Use the Inverter: the chamber is still live half the time for p1, and
+  //   shooting p2 after it is the same 2/3, since a flipped live leaves 1L2B
+  //   for p2, which is worth a third to p1 again.
+  // Reading the moved counts instead would have put the Inverter at 3/4.
+  for (const std::string& seen : {std::string("0L"), std::string("0B")}) {
+    const std::string position = "p1=1/1[inv] p2=1/1 tube=2L2B turn=p1 known=p2:" + seen;
+    const SolveResult result = solve(parse(position), RuleConfig::doubleOrNothing(1), advising());
+    EXPECT_NEAR(result.value, 2.0 / 3.0, 1e-12) << position;
+    ASSERT_EQ(result.ranked.size(), 3u) << position;
+    for (const ActionValue& row : result.ranked) {
+      const std::string text = row.action.describe(result.mover);
+      const double expected = text == "shoot self" ? 1.0 / 3.0 : 2.0 / 3.0;
+      EXPECT_NEAR(row.value, expected, 1e-12) << position << ": " << text;
+    }
+  }
+}
+
 TEST(OpponentKnowledge, TheReportedValueIsTheMoveTheAdvisedSeatWouldPlay) {
   // The rows already account for an opponent that has looked, so the value the
   // answer prints has to be the top row and not a number arrived at another

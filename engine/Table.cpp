@@ -966,6 +966,7 @@ Position Table::view(int seat) const {
     tube.live = static_cast<std::uint8_t>(tube.live - netFlip_);
     tube.blank = static_cast<std::uint8_t>(tube.blank + netFlip_);
     tube.chamberInverted = true;
+    tube.pinnedFlip = false;
   }
   for (int offset = 0; offset < kMaxShells; ++offset) {
     if (offset >= size || !state_.tube.knows(seat, offset)) {

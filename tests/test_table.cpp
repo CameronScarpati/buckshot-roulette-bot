@@ -271,6 +271,15 @@ TEST(Table, AnInverterOnAnUnseenChamberLeavesTheCountsAsLoaded) {
   EXPECT_EQ(seen.state.tube.blank, 2);
   EXPECT_TRUE(seen.state.tube.chamberInverted);
   EXPECT_EQ(seen.state.tube.truth[0], Shell::Unknown);
+  EXPECT_FALSE(seen.state.tube.pinnedFlip);
+  // The table's own record says the counts moved with the flip, and p1 is
+  // handed back the same counts from it as the view gives.
+  EXPECT_TRUE(table.state().tube.pinnedFlip);
+  Tube held = table.state().tube;
+  held.unflipFor(0);
+  EXPECT_EQ(held.live, 1);
+  EXPECT_EQ(held.blank, 2);
+  EXPECT_TRUE(held.chamberInverted);
 }
 
 TEST(Table, CallsOutOfTurnAreRefused) {

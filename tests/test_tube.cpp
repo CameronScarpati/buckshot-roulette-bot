@@ -117,6 +117,91 @@ TEST(Tube, ResolvingAnInvertedChamberComplementsTheDrawAndTheCounts) {
   EXPECT_EQ(tube.unresolvedBlank(), 3);
 }
 
+TEST(Tube, InvertingAShellOnlyAnotherSeatSawShowsNothingThroughTheCounts) {
+  // Seat 1 has seen the chamber and seat 0 has not. An Inverter shows nobody
+  // the type (ItemInteraction.gd 165-171), so the counts seat 0 holds cannot
+  // depend on which type seat 1 saw: in both tubes below seat 0 holds 1L2B
+  // with the chamber flipped, a draw that fires live two times in three.
+  Tube wasLive = makeTube(1, 2);
+  wasLive.resolve(0, Shell::Live, kSeat1);
+  wasLive.invertChamber();
+  EXPECT_EQ(wasLive.truth[0], Shell::Blank);
+  EXPECT_EQ(wasLive.live, 0);
+  EXPECT_EQ(wasLive.blank, 3);
+  EXPECT_TRUE(wasLive.pinnedFlip);
+
+  Tube wasBlank = makeTube(1, 2);
+  wasBlank.resolve(0, Shell::Blank, kSeat1);
+  wasBlank.invertChamber();
+  EXPECT_EQ(wasBlank.truth[0], Shell::Live);
+  EXPECT_EQ(wasBlank.live, 2);
+  EXPECT_EQ(wasBlank.blank, 1);
+  EXPECT_TRUE(wasBlank.pinnedFlip);
+
+  for (const Tube& tube : {wasLive, wasBlank}) {
+    EXPECT_DOUBLE_EQ(tube.liveProbability(0, 0), 2.0 / 3.0);
+    EXPECT_DOUBLE_EQ(tube.liveProbability(0, 1), 1.0 / 3.0);
+    Tube held = tube;
+    held.unflipFor(0);
+    EXPECT_EQ(held.live, 1);
+    EXPECT_EQ(held.blank, 2);
+    EXPECT_EQ(held.truth[0], Shell::Unknown);
+    EXPECT_EQ(held.knownBy[0], 0);
+    EXPECT_TRUE(held.chamberInverted);
+    EXPECT_FALSE(held.pinnedFlip);
+  }
+
+  // Seat 1 saw the chamber before the flip, so it can name it after.
+  EXPECT_DOUBLE_EQ(wasLive.liveProbability(1, 0), 0.0);
+  EXPECT_DOUBLE_EQ(wasBlank.liveProbability(1, 0), 1.0);
+  Tube seen = wasLive;
+  seen.unflipFor(1);
+  EXPECT_EQ(seen, wasLive);
+}
+
+TEST(Tube, APinnedFlipEndsWithTheChamberOrASecondFlip) {
+  Tube twice = makeTube(1, 2);
+  twice.resolve(0, Shell::Live, kSeat1);
+  twice.invertChamber();
+  twice.invertChamber();
+  EXPECT_EQ(twice.truth[0], Shell::Live);
+  EXPECT_EQ(twice.live, 1);
+  EXPECT_EQ(twice.blank, 2);
+  EXPECT_FALSE(twice.pinnedFlip);
+
+  Tube fired = makeTube(1, 2);
+  fired.resolve(0, Shell::Live, kSeat1);
+  fired.invertChamber();
+  fired.popChamber();
+  EXPECT_FALSE(fired.pinnedFlip);
+  EXPECT_EQ(fired.live, 0);
+  EXPECT_EQ(fired.blank, 2);
+}
+
+TEST(Tube, APrivateLookAtAnInvertedChamberHidesTheDrawFromTheOthers) {
+  // Seat 0 flips an unseen chamber in 1L3B and then looks at it. The draw was
+  // live, so it shows blank and the counts become 0L4B, but seat 1 saw only the
+  // flip: it still holds 1L3B with the chamber flipped, live three times in
+  // four.
+  Tube tube = makeTube(1, 3);
+  tube.invertChamber();
+  const Shell shown = tube.resolveChamberDraw(Shell::Live, kSeat0);
+  EXPECT_EQ(shown, Shell::Blank);
+  EXPECT_EQ(tube.live, 0);
+  EXPECT_EQ(tube.blank, 4);
+  EXPECT_TRUE(tube.pinnedFlip);
+  EXPECT_DOUBLE_EQ(tube.liveProbability(0, 0), 0.0);
+  EXPECT_DOUBLE_EQ(tube.liveProbability(1, 0), 0.75);
+  EXPECT_DOUBLE_EQ(tube.liveProbability(1, 1), 0.25);
+
+  Tube held = tube;
+  held.unflipFor(1);
+  EXPECT_EQ(held.live, 1);
+  EXPECT_EQ(held.blank, 3);
+  EXPECT_TRUE(held.chamberInverted);
+  EXPECT_EQ(held.truth[0], Shell::Unknown);
+}
+
 TEST(Tube, ACountCanNeverBeDrivenBelowZeroByAnObservation) {
   // Recording what a shell did without asking whether the tube could supply it
   // wrapped a count past zero, leaving a tube of 255 shells and probabilities

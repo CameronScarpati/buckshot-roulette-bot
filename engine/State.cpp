@@ -192,7 +192,7 @@ std::size_t hash<bsr::GameState>::operator()(const bsr::GameState& state) const 
   mix(state.tube.live);
   mix(state.tube.blank);
   mix(state.tube.sawed ? 1u : 0u);
-  mix(state.tube.chamberInverted ? 1u : 0u);
+  mix((state.tube.chamberInverted ? 1u : 0u) + (state.tube.pinnedFlip ? 2u : 0u));
   for (int i = 0; i < bsr::kMaxShells; ++i) {
     mix(static_cast<std::size_t>(state.tube.truth[i]) * 31u + state.tube.knownBy[i]);
   }

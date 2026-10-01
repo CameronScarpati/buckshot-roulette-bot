@@ -21,6 +21,12 @@ std::uint8_t Tube::unresolvedBlank() const {
 double Tube::liveProbability(int player, int offset) const {
   if (offset >= size()) return 0.0;
   if (knows(player, offset)) return truth[offset] == Shell::Live ? 1.0 : 0.0;
+  if (pinnedFlip && truth[0] != Shell::Unknown && !knows(player, 0)) {
+    // The counts moved with a flip this player did not see.
+    Tube held = *this;
+    held.unflipFor(player);
+    return held.liveProbability(player, offset);
+  }
   if (offset == 0 && chamberInverted && truth[0] == Shell::Unknown) {
     // The shell is still an unresolved draw, but it fires as its opposite.
     Tube plain = *this;
@@ -67,6 +73,7 @@ Shell Tube::resolveChamberDraw(Shell drawn, std::uint8_t observerMask) {
       --blank;
     }
     chamberInverted = false;
+    pinnedFlip = true;
   }
   resolve(0, fires, observerMask);
   return fires;
@@ -75,6 +82,7 @@ Shell Tube::resolveChamberDraw(Shell drawn, std::uint8_t observerMask) {
 void Tube::popChamber() {
   const int n = size();
   chamberInverted = false;
+  pinnedFlip = false;
   if (truth[0] == Shell::Live) {
     if (live > 0) --live;
   } else if (truth[0] == Shell::Blank) {
@@ -97,20 +105,38 @@ void Tube::invertChamber() {
     truth[0] = Shell::Blank;
     --live;
     ++blank;
+    pinnedFlip = !pinnedFlip;
   } else if (truth[0] == Shell::Blank) {
     truth[0] = Shell::Live;
     ++live;
     --blank;
+    pinnedFlip = !pinnedFlip;
   } else {
     chamberInverted = !chamberInverted;
   }
   // knownBy is unchanged: whoever could see the type before the inversion can
-  // still name it afterwards, and whoever could not still cannot.
+  // still name it afterwards, and whoever could not still cannot. Nobody is
+  // shown the type (ItemInteraction.gd 165-171).
+}
+
+void Tube::unflipFor(int player) {
+  if (!pinnedFlip || empty() || truth[0] == Shell::Unknown || knows(player, 0)) return;
+  if (truth[0] == Shell::Live) {
+    --live;
+    ++blank;
+  } else {
+    ++live;
+    --blank;
+  }
+  truth[0] = Shell::Unknown;
+  knownBy[0] = 0;
+  chamberInverted = true;
+  pinnedFlip = false;
 }
 
 bool Tube::operator==(const Tube& other) const {
   if (live != other.live || blank != other.blank || sawed != other.sawed ||
-      chamberInverted != other.chamberInverted) {
+      chamberInverted != other.chamberInverted || pinnedFlip != other.pinnedFlip) {
     return false;
   }
   for (int i = 0; i < kMaxShells; ++i) {
