@@ -194,8 +194,9 @@ void printWrapped(const std::string& lead, const std::string& text) {
 }
 
 /// Print one event for `audience`. The first line of a move starts the line
-/// and what follows it is indented; a load is all on the left. The end of the
-/// round is printed by the caller, after the final board.
+/// and what follows it is indented; a load is all on the left. A shell worked
+/// out as a move began comes before that move and starts the line as well.
+/// The end of the round is printed by the caller, after the final board.
 void printEvent(const Event& event, Audience audience) {
   const bool spectator = audience == Audience::Spectator;
   std::vector<std::string> lines;
@@ -209,7 +210,7 @@ void printEvent(const Event& event, Audience audience) {
       return;
     case Event::Kind::Learned:
       if (!spectator && event.privateTo != -1 && event.privateTo != kPlayerSeat) return;
-      for (const std::string& line : lines) printWrapped("  ", line);
+      for (const std::string& line : lines) printWrapped(event.deduced ? "" : "  ", line);
       return;
     case Event::Kind::Load:
       std::cout << "\n";

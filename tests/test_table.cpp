@@ -210,6 +210,156 @@ TEST(Table, TheDealerPhoneBecomesAReadNobodySaw) {
   EXPECT_TRUE(table.state().tube.knows(1, learned[0]->offset));
 }
 
+TEST(Table, TheDealerWorksOutTheChamberBeforeItsBeerRacksItOut) {
+  // The dealer heard that shell 2 is live, so the counts leave a blank in the
+  // chamber. It works that out as its pass begins (DealerIntelligence.gd
+  // 96-104), before its item rules drink the Beer (170-175), so the log names
+  // the chamber before the Beer racks it out.
+  Table table = fromText("p1=2/2 p2=2/2[beer] tube=1L1B known=p2:1L turn=p2", doubleOrNothing(1));
+  table.dealerPass();
+  const std::vector<Event>& log = table.log();
+  ASSERT_EQ(log.size(), 3u);
+  EXPECT_EQ(log[0].kind, Event::Kind::Learned);
+  EXPECT_TRUE(log[0].deduced);
+  EXPECT_EQ(log[0].seat, 1);
+  EXPECT_EQ(log[0].privateTo, 1);
+  EXPECT_EQ(log[0].offset, 0);
+  EXPECT_EQ(log[0].shell, Shell::Blank);
+  EXPECT_EQ(log[0].text,
+            "Shells only the dealer has heard on a Burner Phone, with the counts, show the "
+            "chamber is blank.");
+  EXPECT_EQ(log[1].kind, Event::Kind::Item);
+  EXPECT_EQ(log[1].item, Item::Beer);
+  EXPECT_EQ(log[1].text, "The dealer uses its Beer.\nThe shell it racked out was blank.");
+  EXPECT_EQ(log[2].kind, Event::Kind::Rule);
+  EXPECT_EQ(table.state().tube.size(), 1);
+  EXPECT_EQ(table.state().tube.truth[0], Shell::Live);
+}
+
+TEST(Table, TheDealerWorksOutABlankBeforeItsInverterMakesItLive) {
+  // The Inverter rule fires on a chamber the dealer knows is blank and writes
+  // it live (DealerIntelligence.gd 195-201): blank is logged before the use,
+  // live after it.
+  Table table = fromText("p1=2/2 p2=2/2[inv] tube=1L1B known=p2:1L turn=p2", doubleOrNothing(1));
+  table.dealerPass();
+  const std::vector<Event>& log = table.log();
+  ASSERT_EQ(log.size(), 4u);
+  EXPECT_EQ(log[0].kind, Event::Kind::Learned);
+  EXPECT_TRUE(log[0].deduced);
+  EXPECT_EQ(log[0].offset, 0);
+  EXPECT_EQ(log[0].shell, Shell::Blank);
+  EXPECT_EQ(log[1].kind, Event::Kind::Item);
+  EXPECT_EQ(log[1].item, Item::Inverter);
+  EXPECT_EQ(log[1].text, "The dealer uses its Inverter.\nIt flips the chamber.");
+  EXPECT_EQ(log[2].kind, Event::Kind::Learned);
+  EXPECT_FALSE(log[2].deduced);
+  EXPECT_EQ(log[2].privateTo, 1);
+  EXPECT_EQ(log[2].offset, 0);
+  EXPECT_EQ(log[2].shell, Shell::Live);
+  EXPECT_EQ(log[2].text, "Seen only by the dealer: the chamber was blank and is now live.");
+  EXPECT_EQ(log[3].kind, Event::Kind::Rule);
+  EXPECT_EQ(table.state().tube.truth[0], Shell::Live);
+  EXPECT_EQ(table.state().tube.live, 2);
+}
+
+TEST(Table, TheStoryDealerKnowsTheLastShellBeforeItsInverter) {
+  // Both rule sets know the last shell as the pass begins
+  // (DealerIntelligence.gd 106-112).
+  TableOptions options;
+  options.config = RuleConfig::storyRound(2);
+  options.seed = 1;
+  Table table = fromText("p1=2/4 p2=2/4[inv] tube=0L1B turn=p2", options);
+  table.dealerPass();
+  const std::vector<Event>& log = table.log();
+  ASSERT_EQ(log.size(), 4u);
+  EXPECT_EQ(log[0].kind, Event::Kind::Learned);
+  EXPECT_TRUE(log[0].deduced);
+  EXPECT_EQ(log[0].offset, 0);
+  EXPECT_EQ(log[0].shell, Shell::Blank);
+  EXPECT_EQ(log[0].text, "One shell is left, so the dealer knows the chamber is blank.");
+  EXPECT_EQ(log[1].kind, Event::Kind::Item);
+  EXPECT_EQ(log[1].item, Item::Inverter);
+  EXPECT_EQ(log[2].kind, Event::Kind::Learned);
+  EXPECT_EQ(log[2].shell, Shell::Live);
+  EXPECT_EQ(log[2].text, "Seen only by the dealer: the chamber was blank and is now live.");
+  EXPECT_EQ(log[3].kind, Event::Kind::Rule);
+  EXPECT_EQ(table.state().tube.truth[0], Shell::Live);
+}
+
+/// Play rounds of `options` from seeds 1 to `seeds`, with items before shots,
+/// and check that every shell learned at the chamber names the shell the
+/// chamber held at its place in the log. Returns how many were worked out
+/// before an item use.
+int checkChamberShells(TableOptions options, std::uint32_t seeds) {
+  int worked = 0;
+  for (std::uint32_t seed = 1; seed <= seeds; ++seed) {
+    options.seed = seed;
+    Table table(options);
+    for (int guard = 0; guard < 400 && table.next() != Step::Over; ++guard) {
+      const std::size_t from = table.log().size();
+      switch (table.next()) {
+        case Step::Load:
+          table.load();
+          break;
+        case Step::Dealer:
+          table.dealerPass();
+          break;
+        case Step::Choose: {
+          const std::vector<Action> actions = table.legal();
+          table.play(
+              actions[actions.size() - 1 - static_cast<std::size_t>(guard) % 2 % actions.size()]);
+          break;
+        }
+        case Step::Over:
+          break;
+      }
+      const std::vector<Event>& log = table.log();
+      std::size_t firstItem = log.size();
+      std::string text;
+      for (std::size_t i = from; i < log.size(); ++i) {
+        if (log[i].kind == Event::Kind::Item && firstItem == log.size()) firstItem = i;
+        text += log[i].text + "\n";
+      }
+      for (std::size_t i = from; i < log.size(); ++i) {
+        const Event& event = log[i];
+        if (event.kind != Event::Kind::Learned || event.offset != 0) continue;
+        if (i > firstItem) {
+          EXPECT_FALSE(event.deduced) << "seed " << seed << " step " << guard;
+          EXPECT_EQ(event.shell, table.state().tube.truth[0])
+              << "seed " << seed << " step " << guard;
+          continue;
+        }
+        // Worked out before the item it led to, about the chamber the pass
+        // began with: the shell a Beer racked out, the blank an Inverter made
+        // live, or else the chamber still there.
+        EXPECT_TRUE(event.deduced) << "seed " << seed << " step " << guard;
+        if (i + 1 != firstItem) {
+          ADD_FAILURE() << "no item use follows, seed " << seed << " step " << guard;
+          continue;
+        }
+        const Event& use = log[firstItem];
+        const Item used = use.steal ? use.stolen : use.item;
+        Shell began = table.state().tube.truth[0];
+        if (used == Item::Beer) {
+          began =
+              text.find("racked out was LIVE") != std::string::npos ? Shell::Live : Shell::Blank;
+        }
+        if (used == Item::Inverter) began = Shell::Blank;
+        EXPECT_EQ(event.shell, began) << "seed " << seed << " step " << guard;
+        ++worked;
+      }
+    }
+  }
+  return worked;
+}
+
+TEST(Table, AShellLearnedAtTheChamberNamesTheChamberWhereItIsLogged) {
+  EXPECT_GT(checkChamberShells(doubleOrNothing(0), 60), 0);
+  TableOptions story;
+  story.config = RuleConfig::storyRound(3);
+  EXPECT_GT(checkChamberShells(story, 30), 0);
+}
+
 TEST(Table, AnyAdrenalineInTheTrayMayBeTheOneSpent) {
   TableOptions options = doubleOrNothing(1);
   options.scriptedDealer = false;

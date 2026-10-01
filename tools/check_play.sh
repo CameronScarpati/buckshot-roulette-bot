@@ -59,6 +59,33 @@ if ! diff -q "$work/w1" "$work/w2" > /dev/null; then
 fi
 echo "ok   the same seed replays the same rounds against the dealer, byte for byte"
 
+# What the dealer works out about the chamber as its pass begins comes before
+# the item it then uses (DealerIntelligence.gd 96-112, then 151-201). A watched
+# round prints it at the start of a line, straight before that item, so that
+# it reads as the start of the pass and not as the end of the one before.
+for seed in $(seq 1 20); do
+  "$PLAY" --watch --seed "$seed" --reloads 0 >> "$work/watched"
+done
+worked='(One shell is left, so the dealer|Every shell left is [a-z]+, so the dealer|Both seats can tell|The dealer heard this shell|Shells only the dealer has heard)'
+if ! awk -v worked="$worked" '
+  $0 ~ ("^ +" worked) { print "indented: " $0; bad = 1 }
+  waiting && /^  / { next }
+  waiting {
+    if ($0 !~ /^The dealer uses/) { print "followed by: " $0; bad = 1 }
+    waiting = 0
+  }
+  $0 ~ ("^" worked) { waiting = 1; seen++ }
+  END {
+    if (seen == 0) { print "no watched round has the dealer work out a chamber"; bad = 1 }
+    exit bad
+  }
+' "$work/watched" >&2; then
+  echo "a chamber the dealer worked out is not printed before the item it led to" >&2
+  exit 1
+fi
+count=$(grep -cE "^$worked" "$work/watched")
+echo "ok   $count chambers the dealer worked out, each printed before the item it led to"
+
 # Against the dealer in double or nothing a load is drawn the way the game's
 # script draws one, with the live count half the total, so live shells never
 # outnumber blanks. Every load of the watched round is checked, and the first

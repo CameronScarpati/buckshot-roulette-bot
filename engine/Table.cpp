@@ -790,12 +790,13 @@ void Table::dealerPass() {
     }
     const ItemText text = describeItem(before, after, action, pass.shellType, thiefSlot, victimSlot,
                                        phoneAt, knewPhone);
-    for (const Event& event : text.items) log_.push_back(event);
 
     // Whether the pass started by working out the chamber, which the endless
-    // rules do whenever they can and both rule sets do with one shell left.
-    // An item rule then acted, and what the dealer worked out is what the
-    // chamber held when the pass began.
+    // rules do whenever they can and both rule sets do with one shell left
+    // (DealerIntelligence.gd 96-112). That comes before the item rules run
+    // (151-201), so it is logged before the item, about the chamber as the
+    // pass began: the shell a Beer then racks out, or the blank an Inverter
+    // then makes live.
     const bool deduced =
         !memory.knows && pass.reason == dealer::Reason::Item &&
         ((brain_ == dealer::Brain::Endless && canTellChamber(before.tube, kDealer)) ||
@@ -808,11 +809,13 @@ void Table::dealerPass() {
       learned.kind = Event::Kind::Learned;
       learned.seat = kDealer;
       learned.offset = 0;
+      learned.deduced = true;
       learned.shell = chamber;
       learned.privateTo = kDealer;
       learned.text = capitalised(chamberKnowledge(before.tube, chamber, "the dealer")) + ".";
       log_.push_back(learned);
     }
+    for (const Event& event : text.items) log_.push_back(event);
     for (const Event& event : text.learned) log_.push_back(event);
 
     const auto aim = [this](const std::string& when, bool fromChamber) {

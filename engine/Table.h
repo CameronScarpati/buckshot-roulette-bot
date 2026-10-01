@@ -49,6 +49,10 @@ struct Event {
   int damage = 0;
   /// On a learned shell, its offset in the current tube, 0 for the chamber.
   int offset = -1;
+  /// On a learned shell, whether the seat worked it out from what it had
+  /// seen and the counts as its move began, rather than an item showing it.
+  /// Such a shell is logged before the move.
+  bool deduced = false;
   int live = 0;
   int blank = 0;
   /// On a load, how many items each seat was offered.
