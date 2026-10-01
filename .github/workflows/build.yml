@@ -77,6 +77,9 @@ jobs:
         run: ./build/play --dealer 20 --seed 1 --reloads 0 --mode story2
       - name: The same seed replays the same round, the batch holds its band, and dealer loads match the script
         run: ./tools/check_play.sh build
+      # Narrated sessions held to the exact position each one must leave.
+      - name: Advisor sessions print the positions they narrate
+        run: ./tools/check_advisor_session.sh build
 
   format:
     # The committed clang-format config, checked against every file, so that it

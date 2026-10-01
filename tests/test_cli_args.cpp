@@ -13,6 +13,7 @@
 namespace bsr {
 namespace {
 
+using cli::parseCopySelector;
 using cli::parseSeatToken;
 using cli::parseWholeNumber;
 
@@ -72,6 +73,35 @@ TEST(Args, TheSeatToMoveCanBeNamedWithoutItsNumber) {
   EXPECT_TRUE(parseSeatToken("me", 3, 0, &seat));
   EXPECT_EQ(seat, 0);
   EXPECT_FALSE(parseSeatToken("myself", 3, 0, &seat));
+}
+
+TEST(Args, ANodeLimitReachesTenBillionOnEveryPlatform) {
+  // A long is 32 bits on some platforms, so the node limit reads a long long.
+  long long value = -1;
+  EXPECT_TRUE(parseWholeNumber("10000000000", 1LL, 10000000000LL, &value));
+  EXPECT_EQ(value, 10000000000LL);
+  EXPECT_TRUE(parseWholeNumber("1", 1LL, 10000000000LL, &value));
+  EXPECT_EQ(value, 1LL);
+  EXPECT_FALSE(parseWholeNumber("10000000001", 1LL, 10000000000LL, &value));
+  EXPECT_FALSE(parseWholeNumber("0", 1LL, 10000000000LL, &value));
+  EXPECT_FALSE(parseWholeNumber("4e9", 1LL, 10000000000LL, &value));
+  EXPECT_FALSE(parseWholeNumber("99999999999999999999999", 1LL, 10000000000LL, &value));
+}
+
+TEST(Args, ACopyIsNamedFromOneToEight) {
+  int ordinal = -1;
+  EXPECT_TRUE(parseCopySelector("#1", &ordinal));
+  EXPECT_EQ(ordinal, 0) << "copies are typed from one and stored from zero";
+  EXPECT_TRUE(parseCopySelector("#8", &ordinal));
+  EXPECT_EQ(ordinal, 7);
+
+  EXPECT_FALSE(parseCopySelector("#0", &ordinal));
+  EXPECT_FALSE(parseCopySelector("#9", &ordinal)) << "a hand holds at most 8 items";
+  EXPECT_FALSE(parseCopySelector("#", &ordinal));
+  EXPECT_FALSE(parseCopySelector("2", &ordinal));
+  EXPECT_FALSE(parseCopySelector("#2x", &ordinal));
+  EXPECT_FALSE(parseCopySelector("#-1", &ordinal));
+  EXPECT_FALSE(parseCopySelector("##2", &ordinal));
 }
 
 }  // namespace

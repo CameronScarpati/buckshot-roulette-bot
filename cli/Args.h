@@ -27,6 +27,33 @@ inline bool parseWholeNumber(const std::string& text, long low, long high, long*
   return true;
 }
 
+/// The same for a range wider than a `long` holds on every platform.
+inline bool parseWholeNumber(const std::string& text, long long low, long long high,
+                             long long* out) {
+  if (text.empty() || text.size() > 18) return false;
+  for (char c : text) {
+    if (!std::isdigit(static_cast<unsigned char>(c))) return false;
+  }
+  errno = 0;
+  char* end = nullptr;
+  const long long value = std::strtoll(text.c_str(), &end, 10);
+  if (errno != 0 || end == text.c_str() || *end != '\0') return false;
+  if (value < low || value > high) return false;
+  *out = value;
+  return true;
+}
+
+/// A word that names one copy of an item, as `#2` names the second copy of its
+/// type counting from the front of the hand. Returns the copy counted from
+/// zero. A hand holds at most 8 items, so a copy past the eighth is refused.
+inline bool parseCopySelector(const std::string& text, int* ordinal) {
+  if (text.size() < 2 || text[0] != '#') return false;
+  long value = 0;
+  if (!parseWholeNumber(text.substr(1), 1, 8, &value)) return false;
+  *ordinal = static_cast<int>(value) - 1;
+  return true;
+}
+
 /// The value that follows a flag. Fails when the flag is last on the line or is
 /// followed by another flag, rather than quietly swallowing it. A minus sign
 /// followed by a digit is a value, so that a negative number reaches the range
@@ -68,6 +95,19 @@ inline bool parseSeatToken(const std::string& text, int playerCount, int current
 /// A flag whose value is a whole number in a stated range.
 inline bool nextNumber(int argc, char** argv, int* index, const std::string& flag, long low,
                        long high, long* out) {
+  std::string text;
+  if (!nextValue(argc, argv, index, flag, &text)) return false;
+  if (!parseWholeNumber(text, low, high, out)) {
+    std::cerr << flag << " takes a number between " << low << " and " << high << ", not " << text
+              << "\n";
+    return false;
+  }
+  return true;
+}
+
+/// The same for a range wider than a `long` holds on every platform.
+inline bool nextNumber(int argc, char** argv, int* index, const std::string& flag, long long low,
+                       long long high, long long* out) {
   std::string text;
   if (!nextValue(argc, argv, index, flag, &text)) return false;
   if (!parseWholeNumber(text, low, high, out)) {

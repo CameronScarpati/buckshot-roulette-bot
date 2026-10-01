@@ -119,6 +119,13 @@ std::vector<Branch> step(const GameState& state, const Memory& memory, const Rul
 /// branch as `GameState::dealerListCigs`.
 bool listCigsAfterPass(const GameState& before, const GameState& after);
 
+/// Whether the endless rules let the dealer work out the chamber at the start of
+/// a pass (`FigureOutShell`, DealerIntelligence.gd 282-303): it has seen the
+/// chamber, the tube holds only one type, or the shells it has seen account for
+/// every live or every blank one. Only shells pinned with the dealer's bit count
+/// as seen.
+bool deduces(const GameState& state);
+
 /// The checks on a dealer memory that hold whatever the rules: a memory other
 /// than the fresh one needs a two-seat table, shells in the tube, the dealer to
 /// move and not cuffed; a chamber the memory says was seen must be one the

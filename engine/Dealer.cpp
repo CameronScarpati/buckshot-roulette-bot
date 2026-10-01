@@ -84,23 +84,6 @@ std::vector<std::pair<double, int>> coin(const Tube& tube, Brain brain) {
   return {{0.5, 0}, {0.5, 1}};
 }
 
-/// `FigureOutShell` (DealerIntelligence.gd lines 282-303): the dealer knows the
-/// chamber when it has seen it, when the tube holds only one type, or when the
-/// shells it has seen account for every live or every blank one.
-bool deduces(const GameState& state) {
-  const Tube& tube = state.tube;
-  if (tube.knows(kDealer, 0)) return true;
-  if (tube.live == 0 || tube.blank == 0) return true;
-  int live = tube.live;
-  int blank = tube.blank;
-  for (int i = 0; i < tube.size(); ++i) {
-    if (!tube.knows(kDealer, i)) continue;
-    if (tube.truth[i] == Shell::Live) --live;
-    if (tube.truth[i] == Shell::Blank) --blank;
-  }
-  return live == 0 || blank == 0;
-}
-
 /// Whether the player could be handcuffed now. The script checks only that the
 /// player is not already cuffed, and it counts a player still serving a skip as
 /// cuffed (RoundManager.gd lines 309-323).
@@ -305,6 +288,20 @@ std::vector<Partial> learnFromChamber(const Partial& pass, Reason reason) {
 }
 
 }  // namespace
+
+bool deduces(const GameState& state) {
+  const Tube& tube = state.tube;
+  if (tube.knows(kDealer, 0)) return true;
+  if (tube.live == 0 || tube.blank == 0) return true;
+  int live = tube.live;
+  int blank = tube.blank;
+  for (int i = 0; i < tube.size(); ++i) {
+    if (!tube.knows(kDealer, i)) continue;
+    if (tube.truth[i] == Shell::Live) --live;
+    if (tube.truth[i] == Shell::Blank) --blank;
+  }
+  return live == 0 || blank == 0;
+}
 
 bool brainFor(const RuleConfig& config, Brain* brain) {
   switch (config.mode) {

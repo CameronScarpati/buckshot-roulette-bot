@@ -1016,14 +1016,21 @@ TEST(DealerAdvisor, AnUnseenTypeNeverMovesTheCounts) {
   EXPECT_NE(inverted.output.find("p1=1/4 p2=3/4 tube=2L1B turn=p1\n"), std::string::npos)
       << inverted.output;
 
-  // A phone's shell pinned to the only live shell has to give way when that
-  // live shell turns up in the chamber first.
+  // Another seat's phone read pins no shell, since nobody else ever learns
+  // which one it named, so the only live shell can still turn up in the
+  // chamber and the read stays on record until the next load.
   const AdvisorRun phoned = advisor("--reloads 0",
                                     "set p1=2/4 p2=3/4[phone] tube=1L2B turn=p2\n"
-                                    "phone 3 unseen\nshot p1 live\nstate\n");
-  EXPECT_NE(phoned.output.find("p1=1/4 p2=3/4 tube=0L2B turn=p1 known=p2:1B\n"), std::string::npos)
+                                    "phone unseen\nshot p1 live\nstate\n");
+  EXPECT_NE(phoned.output.find("p1=1/4 p2=3/4 tube=0L2B turn=p1 phoned=p2@3\n"), std::string::npos)
       << phoned.output;
   EXPECT_EQ(phoned.output.find("contradicts"), std::string::npos) << phoned.output;
+  const AdvisorRun named =
+      advisor("--reloads 0", "set p1=2/4 p2=3/4[phone] tube=1L2B turn=p2\nphone 3 unseen\n");
+  EXPECT_NE(named.output.find("the game never shows which shell another seat's phone named; type "
+                              "phone unseen\n"),
+            std::string::npos)
+      << named.output;
 
   // A type the advised seat saw itself still stands.
   const AdvisorRun seen = advisor("",
@@ -1066,10 +1073,66 @@ TEST(DealerAdvisor, HelpNamesEveryModeAndEveryFlag) {
   EXPECT_EQ(run.code, 0);
   EXPECT_NE(run.output.find("[--mode don|story1|story2|story3|mp]"), std::string::npos)
       << run.output;
-  for (const std::string flag : {"--seat", "--reloads", "--opponent", "--position", "--json"}) {
+  for (const std::string flag :
+       {"--seat", "--reloads", "--opponent", "--position", "--json", "--node-limit"}) {
     EXPECT_NE(run.output.find(flag + " "), std::string::npos) << flag;
   }
   EXPECT_NE(run.output.find("mg live|blank|unseen"), std::string::npos) << run.output;
+  for (const std::string token : {"phone unseen", "listcigs", "phoned=", "dealer=", "#k"}) {
+    EXPECT_NE(run.output.find(token), std::string::npos) << token;
+  }
+}
+
+TEST(DealerAdvisor, ANodeLimitStopsTheSearchAndSaysSo) {
+  const std::string position =
+      "--position 'p1=1/1[mg,beer] p2=1/1[beer] tube=2L2B turn=p1' --reloads 0";
+  const AdvisorRun json = advisor(position + " --node-limit 1 --json");
+  ASSERT_EQ(json.code, 0) << json.errors;
+  EXPECT_NE(json.output.find("\"truncated\": true, \"budgetReached\": false, "
+                             "\"nodeLimitHit\": true}"),
+            std::string::npos)
+      << json.output;
+  const AdvisorRun whole = advisor(position + " --json");
+  EXPECT_NE(whole.output.find("\"nodeLimitHit\": false}"), std::string::npos) << whole.output;
+  const AdvisorRun text = advisor(position + " --node-limit 1");
+  EXPECT_NE(text.output.find("stopped at the node limit; values may be wrong"), std::string::npos)
+      << text.output;
+  for (const std::string bad : {"0", "10000000001", "lots"}) {
+    EXPECT_EQ(advisor(position + " --node-limit " + bad).code, 2) << bad;
+  }
+}
+
+TEST(DealerAdvisor, TheDealersTurnMemoryFollowsTheNarration) {
+  // Double or nothing: a glass that showed a blank, then a Beer on it, leaves
+  // the endless dealer aiming at itself without knowing the next shell.
+  const AdvisorRun endless = advisor("--reloads 0 --opponent dealer",
+                                     "set p1=2/2 p2=2/2[mg,beer] tube=2L2B turn=p2\n"
+                                     "mg blank\nstate\neject blank\nstate\nadvise\n");
+  EXPECT_NE(endless.output.find("p1=2/2 p2=2/2[beer] tube=2L2B turn=p2 known=p2:0B dealer=seen\n"),
+            std::string::npos)
+      << endless.output;
+  EXPECT_NE(endless.output.find("p1=2/2 p2=2/2 tube=2L1B turn=p2 dealer=aim:self\n"),
+            std::string::npos)
+      << endless.output;
+  EXPECT_NE(endless.output.find("part-way through its turn"), std::string::npos) << endless.output;
+
+  // Story rules keep the belief instead.
+  const AdvisorRun story = advisor("--reloads 0 --opponent dealer --mode story2",
+                                   "set p1=2/2 p2=2/2[mg,beer] tube=2L2B turn=p2\n"
+                                   "mg blank\neject blank\nstate\n");
+  EXPECT_NE(story.output.find("p1=2/2 p2=2/2 tube=2L1B turn=p2 dealer=believes:B\n"),
+            std::string::npos)
+      << story.output;
+
+  // Any shot ends the turn and the memory with it.
+  const AdvisorRun shot = advisor("--reloads 0 --opponent dealer",
+                                  "set p1=2/2 p2=2/2[saw] tube=2L2B turn=p2\n"
+                                  "use saw\nstate\nshot p1 blank\nstate\n");
+  EXPECT_NE(shot.output.find("p1=2/2 p2=2/2 tube=2L2B turn=p2 sawed dealer=aim:p1\n"),
+            std::string::npos)
+      << shot.output;
+  EXPECT_NE(shot.output.find("p1=2/2 p2=2/2 tube=2L1B turn=p1\n"), std::string::npos)
+      << shot.output;
 }
 
 #endif

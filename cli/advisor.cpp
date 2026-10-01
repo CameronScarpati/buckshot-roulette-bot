@@ -23,6 +23,7 @@
 
 #include "cli/Args.h"
 #include "cli/RuleFlags.h"
+#include "engine/Dealer.h"
 #include "engine/Notation.h"
 #include "engine/Rules.h"
 #include "solver/Solver.h"
@@ -45,6 +46,14 @@ struct Narration {
   /// allow, which changes nothing for the advised seat, and the board prints
   /// it without that type.
   std::uint8_t unseen = 0;
+  /// What the dealer has settled in the turn it is still taking: the shell it
+  /// saw, the seat it aims at, and whether it has taken Expired Medicine. It
+  /// is followed only against the dealer's script, and a fresh memory is the
+  /// one a turn starts with.
+  dealer::Memory dealerMemory{};
+  /// Burner Phone uses by other seats this load, whose reads the advised seat
+  /// never heard.
+  std::vector<UnseenRead> unseenReads;
 };
 
 /// A point `undo` returns to.
@@ -83,6 +92,25 @@ bool parseOpponent(const std::string& text, bool* scripted) {
     return true;
   }
   return false;
+}
+
+/// Put the preset for a mode's name in force. Returns false, changing nothing,
+/// for a name that is not a mode.
+bool applyMode(Session* session, const std::string& mode) {
+  if (mode == "don") {
+    session->config = RuleConfig::doubleOrNothing(session->state.players[0].maxHp);
+  } else if (mode.rfind("story", 0) == 0) {
+    long round = 2;
+    if (mode.size() > 5 && !cli::parseWholeNumber(mode.substr(5), 1, 3, &round)) return false;
+    session->config = RuleConfig::storyRound(static_cast<int>(round));
+  } else if (mode == "mp" || mode == "multiplayer") {
+    session->config =
+        RuleConfig::multiplayer(session->state.playerCount, session->state.players[0].maxHp);
+    session->options.opponent = OpponentModel::Paranoid;
+  } else {
+    return false;
+  }
+  return true;
 }
 
 /// Rebuild the settings on top of whatever preset is now in force.
@@ -173,6 +201,49 @@ void restore(Session* session, const Snapshot& point) {
   session->narration = point.narration;
 }
 
+/// The session as a whole position, as `set` reads one and `state` prints it.
+Position positionOf(const Session& session) {
+  Position position;
+  position.state = session.state;
+  position.dealerMemory = session.narration.dealerMemory;
+  position.unseenReads = session.narration.unseenReads;
+  return position;
+}
+
+/// The `dealer=` token for a memory in `state`, or nothing for a fresh memory.
+std::string memoryToken(const GameState& state, const dealer::Memory& memory) {
+  Position position;
+  position.state = state;
+  position.dealerMemory = memory;
+  const std::string whole = notation::printPosition(position);
+  const std::string bare = notation::print(state);
+  return whole.size() > bare.size() ? whole.substr(bare.size() + 1) : std::string();
+}
+
+/// The lines a board leaves out: the stale item list, the phone reads nobody
+/// heard and the dealer's memory part-way through its turn.
+std::string positionExtras(const Position& position) {
+  std::ostringstream out;
+  if (position.state.dealerListCigs) {
+    out << "  the dealer's item list from its last pass holds p1's Cigarettes\n";
+  }
+  for (int seat = 0; seat < position.state.playerCount; ++seat) {
+    std::vector<int> sizes;
+    for (const UnseenRead& read : position.unseenReads) {
+      if (read.seat == seat) sizes.push_back(read.sizeAtUse);
+    }
+    if (sizes.empty()) continue;
+    std::sort(sizes.begin(), sizes.end(), [](int a, int b) { return a > b; });
+    out << "  p" << (seat + 1) << " used a burner phone you did not hear, at tube size"
+        << (sizes.size() == 1 ? " " : "s ");
+    for (std::size_t i = 0; i < sizes.size(); ++i) out << (i > 0 ? ", " : "") << sizes[i];
+    out << "\n";
+  }
+  const std::string token = memoryToken(position.state, position.dealerMemory);
+  if (!token.empty()) out << "  the dealer is part-way through its turn: " << token << "\n";
+  return out.str();
+}
+
 /// Whether the shell at `offset` has a type on record that the advised seat
 /// has not seen. Another seat looked at it, and the type was either typed in
 /// by somebody guessing or recorded as unseen.
@@ -256,6 +327,139 @@ void afterEvent(Session* session, const GameState& before, bool itemUse) {
                         now.current == kDealerSeat && !now.roundOver() && !now.needsReload();
 }
 
+/// Whether a seat's phone reads that nobody heard include any by `seat`.
+bool hasUnseenReads(const Session& session, int seat) {
+  for (const UnseenRead& read : session.narration.unseenReads) {
+    if (read.seat == seat) return true;
+  }
+  return false;
+}
+
+/// The dealer's memory after one of its item uses, under the script's rules
+/// for what each item leaves behind (DealerIntelligence.gd 151-215). `before`
+/// is the position the item was used in, with any shell it showed already
+/// recorded, and `shell` the type a Beer ejected. A memory the rules say
+/// cannot arise from what was narrated gives way to a fresh one.
+dealer::Memory nextMemory(const Session& session, const GameState& passStart,
+                          const GameState& before, const Action& action, Shell shell,
+                          bool* readsNote) {
+  dealer::Brain brain = dealer::Brain::Endless;
+  if (action.kind != Action::Kind::UseItem || !dealer::brainFor(session.config, &brain)) {
+    return dealer::Memory{};
+  }
+  const GameState& now = session.state;
+  dealer::Memory memory = session.narration.dealerMemory;
+  const auto learn = [&memory](Shell type) {
+    memory.knows = true;
+    memory.known = type;
+    memory.target = type == Shell::Live ? dealer::Target::Player : dealer::Target::Self;
+  };
+  // A chamber the dealer saw is whatever the record now says it is, which can
+  // differ from a stand-in typed before the shell showed itself.
+  if (memory.knows && before.tube.knows(kDealerSeat, 0)) learn(before.tube.truth[0]);
+  const Item effect = action.isSteal() ? action.stolen : action.item;
+  switch (effect) {
+    case Item::MagnifyingGlass:
+      if (now.tube.knows(kDealerSeat, 0)) learn(now.tube.truth[0]);
+      break;
+    case Item::Beer:
+      if (memory.knows) {
+        // The endless rules forget the shell and keep the target; the story
+        // rules keep both (DealerIntelligence.gd 170-176).
+        if (brain == dealer::Brain::Endless) {
+          memory.knows = false;
+          memory.known = Shell::Unknown;
+        }
+      } else if (brain == dealer::Brain::Endless && memory.target == dealer::Target::None &&
+                 shell == Shell::Blank) {
+        if (hasUnseenReads(session, kDealerSeat)) {
+          *readsNote = true;
+        } else {
+          // Whether the dealer had worked the chamber out at the start of
+          // this pass, from what it had seen before the Beer showed the shell
+          // to everyone (DealerIntelligence.gd 96-104).
+          GameState probe = before;
+          probe.tube.knownBy[0] = passStart.tube.knownBy[0];
+          if (dealer::deduces(probe)) memory.target = dealer::Target::Self;
+        }
+      }
+      break;
+    case Item::HandSaw:
+      // A saw after a live chamber it saw keeps that; otherwise only the coin
+      // saws, which aims at p1 without knowing the chamber (DealerIntelligence.gd
+      // 181, 203-215).
+      if (!(memory.knows && memory.known == Shell::Live)) {
+        memory.knows = false;
+        memory.known = Shell::Unknown;
+        memory.target = dealer::Target::Player;
+      }
+      break;
+    case Item::Inverter:
+      if (now.tube.knows(kDealerSeat, 0)) learn(now.tube.truth[0]);
+      break;
+    case Item::ExpiredMedicine:
+      memory.usedMedicine = true;
+      break;
+    default:
+      break;
+  }
+  Position check;
+  check.state = now;
+  check.dealerMemory = memory;
+  std::string ignored;
+  if (dealer::validateMemory(check, brain, &ignored)) return memory;
+  dealer::Memory medicineOnly;
+  medicineOnly.usedMedicine = memory.usedMedicine;
+  check.dealerMemory = medicineOnly;
+  if (dealer::validateMemory(check, brain, &ignored)) return medicineOnly;
+  return dealer::Memory{};
+}
+
+/// Bring the narration up to date after an event that started from
+/// `passStart`: `before` is the same position with any shell the event showed
+/// already recorded, and `shell` the type that left the tube, if one did. A
+/// dealer pass also rewrites the stale item list (DealerIntelligence.gd
+/// 113-149), and against the script the session follows the dealer's memory
+/// until its turn ends.
+void finishEvent(Session* session, const GameState& passStart, const GameState& before,
+                 const Action& action, Shell shell) {
+  const bool dealerPass =
+      session->scriptedDealer && passStart.playerCount == 2 && passStart.current == kDealerSeat;
+  bool readsNote = false;
+  dealer::Memory memory{};
+  if (dealerPass) {
+    memory = nextMemory(*session, passStart, before, action, shell, &readsNote);
+    session->state.dealerListCigs = dealer::listCigsAfterPass(passStart, session->state);
+  }
+  afterEvent(session, before, action.kind == Action::Kind::UseItem);
+  const bool underWay = dealerPass && session->narration.dealerMidTurn;
+  session->narration.dealerMemory = underWay ? memory : dealer::Memory{};
+  if (underWay && readsNote) {
+    std::cout << "The dealer may have worked out that shell from its phone reads; its memory "
+                 "after the Beer is taken as fresh.\n";
+  }
+}
+
+/// Whether `action` is a move the seat to move can make.
+bool isLegal(const Session& session, const Action& action) {
+  for (const Action& candidate : rules::legalActions(session.state, session.config)) {
+    if (candidate == action) return true;
+  }
+  return false;
+}
+
+/// Take what an item use spends from the hands, for the uses whose effect is
+/// recorded here rather than by the rules: a steal spends the thief's first
+/// Adrenaline and the copy it took, any other use the copy it names.
+void pay(GameState* state, const Action& action) {
+  if (action.isSteal()) {
+    state->players[state->current].hand.removeCopy(Item::Adrenaline, 0);
+    state->players[action.stealFrom].hand.removeCopy(action.stolen, action.copy);
+  } else {
+    state->players[state->current].hand.removeCopy(action.item, action.copy);
+  }
+}
+
 /// The board, with the shells the advised seat never saw printed without the
 /// type they are pinned to.
 void printBoard(const Session& session) {
@@ -265,18 +469,14 @@ void printBoard(const Session& session) {
     if (!typeUnseenByAdvised(session, offset)) continue;
     untyped = static_cast<std::uint8_t>(untyped | (1u << offset));
   }
-  std::cout << notation::board(session.state, untyped);
+  std::cout << notation::board(session.state, untyped) << positionExtras(positionOf(session));
 }
 
 /// Apply an action whose chance outcome is already known, by taking the branch
 /// that matches what actually happened.
 bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Shell shell) {
   const Snapshot point = snapshot(*session);
-  bool legal = false;
-  for (const Action& candidate : rules::legalActions(session->state, session->config)) {
-    if (candidate == action) legal = true;
-  }
-  if (!legal) {
+  if (!isLegal(*session, action)) {
     std::cout << "That move is not available here: the seat to move either does not hold the "
                  "item or cannot use it in this position.\n";
     return false;
@@ -308,7 +508,7 @@ bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Sh
     }
   }
   const bool itemUse = action.kind == Action::Kind::UseItem;
-  const Item effect = action.item == Item::Adrenaline ? action.stolen : action.item;
+  const Item effect = action.isSteal() ? action.stolen : action.item;
   const bool unpinned = itemUse && effect == Item::Inverter && unpinBeforeInversion(session);
   const GameState before = session->state;
   std::vector<Outcome> outcomes = rules::apply(before, action, session->config);
@@ -325,18 +525,14 @@ bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Sh
   session->history.push_back(point);
   session->state = chosen->state;
   if (unpinned) sayUnpinned();
-  afterEvent(session, before, itemUse);
+  finishEvent(session, point.state, before, action, haveShell ? shell : Shell::Unknown);
   return true;
 }
 
 /// Expired medicine has two branches of equal weight, so the caller says which
 /// one happened and the matching branch is taken.
 bool applyMedicine(Session* session, const Action& action, bool healed) {
-  bool legal = false;
-  for (const Action& candidate : rules::legalActions(session->state, session->config)) {
-    if (candidate == action) legal = true;
-  }
-  if (!legal) {
+  if (!isLegal(*session, action)) {
     std::cout << "That move is not available here.\n";
     return false;
   }
@@ -347,11 +543,337 @@ bool applyMedicine(Session* session, const Action& action, bool healed) {
     if (wentUp != healed) continue;
     session->history.push_back(snapshot(*session));
     session->state = outcome.state;
-    afterEvent(session, before, true);
+    finishEvent(session, before, before, action, Shell::Unknown);
     return true;
   }
   std::cout << "That outcome is not possible here.\n";
   return false;
+}
+
+/// "The dealer's" or "p2's", for the seat to move.
+std::string whoseItem(const Session& session) {
+  const int seat = session.state.current;
+  if (session.scriptedDealer && seat == kDealerSeat) return "The dealer's";
+  return "p" + std::to_string(seat + 1) + "'s";
+}
+
+/// The command that records a seat's own use of `item`, for messages.
+std::string ownForm(Item item) {
+  switch (item) {
+    case Item::MagnifyingGlass:
+      return "mg";
+    case Item::BurnerPhone:
+      return "phone";
+    case Item::Beer:
+      return "eject";
+    default:
+      return std::string("use ") + itemToken(item);
+  }
+}
+
+/// Point `action` at the copy of `item` that `holder` gives up: the
+/// `ordinal`-th copy counted from the front of the hand. Copies in one run
+/// leave the same hand behind, so a move names the first copy of the run.
+/// When the hand has no such copy and none was named, the move is left as it
+/// is for the legality check to refuse.
+bool chooseCopy(const GameState& state, int holder, Item item, int ordinal, bool named,
+                Action* action) {
+  const Hand& hand = state.players[holder].hand;
+  int index = hand.indexOfCopy(item, ordinal);
+  if (index < 0) {
+    if (!named) return true;
+    std::cout << "p" << (holder + 1) << " holds no " << itemName(item) << " #" << (ordinal + 1)
+              << ".\n";
+    return false;
+  }
+  while (index > 0 && hand.at[static_cast<std::size_t>(index - 1)] == item) --index;
+  action->copy = static_cast<std::uint8_t>(hand.ordinalAt(index));
+  return true;
+}
+
+void sayNotAvailable() {
+  std::cout << "That move is not available here: the seat to move either does not hold the "
+               "item or cannot use it in this position.\n";
+}
+
+/// A Magnifying Glass, the seat's own or stolen. `rest` is what it showed:
+/// live, blank, or unseen when only the seat using it saw.
+bool recordGlass(Session* session, const Action& action, const std::string& form,
+                 const std::vector<std::string>& rest) {
+  const int seat = session->state.current;
+  const bool own = seat == session->options.seat;
+  const std::string word = rest.empty() ? std::string() : rest[0];
+  const bool unseen = word == "unseen";
+  Shell shell = Shell::Unknown;
+  if (!unseen && !parseShell(word, &shell)) {
+    if (word.empty() && !own) {
+      // Only the seat using it learns what it says, and the advised seat's
+      // answer is the same whatever that was.
+      std::cout << whoseItem(*session) << " glass is private: type " << form << " unseen (or "
+                << form << " live or " << form << " blank if you know; the answer is the same).\n";
+    } else {
+      std::cout << "Say what it showed, as in " << form << " live, or " << form
+                << " unseen when only the seat using it saw.\n";
+    }
+    return false;
+  }
+  if (session->state.tube.empty()) {
+    std::cout << "The tube is empty.\n";
+    return false;
+  }
+  if (unseen && own) {
+    std::cout << "You saw what your own glass showed, so say which, as in " << form << " live.\n";
+    return false;
+  }
+  if (!isLegal(*session, action)) {
+    sayNotAvailable();
+    return false;
+  }
+  const Snapshot point = snapshot(*session);
+  const Tube& chamber = session->state.tube;
+  if (!own && chamber.truth[0] == Shell::Unknown && chamber.chamberInverted) {
+    // Pinning a shell with an inversion pending moves the public counts by
+    // the type it is pinned to, which the advised seat did not see.
+    const GameState before = session->state;
+    session->history.push_back(point);
+    pay(&session->state, action);
+    finishEvent(session, point.state, before, action, Shell::Unknown);
+    std::cout << "The chamber was inverted before anyone saw it, so the glass is recorded as "
+                 "used and what it showed is left out: p"
+              << (seat + 1) << " is treated as not knowing the chamber.\n";
+    return true;
+  }
+  if (unseen) {
+    // Any type the tube can supply will do: the advised seat's answer
+    // averages over it either way.
+    const Tube& tube = session->state.tube;
+    shell = tube.truth[0] != Shell::Unknown ? tube.truth[0]
+            : tube.canFire(Shell::Live)     ? Shell::Live
+                                            : Shell::Blank;
+  } else if (!fitChamber(session, shell)) {
+    return false;
+  }
+  std::string why;
+  if (!chamberCanFire(session->state.tube, shell, &why)) {
+    restore(session, point);
+    std::cout << why;
+    return false;
+  }
+  GameState probe = session->state;
+  if (probe.tube.chamberInverted && probe.tube.truth[0] == Shell::Unknown) {
+    probe.tube.resolveChamberDraw(opposite(shell), static_cast<std::uint8_t>(1u << seat));
+  } else {
+    probe.tube.resolve(0, shell, static_cast<std::uint8_t>(1u << seat));
+  }
+  if (!tubeStillFits(probe.tube)) {
+    restore(session, point);
+    std::cout << contradictionMessage(shell);
+    return false;
+  }
+  const GameState before = session->state;
+  session->history.push_back(point);
+  session->state = probe;
+  pay(&session->state, action);
+  if (unseen) session->narration.unseen = static_cast<std::uint8_t>(session->narration.unseen | 1u);
+  finishEvent(session, point.state, before, action, Shell::Unknown);
+  return true;
+}
+
+/// A Burner Phone, the seat's own or stolen. The advised seat heard its own
+/// phone, so it says which shell and what it is; any other seat's read is
+/// recorded as unseen, because the game never shows it (BurnerPhone.gd 6,
+/// DealerIntelligence.gd 187-194).
+bool recordPhone(Session* session, const Action& action, const std::string& form,
+                 const std::vector<std::string>& rest) {
+  const int seat = session->state.current;
+  const bool own = seat == session->options.seat;
+  const int size = session->state.tube.size();
+  if (rest.size() == 1 && rest[0] == "unseen") {
+    // A phone with one shell left names nothing, so it needs no result.
+    if (own && size >= 2) {
+      std::cout << "You heard what your own phone said, so say which, as in " << form
+                << " 3 live.\n";
+      return false;
+    }
+    if (!isLegal(*session, action)) {
+      sayNotAvailable();
+      return false;
+    }
+    int reads = 0;
+    for (const UnseenRead& read : session->narration.unseenReads) {
+      if (read.seat == seat) ++reads;
+    }
+    if (size >= 2 && reads >= 8) {
+      std::cout << "a seat makes at most 8 phone reads in one load\n";
+      return false;
+    }
+    const Snapshot point = snapshot(*session);
+    session->history.push_back(point);
+    pay(&session->state, action);
+    if (size >= 2) {
+      UnseenRead read;
+      read.seat = static_cast<std::uint8_t>(seat);
+      read.sizeAtUse = static_cast<std::uint8_t>(size);
+      session->narration.unseenReads.push_back(read);
+    }
+    finishEvent(session, point.state, point.state, action, Shell::Unknown);
+    return true;
+  }
+  if (rest.empty() && !own) {
+    std::cout << whoseItem(*session) << " phone is private: type " << form << " unseen.\n";
+    return false;
+  }
+  long parsed = 0;
+  const bool number = rest.size() == 2 && cli::parseWholeNumber(rest[0], 0, 64, &parsed);
+  if (number && !own) {
+    std::cout << "the game never shows which shell another seat's phone named; type phone "
+                 "unseen\n";
+    return false;
+  }
+  if (number && rest[1] == "unseen") {
+    std::cout << "You heard what your own phone said, so say which, as in " << form << " 3 live.\n";
+    return false;
+  }
+  const int position = number ? static_cast<int>(parsed) : 0;
+  Shell shell = Shell::Unknown;
+  if (!number || position < 2 || position > size || !parseShell(rest[1], &shell)) {
+    std::cout << "Say which shell your phone named and what it is, as in " << form
+              << " 3 blank, or " << form
+              << " unseen for another seat's phone. A burner phone never names the chamber, so "
+                 "the number starts at 2.\n";
+    return false;
+  }
+  if (!isLegal(*session, action)) {
+    sayNotAvailable();
+    return false;
+  }
+  const int offset = position - 1;
+  const Snapshot point = snapshot(*session);
+  const Shell already = session->state.tube.truth[offset];
+  if (already == Shell::Unknown) {
+    makeRoomFor(session, shell, offset);
+  } else if (already != shell) {
+    if (!typeUnseenByAdvised(*session, offset)) {
+      std::cout << "Shell " << position << " is already recorded as "
+                << (already == Shell::Live ? "live" : "blank") << ".\n";
+      return false;
+    }
+    if (!repin(session, offset, shell)) {
+      std::cout << contradictionMessage(shell);
+      return false;
+    }
+  }
+  GameState probe = session->state;
+  probe.tube.resolve(offset, shell, static_cast<std::uint8_t>(1u << seat));
+  if (!tubeStillFits(probe.tube)) {
+    restore(session, point);
+    std::cout << contradictionMessage(shell);
+    return false;
+  }
+  const GameState before = session->state;
+  session->history.push_back(point);
+  session->state = probe;
+  pay(&session->state, action);
+  finishEvent(session, point.state, before, action, Shell::Unknown);
+  return true;
+}
+
+/// The dealer's Inverter, against its script. The script turns only a chamber
+/// it knows is blank, and then knows it is live (DealerIntelligence.gd
+/// 195-201), so the chamber is recorded as a blank the dealer saw, turned
+/// live. A chamber nobody recorded gets a blank pinned as a stand-in, as the
+/// dealer's glass does, and a stand-in typed live gives way to a blank where
+/// the counts allow.
+bool recordDealerInversion(Session* session, const Action& action) {
+  if (!isLegal(*session, action)) {
+    sayNotAvailable();
+    return false;
+  }
+  if (session->state.tube.empty()) {
+    std::cout << "The tube is empty.\n";
+    return false;
+  }
+  if (session->state.tube.truth[0] == Shell::Unknown && session->state.tube.chamberInverted) {
+    return applyWithOutcome(session, action, false, Shell::Unknown);
+  }
+  const Snapshot point = snapshot(*session);
+  constexpr std::uint8_t dealerBit = 1u << kDealerSeat;
+  if (session->state.tube.truth[0] == Shell::Unknown) {
+    makeRoomFor(session, Shell::Blank, 0);
+    const Shell standIn = session->state.tube.unresolvedBlank() > 0 ? Shell::Blank : Shell::Live;
+    session->state.tube.resolve(0, standIn, dealerBit);
+    session->narration.unseen = static_cast<std::uint8_t>(session->narration.unseen | 1u);
+  } else {
+    if (session->state.tube.truth[0] == Shell::Live && typeUnseenByAdvised(*session, 0)) {
+      repin(session, 0, Shell::Blank);
+    }
+    session->state.tube.knownBy[0] =
+        static_cast<std::uint8_t>(session->state.tube.knownBy[0] | dealerBit);
+  }
+  if (!tubeStillFits(session->state.tube)) {
+    restore(session, point);
+    std::cout << contradictionMessage(Shell::Blank);
+    return false;
+  }
+  const GameState before = session->state;
+  session->state.tube.invertChamber();
+  pay(&session->state, action);
+  session->history.push_back(point);
+  finishEvent(session, point.state, before, action, Shell::Unknown);
+  return true;
+}
+
+/// One item use, the seat's own or stolen, once the words naming the item and
+/// its copy are read. `form` is the command as typed up to the result, for
+/// messages, and `rest` is what follows it: a target, what a glass showed,
+/// what a phone named, what a Beer ejected or how medicine went.
+bool runItem(Session* session, Action action, const std::string& form,
+             const std::vector<std::string>& rest) {
+  const Item effect = action.isSteal() ? action.stolen : action.item;
+  if (itemNeedsTarget(effect)) {
+    int target = 0;
+    if (rest.empty() || !parseSeat(rest[0], session->state, &target)) {
+      std::cout << "That item needs a target, as in " << form << " p2.\n";
+      return false;
+    }
+    action.target = static_cast<std::uint8_t>(target);
+    return applyWithOutcome(session, action, false, Shell::Unknown);
+  }
+  // Items whose result is a matter of chance are recorded with the result
+  // named, so that the advisor tracks what actually happened rather than the
+  // likeliest branch.
+  switch (effect) {
+    case Item::MagnifyingGlass:
+      return recordGlass(session, action, form, rest);
+    case Item::BurnerPhone:
+      return recordPhone(session, action, form, rest);
+    case Item::Beer: {
+      Shell shell = Shell::Unknown;
+      if (rest.empty() || !parseShell(rest[0], &shell)) {
+        std::cout << "Say what was ejected, as in " << form << " blank.\n";
+        return false;
+      }
+      return applyWithOutcome(session, action, true, shell);
+    }
+    case Item::ExpiredMedicine: {
+      const std::string outcome = rest.empty() ? std::string() : rest[0];
+      if (outcome != "ok" && outcome != "bad") {
+        std::cout << "Expired medicine is a toss up, so say how it went: " << form << " ok, or "
+                  << form << " bad.\n";
+        return false;
+      }
+      return applyMedicine(session, action, outcome == "ok");
+    }
+    case Item::Inverter:
+      if (session->scriptedDealer && session->state.playerCount == 2 &&
+          session->state.current == kDealerSeat) {
+        return recordDealerInversion(session, action);
+      }
+      break;
+    default:
+      break;
+  }
+  return applyWithOutcome(session, action, false, Shell::Unknown);
 }
 
 /// Who acts first after a reload under `config`.
@@ -368,17 +890,18 @@ const char* reloadTurnText(const RuleConfig& config) {
 }
 
 /// Whether a position with the dealer to move carries something only its own
-/// turn could have left there: a sawed barrel, an inverted chamber or a cuff it
-/// put on p1. Every shot clears the first two, and p1 cannot cuff itself.
+/// turn could have left there: a sawed barrel or a cuff it put on p1. Every
+/// shot clears the saw, and p1 cannot cuff itself. An inverted chamber is not
+/// a sign, because p1's own Inverter leaves one for the dealer's turn.
 bool looksMidDealerTurn(const GameState& state, int seat) {
-  return state.tube.sawed || state.tube.chamberInverted || state.cuffUsedThisTurn ||
-         state.players[seat].cuffed;
+  return state.tube.sawed || state.cuffUsedThisTurn || state.players[seat].cuffed;
 }
 
 /// `narratedMidTurn` is set when the narration recorded the dealer using an
 /// item in the turn it is still taking.
-void printRanking(const SolveResult& result, const GameState& state, const RuleConfig& config,
+void printRanking(const SolveResult& result, const Position& position, const RuleConfig& config,
                   int seat, OpponentModel opponent, bool narratedMidTurn) {
+  const GameState& state = position.state;
   if (result.refused) {
     std::cout << result.assumptions << "\n";
     return;
@@ -388,9 +911,12 @@ void printRanking(const SolveResult& result, const GameState& state, const RuleC
               << std::setprecision(4) << result.value << "\n";
   };
   const auto printFooter = [&result]() {
-    if (result.truncated) {
+    if (result.budgetReached) {
       std::cout << "  Note: the search hit its reload budget in some lines, so those were "
                    "valued by charges in hand.\n";
+    }
+    if (result.nodeLimitHit) {
+      std::cout << "  Note: the search stopped at the node limit; values may be wrong.\n";
     }
     std::cout << "  " << result.assumptions << "\n";
     std::cout << "  " << result.nodes << (result.nodes == 1 ? " state" : " states")
@@ -432,13 +958,20 @@ void printRanking(const SolveResult& result, const GameState& state, const RuleC
     }
     std::cout << ".\n";
     printChance();
-    if (narratedMidTurn) {
-      std::cout << "  Note: the dealer is part-way through its turn. This value assumes it starts "
-                   "the turn afresh and forgets the target and shell it chose earlier (saw, "
-                   "inverter, glass), so it can be wrong.\n";
+    const std::string token = memoryToken(state, position.dealerMemory);
+    if (narratedMidTurn && token.empty()) {
+      std::cout << "  Note: the dealer is part-way through its turn and has not yet seen the "
+                   "chamber or chosen a target, so the value goes on from there.\n";
+    } else if (narratedMidTurn) {
+      std::cout << "  Note: the dealer is part-way through its turn, and the value goes on from "
+                   "what it has settled so far ("
+                << token << ").\n";
+    } else if (!token.empty()) {
+      std::cout << "  Its turn is taken to be under way, with " << token << ".\n";
     } else if (!skipped && looksMidDealerTurn(state, seat)) {
       std::cout << "  Note: this looks like the middle of a dealer turn, and the value assumes its "
-                   "turn starts here.\n";
+                   "turn starts here. If it is, say what the dealer has settled with dealer=, as "
+                   "in dealer=aim:p1.\n";
     } else {
       std::cout << "  Its turn is taken to start here.\n";
     }
@@ -524,7 +1057,12 @@ void printHelp() {
   Position
     set <notation>        replace the position, e.g.
                           set p1=3/4[saw,beer] p2=2/4[mg] tube=2L3B turn=p1
-    load <n>L<m>B         start a fresh load, clearing knowledge and the saw
+                          A written position may also carry listcigs,
+                          phoned= and dealer=, described at the end.
+    load <n>L<m>B         start a fresh load: clears knowledge, cuffs and
+                          phone reads, keeps a sawed barrel where the rules
+                          say so, and hands the turn to the seat the rules
+                          name
     state                 print the position in one line
     board                 print the position as a board
     seat p<N>             advise this seat (default p1)
@@ -541,7 +1079,8 @@ void printHelp() {
 
   Edits
     hp p<N> <charges>     set charges
-    give p<N> <item>      add an item        take p<N> <item>   remove an item
+    give p<N> <item>      add an item at the end of the hand
+    take p<N> <item>      remove an item, the first copy unless #k names one
     turn p<N>             hand the turn to a seat
     cuff p<N>             cuff a seat        uncuff p<N>
     saw                   mark the barrel sawed
@@ -551,21 +1090,42 @@ void printHelp() {
     shot self live        you shot yourself and it was live
     shot p<N> blank       the seat to move shot p<N> and it was blank
     eject live|blank      a beer ejected a shell of that type
-    mg live|blank|unseen  a magnifying glass showed the seat to move that shell
-    phone <k> live|blank|unseen
-                          a burner phone named shell k, counting from 2, since
-                          a burner phone never names the chamber.
-                          unseen records a result only another seat saw; the
-                          answer is the same whichever type it was
+    mg live|blank|unseen  a magnifying glass showed the seat to move that
+                          shell; unseen when only that seat saw it
+    phone <k> live|blank  your burner phone named shell k, counting from 2,
+                          since a burner phone never names the chamber
+    phone unseen          another seat used a burner phone; the game never
+                          shows which shell it named
     use <item> [p<N>]     the seat to move used an item with no chance outcome
     use med ok|bad        expired medicine, and how it went
-    use adr p<N> <item> [p<M>]
-                          the seat to move stole an item and used it, on p<M>
-                          when the stolen item needs a target
+    use adr               adrenaline spent on its own, taking nothing
+    use adr p<N> <item> ...
+                          the seat to move stole an item from p<N> and used
+                          it; what follows is what that item's own command
+                          takes, as in use adr p2 beer blank, use adr p1 mg
+                          unseen or use adr p2 cuff p2
+
+  Copies
+    #k                    add to take, use, mg, phone or eject to name the
+                          k-th copy of the item, counting from the front of
+                          the hand it leaves (the victim's, for a steal), as
+                          in take p1 beer #2 or use adr p2 cig #2. The board
+                          numbers copies of a type held in more than one
+                          place. Without #k the first copy goes.
 
   Other
     advise (or a blank line)   rank the moves worth considering
     undo    help    quit
+
+  Tokens only a written position carries
+    listcigs              the dealer's item list from its last pass holds
+                          Cigarettes that p1 owns
+    phoned=p2@5,4         p2 used a burner phone this load at tube sizes 5
+                          and 4, and you never heard where it looked
+    dealer=seen           the dealer is part-way through its turn with this
+                          memory: seen, believes:B, aim:self or aim:p1, then
+                          med after it took expired medicine, or med alone.
+                          A narrated dealer turn keeps it as it goes
 )";
 }
 
@@ -595,18 +1155,21 @@ void printJson(const SolveResult& result, OpponentModel opponent) {
               << "\", \"value\": " << result.ranked[i].value << "}";
   }
   std::cout << "], \"nodes\": " << result.nodes
-            << ", \"truncated\": " << (result.truncated ? "true" : "false") << "}\n";
+            << ", \"truncated\": " << (result.truncated ? "true" : "false")
+            << ", \"budgetReached\": " << (result.budgetReached ? "true" : "false")
+            << ", \"nodeLimitHit\": " << (result.nodeLimitHit ? "true" : "false") << "}\n";
 }
 
-int runOnce(const std::string& position, int seat, int reloads, const std::string& mode,
-            bool scriptedDealer, bool asJson,
+int runOnce(const std::string& text, int seat, int reloads, long long nodeLimit,
+            const std::string& mode, bool scriptedDealer, bool asJson,
             const std::vector<std::pair<std::string, std::string>>& ruleSettings) {
-  GameState state;
+  Position position;
   std::string error;
-  if (!notation::parse(position, &state, &error)) {
+  if (!notation::parsePosition(text, &position, &error)) {
     std::cerr << error << "\n";
     return 1;
   }
+  const GameState& state = position.state;
   if (seat < 0 || seat >= state.playerCount) {
     std::cerr << "this position has " << static_cast<int>(state.playerCount)
               << " seats, so --seat must be between 1 and " << static_cast<int>(state.playerCount)
@@ -617,6 +1180,7 @@ int runOnce(const std::string& position, int seat, int reloads, const std::strin
   SolveOptions options;
   options.seat = seat;
   options.reloadBudget = reloads;
+  options.nodeLimit = nodeLimit;
   if (mode == "mp" || mode == "multiplayer") {
     config = RuleConfig::multiplayer(state.playerCount, state.players[0].maxHp);
     options.opponent = OpponentModel::Paranoid;
@@ -646,12 +1210,12 @@ int runOnce(const std::string& position, int seat, int reloads, const std::strin
   }
   const std::string outside = itemsOutsideThePool(state, config);
   if (!outside.empty() && !asJson) std::cerr << outside << "\n";
-  const SolveResult result = solve(state, config, options);
+  const SolveResult result = solve(position, config, options);
   if (asJson) {
     printJson(result, options.opponent);
   } else {
-    std::cout << notation::board(state);
-    printRanking(result, state, config, seat, options.opponent, false);
+    std::cout << notation::board(state) << positionExtras(position);
+    printRanking(result, position, config, seat, options.opponent, false);
   }
   return 0;
 }
@@ -670,6 +1234,7 @@ int main(int argc, char** argv) {
   std::string startMode = "don";
   int startSeat = 0;
   int reloads = 2;
+  long long nodeLimit = SolveOptions{}.nodeLimit;
   bool asJson = false;
   bool scriptedDealer = false;
   for (int i = 1; i < argc; ++i) {
@@ -678,11 +1243,14 @@ int main(int argc, char** argv) {
     if (arg == "--help" || arg == "-h") {
       std::cout << "advisor [--position \"<notation>\"] [--seat N] [--reloads N]\n"
                    "        [--mode don|story1|story2|story3|mp] [--opponent solver|dealer]\n"
-                   "        [--json] [rule settings, listed below]\n\n"
+                   "        [--node-limit N] [--json] [rule settings, listed below]\n\n"
                    "--seat, --reloads, --mode and --opponent set the starting value of the "
                    "command\nof the same name below (seat p1, 2 reloads, don and solver by "
                    "default).\n--position answers that one position and exits; --json prints "
-                   "that answer as\nJSON and needs --position.\n\n";
+                   "that answer as\nJSON and needs --position.\n"
+                   "--node-limit stops a search after N positions met for the first time\n"
+                   "(1 to 10000000000, 40000000 by default) and says so, since the values\n"
+                   "it gives then may be wrong.\n\n";
       printHelp();
       std::cout << "\n" << cli::ruleSettingsHelp();
       return 0;
@@ -700,6 +1268,10 @@ int main(int argc, char** argv) {
     } else if (arg == "--reloads") {
       if (!cli::nextNumber(argc, argv, &i, arg, 0, 6, &number)) return 2;
       reloads = static_cast<int>(number);
+    } else if (arg == "--node-limit") {
+      long long limit = 0;
+      if (!cli::nextNumber(argc, argv, &i, arg, 1LL, 10000000000LL, &limit)) return 2;
+      nodeLimit = limit;
     } else if (arg == "--mode") {
       if (!cli::nextValue(argc, argv, &i, arg, &startMode)) return 2;
     } else if (arg == "--opponent") {
@@ -727,17 +1299,23 @@ int main(int argc, char** argv) {
     }
   }
   if (!startPosition.empty()) {
-    return runOnce(startPosition, startSeat, reloads, startMode, scriptedDealer, asJson,
+    return runOnce(startPosition, startSeat, reloads, nodeLimit, startMode, scriptedDealer, asJson,
                    ruleSettings);
   }
   if (asJson) {
     std::cerr << "--json prints one answer, so it needs --position\n";
     return 2;
   }
+  // --mode sets the starting mode as the mode command would.
+  if (!applyMode(&session, startMode)) {
+    std::cerr << "Modes: don, story1, story2, story3, mp.\n";
+    return 2;
+  }
   session.ruleSettings = ruleSettings;
   if (!reapplySettings(&session)) return 2;
   session.options.seat = startSeat;
   session.options.reloadBudget = reloads;
+  session.options.nodeLimit = nodeLimit;
   session.scriptedDealer = scriptedDealer;
 
   if (BSR_ISATTY(BSR_FILENO(stdin)) != 0) {
@@ -761,13 +1339,48 @@ int main(int argc, char** argv) {
     std::transform(command.begin(), command.end(), command.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
+    // One word may name which copy of an item a command means, as #2 does.
+    // A written position never holds one, so `set` keeps its line as typed.
+    int copyOrdinal = 0;
+    bool copyNamed = false;
+    bool badCopy = false;
+    if (command != "set" && command != "pos") {
+      for (auto word = words.begin() + 1; word != words.end();) {
+        if (word->empty() || (*word)[0] != '#') {
+          ++word;
+          continue;
+        }
+        int ordinal = 0;
+        if (copyNamed || !cli::parseCopySelector(*word, &ordinal)) {
+          badCopy = true;
+          break;
+        }
+        copyOrdinal = ordinal;
+        copyNamed = true;
+        word = words.erase(word);
+      }
+    }
+    if (badCopy) {
+      std::cout << "Name at most one copy, from #1 to #8, as in take p1 beer #2.\n";
+      continue;
+    }
+    if (copyNamed && command == "give") {
+      std::cout << "give adds the item at the end of the hand, so it takes no copy number.\n";
+      continue;
+    }
+    if (copyNamed && command != "take" && command != "use" && command != "mg" &&
+        command != "phone" && command != "eject" && command != "beer") {
+      std::cout << "Only take, use, mg, phone and eject name a copy, as in eject blank #2.\n";
+      continue;
+    }
+
     if (command == "quit" || command == "exit") break;
     if (command == "help") {
       printHelp();
       continue;
     }
     if (command == "state") {
-      std::cout << notation::print(session.state) << "\n";
+      std::cout << notation::printPosition(positionOf(session)) << "\n";
       continue;
     }
     if (command == "board") {
@@ -786,14 +1399,16 @@ int main(int argc, char** argv) {
     }
     if (command == "set" || command == "pos") {
       const std::size_t pos = line.find(words[0]) + words[0].size();
-      GameState parsed;
-      if (!notation::parse(line.substr(pos), &parsed, &error)) {
+      Position parsed;
+      if (!notation::parsePosition(line.substr(pos), &parsed, &error)) {
         std::cout << error << "\n";
         continue;
       }
       session.history.push_back(snapshot(session));
-      session.state = parsed;
+      session.state = parsed.state;
       session.narration = Narration{};
+      session.narration.dealerMemory = parsed.dealerMemory;
+      session.narration.unseenReads = parsed.unseenReads;
       printBoard(session);
       continue;
     }
@@ -818,21 +1433,7 @@ int main(int argc, char** argv) {
       continue;
     }
     if (command == "mode" && words.size() >= 2) {
-      const std::string mode = words[1];
-      if (mode == "don") {
-        session.config = RuleConfig::doubleOrNothing(session.state.players[0].maxHp);
-      } else if (mode.rfind("story", 0) == 0) {
-        long round = 2;
-        if (mode.size() > 5 && !cli::parseWholeNumber(mode.substr(5), 1, 3, &round)) {
-          std::cout << "Modes: don, story1, story2, story3, mp.\n";
-          continue;
-        }
-        session.config = RuleConfig::storyRound(static_cast<int>(round));
-      } else if (mode == "mp" || mode == "multiplayer") {
-        session.config =
-            RuleConfig::multiplayer(session.state.playerCount, session.state.players[0].maxHp);
-        session.options.opponent = OpponentModel::Paranoid;
-      } else {
+      if (!applyMode(&session, words[1])) {
         std::cout << "Modes: don, story1, story2, story3, mp.\n";
         continue;
       }
@@ -885,26 +1486,26 @@ int main(int argc, char** argv) {
       continue;
     }
     if (command == "load" && words.size() >= 2) {
-      GameState next = session.state;
       std::string spec = "p1=1/1 p2=1/1 tube=" + words[1];
       GameState probe;
       if (!notation::parse(spec, &probe, &error)) {
         std::cout << error << "\n";
         continue;
       }
-      next.tube = Tube{};
-      next.tube.live = probe.tube.live;
-      next.tube.blank = probe.tube.blank;
-      if (session.config.reloadClearsCuffs) {
-        for (int seat = 0; seat < next.playerCount; ++seat) {
-          next.players[seat].cuffed = false;
-          next.players[seat].skipConsumed = false;
-        }
+      if (probe.tube.empty()) {
+        std::cout << "A load holds at least one shell, as in load 2L3B.\n";
+        continue;
       }
+      // The same reload the search makes: the saw, the cuffs and the turn
+      // follow the rules in force. What anyone knew about the old tube, its
+      // phone reads and the dealer's turn memory all go with it.
+      GameState next = session.state;
+      rules::reloadInto(&next, probe.tube.live, probe.tube.blank, session.config);
       session.history.push_back(snapshot(session));
       session.state = next;
       session.narration = Narration{};
       printBoard(session);
+      std::cout << "p" << (static_cast<int>(next.current) + 1) << " is to move.\n";
       continue;
     }
     if (command == "hp" && words.size() >= 3) {
@@ -941,11 +1542,20 @@ int main(int argc, char** argv) {
         std::cout << "a seat holds at most 8 items\n";
         continue;
       }
+      if (command == "take" && hand.indexOfCopy(item, copyOrdinal) < 0) {
+        std::cout << "p" << (seat + 1);
+        if (copyNamed) {
+          std::cout << " holds no " << itemName(item) << " #" << (copyOrdinal + 1) << ".\n";
+        } else {
+          std::cout << " is not holding a " << itemName(item) << ".\n";
+        }
+        continue;
+      }
       session.history.push_back(snapshot(session));
       if (command == "give") {
         hand.append(item);
       } else {
-        hand.removeCopy(item, 0);
+        hand.removeCopy(item, copyOrdinal);
       }
       printBoard(session);
       continue;
@@ -960,6 +1570,7 @@ int main(int argc, char** argv) {
       session.state.current = static_cast<std::uint8_t>(seat);
       session.state.cuffUsedThisTurn = false;
       session.narration.dealerMidTurn = false;
+      session.narration.dealerMemory = dealer::Memory{};
       printBoard(session);
       continue;
     }
@@ -997,142 +1608,19 @@ int main(int argc, char** argv) {
       }
       continue;
     }
-    if ((command == "eject" || command == "beer") && words.size() >= 2) {
-      Shell shell;
-      if (!parseShell(words[1], &shell)) {
-        std::cout << "Say what was ejected, as in eject blank.\n";
+    if (command == "eject" || command == "beer" || command == "mg" || command == "phone") {
+      const Item item = command == "mg"      ? Item::MagnifyingGlass
+                        : command == "phone" ? Item::BurnerPhone
+                                             : Item::Beer;
+      Action action = Action::use(item);
+      if (!chooseCopy(session.state, session.state.current, item, copyOrdinal, copyNamed,
+                      &action)) {
         continue;
       }
-      if (applyWithOutcome(&session, Action::use(Item::Beer), true, shell)) {
+      const std::vector<std::string> rest(words.begin() + 1, words.end());
+      if (runItem(&session, action, command == "beer" ? "beer" : ownForm(item), rest)) {
         printBoard(session);
       }
-      continue;
-    }
-    if (command == "mg" && words.size() >= 2) {
-      const bool unseen = words[1] == "unseen";
-      Shell shell = Shell::Unknown;
-      if (!unseen && !parseShell(words[1], &shell)) {
-        std::cout << "Say what it showed, as in mg live, or mg unseen when only the seat using it "
-                     "saw.\n";
-        continue;
-      }
-      if (session.state.tube.empty()) {
-        std::cout << "The tube is empty.\n";
-        continue;
-      }
-      const int seat = session.state.current;
-      if (unseen && seat == session.options.seat) {
-        std::cout << "You saw what your own glass showed, so say which, as in mg live.\n";
-        continue;
-      }
-      const Snapshot point = snapshot(session);
-      const Tube& chamber = session.state.tube;
-      if (seat != session.options.seat && chamber.truth[0] == Shell::Unknown &&
-          chamber.chamberInverted) {
-        // Pinning a shell with an inversion pending moves the public counts by
-        // the type it is pinned to, which the advised seat did not see.
-        session.history.push_back(point);
-        session.state.players[seat].hand.removeCopy(Item::MagnifyingGlass, 0);
-        afterEvent(&session, point.state, true);
-        std::cout << "The chamber was inverted before anyone saw it, so the glass is recorded as "
-                     "used and what it showed is left out: p"
-                  << (seat + 1) << " is treated as not knowing the chamber.\n";
-        printBoard(session);
-        continue;
-      }
-      if (unseen) {
-        // Any type the tube can supply will do: the advised seat's answer
-        // averages over it either way.
-        const Tube& tube = session.state.tube;
-        shell = tube.truth[0] != Shell::Unknown ? tube.truth[0]
-                : tube.canFire(Shell::Live)     ? Shell::Live
-                                                : Shell::Blank;
-      } else if (!fitChamber(&session, shell)) {
-        continue;
-      }
-      std::string why;
-      if (!chamberCanFire(session.state.tube, shell, &why)) {
-        restore(&session, point);
-        std::cout << why;
-        continue;
-      }
-      GameState probe = session.state;
-      if (probe.tube.chamberInverted && probe.tube.truth[0] == Shell::Unknown) {
-        probe.tube.resolveChamberDraw(opposite(shell), static_cast<std::uint8_t>(1u << seat));
-      } else {
-        probe.tube.resolve(0, shell, static_cast<std::uint8_t>(1u << seat));
-      }
-      if (!tubeStillFits(probe.tube)) {
-        restore(&session, point);
-        std::cout << contradictionMessage(shell);
-        continue;
-      }
-      const GameState before = session.state;
-      session.history.push_back(point);
-      session.state = probe;
-      session.state.players[seat].hand.removeCopy(Item::MagnifyingGlass, 0);
-      if (unseen)
-        session.narration.unseen = static_cast<std::uint8_t>(session.narration.unseen | 1u);
-      afterEvent(&session, before, true);
-      printBoard(session);
-      continue;
-    }
-    if (command == "phone" && words.size() >= 3) {
-      long parsed = 0;
-      const bool number = cli::parseWholeNumber(words[1], 0, 64, &parsed);
-      const int position = number ? static_cast<int>(parsed) : 0;
-      const bool unseen = words[2] == "unseen";
-      Shell shell = Shell::Unknown;
-      if (!number || position < 2 || position > session.state.tube.size() ||
-          (!unseen && !parseShell(words[2], &shell))) {
-        std::cout << "Say which shell and what it is, as in phone 3 blank, or phone 3 unseen when "
-                     "only the seat using it heard. A burner phone never names the chamber, so "
-                     "the number starts at 2.\n";
-        continue;
-      }
-      const int seat = session.state.current;
-      if (unseen && seat == session.options.seat) {
-        std::cout << "You heard what your own phone said, so say which, as in phone 3 live.\n";
-        continue;
-      }
-      const int offset = position - 1;
-      const Snapshot point = snapshot(session);
-      const Shell already = session.state.tube.truth[offset];
-      if (unseen) {
-        const Tube& tube = session.state.tube;
-        shell = already != Shell::Unknown   ? already
-                : tube.unresolvedLive() > 0 ? Shell::Live
-                                            : Shell::Blank;
-      } else if (already == Shell::Unknown) {
-        makeRoomFor(&session, shell, offset);
-      } else if (already != shell) {
-        if (!typeUnseenByAdvised(session, offset)) {
-          std::cout << "Shell " << position << " is already recorded as "
-                    << (already == Shell::Live ? "live" : "blank") << ".\n";
-          continue;
-        }
-        if (!repin(&session, offset, shell)) {
-          std::cout << contradictionMessage(shell);
-          continue;
-        }
-      }
-      GameState probe = session.state;
-      probe.tube.resolve(offset, shell, static_cast<std::uint8_t>(1u << seat));
-      if (!tubeStillFits(probe.tube)) {
-        restore(&session, point);
-        std::cout << contradictionMessage(shell);
-        continue;
-      }
-      const GameState before = session.state;
-      session.history.push_back(point);
-      session.state = probe;
-      session.state.players[seat].hand.removeCopy(Item::BurnerPhone, 0);
-      if (unseen) {
-        session.narration.unseen =
-            static_cast<std::uint8_t>(session.narration.unseen | (1u << offset));
-      }
-      afterEvent(&session, before, true);
-      printBoard(session);
       continue;
     }
     if (command == "use" && words.size() >= 2) {
@@ -1141,80 +1629,49 @@ int main(int argc, char** argv) {
         std::cout << "No item is called " << words[1] << ".\n";
         continue;
       }
-      Action action = Action::use(item);
-      if (item == Item::Adrenaline) {
-        // Adrenaline is two decisions: whose item, and where the stolen item
-        // points. Without both it would silently steal whatever the default is.
-        int from = 0;
-        Item stolen;
-        if (words.size() < 4 || !parseSeat(words[2], session.state, &from) ||
-            !itemFromToken(words[3], &stolen)) {
-          std::cout << "Say whose item and which one, as in use adr p2 saw.\n";
-          continue;
-        }
-        if (stolen == Item::Adrenaline) {
-          std::cout << "Adrenaline cannot take another adrenaline.\n";
-          continue;
-        }
-        if (!session.state.players[from].hand.holds(stolen)) {
-          std::cout << "p" << (from + 1) << " is not holding a " << itemName(stolen) << ".\n";
-          continue;
-        }
-        int victim = from;
-        if (itemNeedsTarget(stolen)) {
-          if (words.size() < 5 || !parseSeat(words[4], session.state, &victim)) {
-            std::cout << "That stolen item needs a target, as in use adr p2 cuff p3.\n";
-            continue;
-          }
-        }
-        action = Action::steal(from, stolen, victim);
-      } else if (itemNeedsTarget(item)) {
-        int seat = 0;
-        if (words.size() < 3 || !parseSeat(words[2], session.state, &seat)) {
-          std::cout << "That item needs a target, as in use cuff p2.\n";
-          continue;
-        }
-        action.target = static_cast<std::uint8_t>(seat);
+      const int mover = session.state.current;
+      if (item != Item::Adrenaline) {
+        Action action = Action::use(item);
+        if (!chooseCopy(session.state, mover, item, copyOrdinal, copyNamed, &action)) continue;
+        const std::vector<std::string> rest(words.begin() + 2, words.end());
+        if (runItem(&session, action, ownForm(item), rest)) printBoard(session);
+        continue;
       }
-      // Items whose result is a matter of chance are recorded through the
-      // command that names the result, so that the advisor tracks what actually
-      // happened rather than the likeliest branch.
-      const Item effect = item == Item::Adrenaline ? action.stolen : item;
-      const bool privateItem = effect == Item::MagnifyingGlass || effect == Item::BurnerPhone;
-      if (privateItem && session.state.current != session.options.seat) {
-        // Only the seat using it learns what it says, and the advised seat's
-        // answer is the same whatever that was.
-        const std::string whose =
-            session.scriptedDealer && session.state.current == kDealerSeat
-                ? std::string("The dealer's")
-                : "p" + std::to_string(static_cast<int>(session.state.current) + 1) + "'s";
-        if (effect == Item::MagnifyingGlass) {
-          std::cout << whose
-                    << " glass is private: type mg unseen (or mg live or mg blank if you know; "
-                       "the answer is the same).\n";
-        } else {
-          std::cout << whose
-                    << " phone is private: type phone <k> unseen for the shell it read (or "
-                       "phone <k> live or blank if you know; the answer is the same).\n";
+      if (words.size() == 2) {
+        // Spent with nothing taken. Whichever Adrenaline goes, the hand left
+        // behind is the same as far as any rule reads it.
+        if (copyNamed) {
+          std::cout << "An Adrenaline used on its own is the first in the hand, so it takes no "
+                       "copy number.\n";
+          continue;
+        }
+        if (applyWithOutcome(&session, Action::adrenalineAlone(mover), false, Shell::Unknown)) {
+          printBoard(session);
         }
         continue;
       }
-      if (privateItem || effect == Item::Beer) {
-        std::cout << "Say what it showed instead: mg live, eject blank, or phone 3 live.\n";
+      // A steal is two decisions: whose item, and which one. Without both it
+      // would silently take whatever the default is.
+      int from = 0;
+      Item stolen;
+      if (words.size() < 4 || !parseSeat(words[2], session.state, &from) ||
+          !itemFromToken(words[3], &stolen)) {
+        std::cout << "Say whose item and which one, as in use adr p2 saw, or use adr alone to "
+                     "spend it taking nothing.\n";
         continue;
       }
-      if (effect == Item::ExpiredMedicine) {
-        const std::string outcome = words.size() >= 3 ? words.back() : "";
-        if (outcome != "ok" && outcome != "bad") {
-          std::cout << "Expired medicine is a toss up, so say how it went: use med ok, or "
-                       "use med bad.\n";
-          continue;
-        }
-        if (!applyMedicine(&session, action, outcome == "ok")) continue;
-        printBoard(session);
+      if (stolen == Item::Adrenaline) {
+        std::cout << "Adrenaline cannot take another adrenaline.\n";
         continue;
       }
-      if (applyWithOutcome(&session, action, false, Shell::Unknown)) {
+      if (!session.state.players[from].hand.holds(stolen)) {
+        std::cout << "p" << (from + 1) << " is not holding a " << itemName(stolen) << ".\n";
+        continue;
+      }
+      Action action = Action::steal(from, stolen);
+      if (!chooseCopy(session.state, from, stolen, copyOrdinal, copyNamed, &action)) continue;
+      const std::vector<std::string> rest(words.begin() + 4, words.end());
+      if (runItem(&session, action, "use adr " + words[2] + " " + words[3], rest)) {
         printBoard(session);
       }
       continue;
@@ -1227,6 +1684,7 @@ int main(int argc, char** argv) {
       const std::string outside = itemsOutsideThePool(session.state, session.config);
       if (!outside.empty()) std::cout << outside << "\n";
       SolveOptions options = session.options;
+      const Position position = positionOf(session);
       if (session.scriptedDealer) {
         std::string reason;
         if (!dealerSupported(session.state, session.config, options, &reason)) {
@@ -1236,8 +1694,8 @@ int main(int argc, char** argv) {
         }
         options.opponent = OpponentModel::Dealer;
       }
-      const SolveResult result = solve(session.state, session.config, options);
-      printRanking(result, session.state, session.config, options.seat, options.opponent,
+      const SolveResult result = solve(position, session.config, options);
+      printRanking(result, position, session.config, options.seat, options.opponent,
                    session.narration.dealerMidTurn);
       continue;
     }
