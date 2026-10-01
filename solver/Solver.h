@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "engine/Config.h"
+#include "engine/Position.h"
 #include "engine/Rules.h"
 #include "engine/State.h"
 
@@ -37,8 +38,20 @@ struct SolveOptions {
   /// all of them before.
   int opponentKnowledgeLimit = 4;
 
-  /// Guard rail. The search reports truncation rather than running forever.
+  /// Guard rail. The search counts the positions it has not met before, and
+  /// once that count passes this limit it stops recursing and reports
+  /// `nodeLimitHit` rather than running forever. Positions it has already
+  /// solved keep their values.
   long long nodeLimit = 40000000;
+
+  /// Under `OpponentModel::Dealer`, merge positions that differ only in the
+  /// order of p1's hand when nothing can read that order: the dealer reads it
+  /// only while it holds Adrenaline (DealerIntelligence.gd 127-129, 146-149,
+  /// 243-257), and here it holds none and no deal the search looks through
+  /// gives it one. This changes how much the search does and never a value.
+  /// No command line flag sets it; it exists so that tests can compare the
+  /// two.
+  bool mergePlayerHandOrder = true;
 };
 
 struct ActionValue {
@@ -60,8 +73,17 @@ struct SolveResult {
   /// such as the scripted dealer at a table it does not play. Nothing is
   /// searched, and `assumptions` says why.
   bool refused = false;
+  /// Positions the search met for the first time, counting a dealer pass
+  /// separately from the position it starts from.
   long long nodes = 0;
-  bool truncated = false;  ///< a node hit the reload budget or the node limit
+  /// Some line ran past the reload budget and was scored by charges in hand.
+  bool budgetReached = false;
+  /// The search passed `SolveOptions::nodeLimit` and stopped early, so the
+  /// values may be wrong.
+  bool nodeLimitHit = false;
+  /// Set when any value was not searched to the end of the round: the reload
+  /// budget, the node limit, or a position with no move to make.
+  bool truncated = false;
   /// Shells another seat has looked at and the advised seat has not. The value
   /// is the average over the ways those shells could have fallen, weighted by
   /// what the advised seat can work out about them.
@@ -79,6 +101,16 @@ struct SolveResult {
 
 /// Solve a position exactly under the stated model. The value is the
 /// probability that `options.seat` is the last player standing in this round.
+///
+/// Phone reads whose result the advised seat never saw are spread over the
+/// shells they could have named, and a dealer memory is taken as the memory
+/// the dealer's current turn has reached. A position the model cannot answer
+/// comes back `refused`, with the reason in `assumptions` after "Not solved: ":
+/// a dealer memory under another opponent model, a memory the dealer's rules
+/// in this mode cannot leave, or phone reads by the advised seat itself.
+SolveResult solve(const Position& position, const RuleConfig& config, const SolveOptions& options);
+
+/// `solve` for a state with no unseen phone reads, at the start of a turn.
 SolveResult solve(const GameState& state, const RuleConfig& config, const SolveOptions& options);
 
 /// The value of a position without ranking the moves, for tests and the oracle

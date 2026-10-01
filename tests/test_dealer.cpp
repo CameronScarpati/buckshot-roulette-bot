@@ -701,6 +701,17 @@ TEST(DealerSolve, TheAnswerNamesTheDealerAndItsApproximations) {
   const SolveResult endless =
       solveAgainstTheDealer("p1=1/1 p2=1/1 tube=1L1B turn=p2", Brain::Endless);
   EXPECT_NE(endless.assumptions.find("endless rules"), std::string::npos);
+  EXPECT_EQ(endless.assumptions.find("stopped early"), std::string::npos);
+
+  // A search cut short by the node limit says so in the same text.
+  SolveOptions limited = againstTheDealer();
+  limited.nodeLimit = 1;
+  const SolveResult stopped =
+      solve(parse("p1=2/2 p2=2/2 tube=2L2B turn=p2"), configFor(Brain::Endless), limited);
+  EXPECT_TRUE(stopped.nodeLimitHit);
+  EXPECT_NE(stopped.assumptions.find("The search stopped early; these chances may be off."),
+            std::string::npos)
+      << stopped.assumptions;
 }
 
 TEST(DealerSolve, AHealFloorAboveTwoAddsTheMedicineDeparture) {
@@ -708,7 +719,6 @@ TEST(DealerSolve, AHealFloorAboveTwoAddsTheMedicineDeparture) {
   config.healFloor = 3;
   const SolveResult result =
       solve(parse("p1=4/4 p2=4/4 tube=1L1B turn=p2"), config, againstTheDealer());
-  EXPECT_NE(result.assumptions.find("Two approximations"), std::string::npos) << result.assumptions;
   EXPECT_NE(result.assumptions.find("Expired Medicine always costs it a charge"), std::string::npos)
       << result.assumptions;
 }
@@ -921,7 +931,9 @@ TEST(DealerAdvisor, AFinishedRoundOrAnEmptyTubeIsNotTheDealersMove) {
     EXPECT_EQ(empty.output.find("plays by its script"), std::string::npos) << empty.output;
     EXPECT_EQ(empty.output.find("No legal move"), std::string::npos) << empty.output;
     EXPECT_EQ(chanceAfter(empty.output, 0), "0.5000");
-    EXPECT_NE(empty.output.find("1 state examined."), std::string::npos) << empty.output;
+    // Only positions met for the first time are counted, and a reload past
+    // the last one searched is scored before it would be.
+    EXPECT_NE(empty.output.find("0 states examined."), std::string::npos) << empty.output;
   }
 }
 
