@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <sstream>
+#include <string>
 #include <unordered_map>
+
+#include "engine/Dealer.h"
 
 namespace bsr {
 namespace {
@@ -21,6 +24,31 @@ struct MemoHash {
     std::size_t h = std::hash<GameState>{}(key.state);
     h ^=
         static_cast<std::size_t>(key.reloadsLeft) * static_cast<std::size_t>(0x9e3779b97f4a7c15ULL);
+    return h;
+  }
+};
+
+/// A position part of the way through a dealer turn. The memory is part of the
+/// key because two passes that reach the same position with different memories
+/// go on to play differently.
+struct DealerKey {
+  GameState state;
+  dealer::Memory memory;
+  int reloadsLeft;
+  bool operator==(const DealerKey& other) const {
+    return reloadsLeft == other.reloadsLeft && memory == other.memory && state == other.state;
+  }
+};
+
+struct DealerHash {
+  std::size_t operator()(const DealerKey& key) const noexcept {
+    std::size_t h = MemoHash{}(MemoKey{key.state, key.reloadsLeft});
+    const dealer::Memory& memory = key.memory;
+    const std::size_t packed =
+        (memory.knows ? 1u : 0u) | static_cast<std::size_t>(memory.known) << 1u |
+        static_cast<std::size_t>(memory.target) << 3u | (memory.usedMedicine ? 1u : 0u) << 5u |
+        static_cast<std::size_t>(memory.adrenalineList) << 6u;
+    h ^= packed + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
     return h;
   }
 };
@@ -166,7 +194,11 @@ std::vector<KnowledgeBranch> knowledgeBranches(const GameState& state, int seat,
 class Search {
  public:
   Search(const RuleConfig& config, const SolveOptions& options)
-      : config_(config), options_(options) {}
+      : config_(config), options_(options) {
+    // solve() refuses a rule set without a scripted dealer before a search is
+    // built, so the default here is never the one that plays.
+    if (!dealer::brainFor(config, &brain_)) brain_ = dealer::Brain::Endless;
+  }
 
   double value(const GameState& start, int reloadsLeft) {
     GameState state = start;
@@ -198,6 +230,14 @@ class Search {
     const MemoKey key{state, reloadsLeft};
     auto found = memo_.find(key);
     if (found != memo_.end()) return found->second;
+
+    // The scripted dealer does not choose between moves. Every turn it starts,
+    // including the one after a blank into itself, starts with a fresh memory.
+    if (options_.opponent == OpponentModel::Dealer && state.current != options_.seat) {
+      const double worth = dealerTurn(state, dealer::Memory{}, reloadsLeft);
+      memo_.emplace(key, worth);
+      return worth;
+    }
 
     const bool maximising = state.current == options_.seat;
     std::vector<Action> actions = legalFor(state);
@@ -252,6 +292,31 @@ class Search {
     return total / static_cast<double>(chosen.size());
   }
 
+  /// The value of the rest of a dealer turn: one pass, then either the next
+  /// pass with the memory it left, or, once a shot has ended the turn, the
+  /// position as the ordinary search sees it.
+  double dealerTurn(const GameState& state, const dealer::Memory& memory, int reloadsLeft) {
+    const DealerKey key{state, memory, reloadsLeft};
+    auto found = dealerMemo_.find(key);
+    if (found != dealerMemo_.end()) return found->second;
+    ++nodes_;
+    const std::vector<dealer::Branch> branches = dealer::step(state, memory, config_, brain_);
+    double total = 0.0;
+    if (branches.empty()) {
+      // Not reachable from a position the search generates; stated rather
+      // than hidden if it ever is.
+      truncated_ = true;
+      total = boundaryValue(state, options_.seat);
+    }
+    for (const dealer::Branch& branch : branches) {
+      total += branch.probability * (branch.turnOver
+                                         ? value(branch.state, reloadsLeft)
+                                         : dealerTurn(branch.state, branch.memory, reloadsLeft));
+    }
+    dealerMemo_.emplace(key, total);
+    return total;
+  }
+
   double actionValue(const GameState& state, const Action& action, int reloadsLeft) {
     double total = 0.0;
     for (const Outcome& branch : rules::apply(state, action, config_)) {
@@ -285,7 +350,9 @@ class Search {
  private:
   const RuleConfig& config_;
   const SolveOptions& options_;
+  dealer::Brain brain_ = dealer::Brain::Endless;
   std::unordered_map<MemoKey, double, MemoHash> memo_;
+  std::unordered_map<DealerKey, double, DealerHash> dealerMemo_;
   long long nodes_ = 0;
   bool truncated_ = false;
 };
@@ -307,11 +374,60 @@ std::vector<Action> SolveResult::bestActions(double tolerance) const {
   return best;
 }
 
+bool dealerSupported(const GameState& state, const RuleConfig& config, const SolveOptions& options,
+                     std::string* reason) {
+  dealer::Brain brain = dealer::Brain::Endless;
+  if (state.playerCount != 2) {
+    *reason = "the scripted dealer plays a table of two seats, and this position has " +
+              std::to_string(static_cast<int>(state.playerCount));
+    return false;
+  }
+  if (!dealer::brainFor(config, &brain)) {
+    *reason = "the scripted dealer plays story mode and double or nothing, not multiplayer";
+    return false;
+  }
+  if (options.seat != 0) {
+    *reason = "the scripted dealer is p2, so the advised seat must be p1";
+    return false;
+  }
+  return true;
+}
+
 std::string describeAssumptions(const RuleConfig& config, const SolveOptions& options) {
   std::ostringstream out;
   out << "Model: " << config.describe() << ". ";
+  if (options.opponent == OpponentModel::Dealer) {
+    dealer::Brain brain = dealer::Brain::Endless;
+    dealer::brainFor(config, &brain);
+    out << "The other seat is the dealer, and it plays the game's own dealer script with its "
+        << dealer::brainName(brain)
+        << " rules: it uses items, aims and flips coins as the decompiled script does, rather "
+           "than playing to minimise your chance of surviving the round. "
+        << (config.healFloor > 2 ? "Five" : "Four")
+        << " approximations: it considers its item types in a fixed order rather than the "
+           "order they sit on the table, the first pass of each of its turns reads whether it "
+           "can reach cigarettes from the items held then rather than from its previous turn, "
+           "a blank it fires into itself clears a sawed barrel, ";
+    // The script's own guard keeps it off medicine at one charge, so a failed
+    // dose can only cross the heal floor when the floor is above two.
+    if (config.healFloor > 2) {
+      out << "a failed Expired Medicine always costs it a charge, even below the heal floor, ";
+    }
+    out << "and a position with the dealer to move is taken as the start of its turn, so "
+           "anything it decided earlier in that turn (the target a coin chose before it sawed "
+           "the barrel, medicine already taken, what it worked out about the chamber) is not "
+           "carried over. Your own moves are chosen from what you have "
+           "seen, and a choice made without sight of a shell does not infer its type from what "
+           "the dealer's actions reveal. The answer is given from what the advised seat has "
+           "seen: a shell only the dealer has looked at is unknown to you and known to it, and "
+           "the value averages over how it could have fallen. Values are the probability of "
+           "being the last player standing in this round, looking through "
+        << options.reloadBudget << " reload" << (options.reloadBudget == 1 ? "" : "s") << ".";
+    return out.str();
+  }
   switch (options.opponent) {
     case OpponentModel::Optimal:
+    case OpponentModel::Dealer:
       out << "The other seat plays to minimise your chance of surviving the round";
       break;
     case OpponentModel::Paranoid:
@@ -332,6 +448,43 @@ std::string describeAssumptions(const RuleConfig& config, const SolveOptions& op
   return out.str();
 }
 
+namespace {
+
+/// What the answer did with shells another seat has looked at, appended to the
+/// assumptions whenever there were any.
+std::string knowledgeNote(const SolveResult& result, const RuleConfig& config,
+                          const SolveOptions& options) {
+  if (result.opponentKnownShells <= 0) return "";
+  const bool scripted = options.opponent == OpponentModel::Dealer;
+  dealer::Brain brain = dealer::Brain::Endless;
+  dealer::brainFor(config, &brain);
+  std::ostringstream extra;
+  extra << (scripted ? " The dealer has looked at " : " Another seat has looked at ")
+        << result.opponentKnownShells << " shell" << (result.opponentKnownShells == 1 ? "" : "s")
+        << " that you have not";
+  if (result.opponentKnowledgeDropped) {
+    extra << ", which is more than this answer averages over, so they are treated as seen "
+             "by nobody and the opponent is modelled weaker than it is";
+  } else if (scripted && brain == dealer::Brain::Story) {
+    // Only the endless rules deduce the chamber from shells seen before the
+    // turn, so the story dealer plays the same whichever way they fell.
+    extra << ", but the story rules do not use what it has seen, so this does not change the "
+             "answer";
+  } else if (scripted) {
+    extra << ", and the answer is the average over how those could have fallen, against a "
+             "dealer that remembers which";
+  } else {
+    extra << ", and the answer is the average over how those could have fallen, against a "
+             "seat that knows which. Only the move being asked about gets that treatment: "
+             "deeper in the search this seat picks as though nobody had looked, which "
+             "understates the other seat in those lines";
+  }
+  extra << ".";
+  return extra.str();
+}
+
+}  // namespace
+
 SolveResult solve(const GameState& state, const RuleConfig& config, const SolveOptions& options) {
   SolveResult result;
   result.assumptions = describeAssumptions(config, options);
@@ -340,6 +493,14 @@ SolveResult solve(const GameState& state, const RuleConfig& config, const SolveO
     // the value would otherwise be read from past the end of the seats.
     result.assumptions = "No such seat in this position.";
     return result;
+  }
+  if (options.opponent == OpponentModel::Dealer) {
+    std::string reason;
+    if (!dealerSupported(state, config, options, &reason)) {
+      result.refused = true;
+      result.assumptions = "Not solved: " + reason + ".";
+      return result;
+    }
   }
 
   // Answer from the information state of the seat being advised. A shell it has
@@ -395,6 +556,17 @@ SolveResult solve(const GameState& state, const RuleConfig& config, const SolveO
     return result;
   }
 
+  // The scripted dealer to move has no moves to rank. Its turn starts here
+  // with a fresh memory, and what it has already seen is in each branch.
+  if (options.opponent == OpponentModel::Dealer &&
+      static_cast<int>(first.current) != options.seat) {
+    result.value = averageOver(starts, nullptr);
+    result.nodes = search.nodes();
+    result.truncated = search.truncated();
+    result.assumptions += knowledgeNote(result, config, options);
+    return result;
+  }
+
   // Values are always the solved seat's chance of surviving. The ordering
   // belongs to whoever is holding the gun, and when that is an opponent it has
   // to rank its moves by what it can see rather than by what we have seen.
@@ -443,22 +615,7 @@ SolveResult solve(const GameState& state, const RuleConfig& config, const SolveO
   }
   result.nodes = search.nodes();
   result.truncated = search.truncated();
-  if (result.opponentKnownShells > 0) {
-    std::ostringstream extra;
-    extra << " Another seat has looked at " << result.opponentKnownShells << " shell"
-          << (result.opponentKnownShells == 1 ? "" : "s") << " that you have not";
-    if (result.opponentKnowledgeDropped) {
-      extra << ", which is more than this answer averages over, so they are treated as seen "
-               "by nobody and the opponent is modelled weaker than it is";
-    } else {
-      extra << ", and the answer is the average over how those could have fallen, against a "
-               "seat that knows which. Only the move being asked about gets that treatment: "
-               "deeper in the search this seat picks as though nobody had looked, which "
-               "understates the other seat in those lines";
-    }
-    extra << ".";
-    result.assumptions += extra.str();
-  }
+  result.assumptions += knowledgeNote(result, config, options);
   return result;
 }
 

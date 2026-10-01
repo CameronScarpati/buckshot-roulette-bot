@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 #include "engine/Config.h"
@@ -36,7 +37,10 @@ bool parse(const std::string& text, GameState* state, std::string* error);
 std::string print(const GameState& state);
 
 /// A multi-line board for humans, with each seat's charges, items and knowledge.
-std::string board(const GameState& state);
+/// Offsets set in `untyped`, one bit each, are shells the reader has not seen
+/// whose type is pinned only as a stand-in: a seat that knows one is shown
+/// knowing it, without the type.
+std::string board(const GameState& state, std::uint8_t untyped = 0);
 
 }  // namespace notation
 }  // namespace bsr

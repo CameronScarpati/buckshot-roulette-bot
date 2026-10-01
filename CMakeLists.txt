@@ -41,6 +41,7 @@ add_library(bsr_core STATIC
     engine/Rules.cpp
     engine/Config.cpp
     engine/Notation.cpp
+    engine/Dealer.cpp
     solver/Solver.cpp
 )
 target_include_directories(bsr_core PUBLIC ${CMAKE_SOURCE_DIR})
@@ -79,6 +80,9 @@ if(BUILD_TESTS)
     if(TEST_SOURCES)
         add_executable(tests ${TEST_SOURCES})
         target_link_libraries(tests PRIVATE bsr_core bsr_warnings GTest::gtest_main)
+        # Some tests run the advisor itself to check its command line.
+        target_compile_definitions(tests PRIVATE BSR_ADVISOR_PATH="$<TARGET_FILE:advisor>")
+        add_dependencies(tests advisor)
         gtest_discover_tests(tests)
     endif()
 endif()

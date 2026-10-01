@@ -31,16 +31,59 @@ namespace {
 
 using namespace bsr;
 
+/// The dealer's seat whenever the dealer is the opponent.
+constexpr int kDealerSeat = 1;
+
+/// What a narrated round knows that a position written as notation does not.
+struct Narration {
+  /// The dealer has used an item in the turn it is still taking. What it
+  /// decided earlier in that turn is not part of a position, so an answer from
+  /// here takes the turn as starting afresh, and says so.
+  bool dealerMidTurn = false;
+  /// Shells, one bit per offset, recorded as seen by another seat without the
+  /// advised seat seeing what they were. Each is pinned to a type the counts
+  /// allow, which changes nothing for the advised seat, and the board prints
+  /// it without that type.
+  std::uint8_t unseen = 0;
+};
+
+/// A point `undo` returns to.
+struct Snapshot {
+  GameState state;
+  Narration narration;
+};
+
 struct Session {
   GameState state;
   RuleConfig config = RuleConfig::doubleOrNothing(4);
   SolveOptions options;
-  std::vector<GameState> history;
+  Narration narration;
+  std::vector<Snapshot> history;
   /// Rule settings typed on the command line or with `rule`. Kept so that a
   /// later `mode` command, which rebuilds the configuration from a preset,
   /// does not quietly throw them away.
   std::vector<std::pair<std::string, std::string>> ruleSettings;
+  /// Whether p2 plays the game's dealer script, set with `opponent`. Kept apart
+  /// from `options.opponent`, which `mode` sets, so that neither command
+  /// quietly undoes the other; it is checked against the table at `advise`.
+  bool scriptedDealer = false;
 };
+
+/// Read an opponent model's name. Only the two a two-seat table can use are
+/// named here; multiplayer picks its own when its mode is chosen. The
+/// minimising opponent is "solver", as in play; its older name "optimal" is
+/// still taken.
+bool parseOpponent(const std::string& text, bool* scripted) {
+  if (text == "dealer") {
+    *scripted = true;
+    return true;
+  }
+  if (text == "solver" || text == "optimal") {
+    *scripted = false;
+    return true;
+  }
+  return false;
+}
 
 /// Rebuild the settings on top of whatever preset is now in force.
 bool reapplySettings(Session* session) {
@@ -117,10 +160,118 @@ std::uint8_t allSeats(const GameState& state) {
   return static_cast<std::uint8_t>((1u << state.playerCount) - 1u);
 }
 
+Shell opposite(Shell shell) {
+  return shell == Shell::Live ? Shell::Blank : Shell::Live;
+}
+
+Snapshot snapshot(const Session& session) {
+  return Snapshot{session.state, session.narration};
+}
+
+void restore(Session* session, const Snapshot& point) {
+  session->state = point.state;
+  session->narration = point.narration;
+}
+
+/// Whether the shell at `offset` has a type on record that the advised seat
+/// has not seen. Another seat looked at it, and the type was either typed in
+/// by somebody guessing or recorded as unseen.
+bool typeUnseenByAdvised(const Session& session, int offset) {
+  const Tube& tube = session.state.tube;
+  return tube.truth[offset] != Shell::Unknown && !tube.knows(session.options.seat, offset);
+}
+
+/// Pin a shell whose type the advised seat never saw to the type it turned out
+/// to be, keeping who saw it. Nothing about the advised seat's answer rested on
+/// the old type, and the public counts never moved with it (an inversion
+/// unpins such a shell first), so only the counts can refuse it. Returns false,
+/// changing nothing, when they do.
+bool repin(Session* session, int offset, Shell type) {
+  Tube next = session->state.tube;
+  next.truth[offset] = type;
+  if (!tubeStillFits(next)) return false;
+  session->state.tube = next;
+  return true;
+}
+
+/// A shell of `type` is about to be drawn at `offset`, which nobody has pinned,
+/// but every unpinned shell of that type may be held by pins the advised seat
+/// never saw. Swap one of those to the other type, which leaves the counts as
+/// they are. When nothing can be swapped the caller's own check speaks.
+void makeRoomFor(Session* session, Shell type, int offset) {
+  const Tube& tube = session->state.tube;
+  const int free = type == Shell::Live ? tube.unresolvedLive() : tube.unresolvedBlank();
+  if (free > 0) return;
+  for (int other = 0; other < tube.size(); ++other) {
+    if (other == offset || tube.truth[other] != type) continue;
+    if (!typeUnseenByAdvised(*session, other)) continue;
+    if (repin(session, other, opposite(type))) return;
+  }
+}
+
+/// Before a shell fires or is shown as `fired`, bring the record into line with
+/// it wherever only a type the advised seat never saw stands in the way.
+/// Returns false, with the reason printed, when the counts rule it out.
+bool fitChamber(Session* session, Shell fired) {
+  const Tube& tube = session->state.tube;
+  if (tube.empty()) return true;
+  if (tube.truth[0] == Shell::Unknown) {
+    makeRoomFor(session, tube.chamberInverted ? opposite(fired) : fired, 0);
+    return true;
+  }
+  if (tube.truth[0] == fired || !typeUnseenByAdvised(*session, 0)) return true;
+  if (repin(session, 0, fired)) return true;
+  std::cout << contradictionMessage(fired);
+  return false;
+}
+
+/// An inversion is about to flip a chamber whose type only other seats saw.
+/// Flipping the type on record would move the public counts by whichever type
+/// was recorded, which the advised seat cannot know, so the chamber goes back
+/// to the unseen pool first and the flip is kept as pending, as for any shell
+/// nobody has seen. What the other seats saw of it is lost, which the caller
+/// says. Returns whether anything was unpinned.
+bool unpinBeforeInversion(Session* session) {
+  if (session->state.tube.empty() || !typeUnseenByAdvised(*session, 0)) return false;
+  session->state.tube.truth[0] = Shell::Unknown;
+  session->state.tube.knownBy[0] = 0;
+  session->narration.unseen = static_cast<std::uint8_t>(session->narration.unseen & ~1u);
+  return true;
+}
+
+void sayUnpinned() {
+  std::cout << "The chamber was inverted while only another seat knew its type, so it is kept "
+               "as an inverted shell nobody has seen, and that seat no longer counts as "
+               "knowing it.\n";
+}
+
+/// Bring the narration up to date after an event moved the position on from
+/// `before`.
+void afterEvent(Session* session, const GameState& before, bool itemUse) {
+  Narration& noted = session->narration;
+  const GameState& now = session->state;
+  const int left = before.tube.size() - now.tube.size();
+  if (left > 0) noted.unseen = static_cast<std::uint8_t>(noted.unseen >> left);
+  noted.dealerMidTurn = itemUse && before.playerCount == 2 && before.current == kDealerSeat &&
+                        now.current == kDealerSeat && !now.roundOver() && !now.needsReload();
+}
+
+/// The board, with the shells the advised seat never saw printed without the
+/// type they are pinned to.
+void printBoard(const Session& session) {
+  std::uint8_t untyped = 0;
+  for (int offset = 0; offset < session.state.tube.size(); ++offset) {
+    if ((session.narration.unseen >> offset & 1u) == 0) continue;
+    if (!typeUnseenByAdvised(session, offset)) continue;
+    untyped = static_cast<std::uint8_t>(untyped | (1u << offset));
+  }
+  std::cout << notation::board(session.state, untyped);
+}
+
 /// Apply an action whose chance outcome is already known, by taking the branch
 /// that matches what actually happened.
 bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Shell shell) {
-  GameState before = session->state;
+  const Snapshot point = snapshot(*session);
   bool legal = false;
   for (const Action& candidate : rules::legalActions(session->state, session->config)) {
     if (candidate == action) legal = true;
@@ -131,8 +282,13 @@ bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Sh
     return false;
   }
   if (haveShell) {
+    if (!fitChamber(session, shell)) {
+      restore(session, point);
+      return false;
+    }
     std::string why;
     if (!chamberCanFire(session->state.tube, shell, &why)) {
+      restore(session, point);
       std::cout << why;
       return false;
     }
@@ -146,14 +302,18 @@ bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Sh
       session->state.tube.resolve(0, shell, allSeats(session->state));
     }
     if (!tubeStillFits(session->state.tube)) {
-      session->state = before;
+      restore(session, point);
       std::cout << contradictionMessage(shell);
       return false;
     }
   }
-  std::vector<Outcome> outcomes = rules::apply(session->state, action, session->config);
+  const bool itemUse = action.kind == Action::Kind::UseItem;
+  const Item effect = action.item == Item::Adrenaline ? action.stolen : action.item;
+  const bool unpinned = itemUse && effect == Item::Inverter && unpinBeforeInversion(session);
+  const GameState before = session->state;
+  std::vector<Outcome> outcomes = rules::apply(before, action, session->config);
   if (outcomes.empty()) {
-    session->state = before;
+    restore(session, point);
     std::cout << "That move is not available here.\n";
     return false;
   }
@@ -162,8 +322,10 @@ bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Sh
   for (const Outcome& outcome : outcomes) {
     if (outcome.probability > chosen->probability) chosen = &outcome;
   }
-  session->history.push_back(before);
+  session->history.push_back(point);
   session->state = chosen->state;
+  if (unpinned) sayUnpinned();
+  afterEvent(session, before, itemUse);
   return true;
 }
 
@@ -179,19 +341,110 @@ bool applyMedicine(Session* session, const Action& action, bool healed) {
     return false;
   }
   const int seat = session->state.current;
-  const int before = session->state.players[seat].hp;
-  for (const Outcome& outcome : rules::apply(session->state, action, session->config)) {
-    const bool wentUp = outcome.state.players[seat].hp > before;
+  const GameState before = session->state;
+  for (const Outcome& outcome : rules::apply(before, action, session->config)) {
+    const bool wentUp = outcome.state.players[seat].hp > before.players[seat].hp;
     if (wentUp != healed) continue;
-    session->history.push_back(session->state);
+    session->history.push_back(snapshot(*session));
     session->state = outcome.state;
+    afterEvent(session, before, true);
     return true;
   }
   std::cout << "That outcome is not possible here.\n";
   return false;
 }
 
-void printRanking(const SolveResult& result, const GameState& state, int seat) {
+/// Who acts first after a reload under `config`.
+const char* reloadTurnText(const RuleConfig& config) {
+  switch (config.reloadTurn) {
+    case ReloadTurn::PlayerFirst:
+      return "p1 acts first";
+    case ReloadTurn::DealerFirst:
+      return "p2 acts first";
+    case ReloadTurn::KeepCurrent:
+      return "the seat to move keeps the turn";
+  }
+  return "";
+}
+
+/// Whether a position with the dealer to move carries something only its own
+/// turn could have left there: a sawed barrel, an inverted chamber or a cuff it
+/// put on p1. Every shot clears the first two, and p1 cannot cuff itself.
+bool looksMidDealerTurn(const GameState& state, int seat) {
+  return state.tube.sawed || state.tube.chamberInverted || state.cuffUsedThisTurn ||
+         state.players[seat].cuffed;
+}
+
+/// `narratedMidTurn` is set when the narration recorded the dealer using an
+/// item in the turn it is still taking.
+void printRanking(const SolveResult& result, const GameState& state, const RuleConfig& config,
+                  int seat, OpponentModel opponent, bool narratedMidTurn) {
+  if (result.refused) {
+    std::cout << result.assumptions << "\n";
+    return;
+  }
+  const auto printChance = [&result]() {
+    std::cout << "  Your chance of being the last player standing: " << std::fixed
+              << std::setprecision(4) << result.value << "\n";
+  };
+  const auto printFooter = [&result]() {
+    if (result.truncated) {
+      std::cout << "  Note: the search hit its reload budget in some lines, so those were "
+                   "valued by charges in hand.\n";
+    }
+    std::cout << "  " << result.assumptions << "\n";
+    std::cout << "  " << result.nodes << (result.nodes == 1 ? " state" : " states")
+              << " examined.\n\n";
+  };
+  // Neither of these changes when a handcuffed seat is skipped, so the
+  // position as given answers both, whatever the opponent model.
+  if (state.roundOver()) {
+    std::cout << "\nAdvising seat p" << (seat + 1) << ". The round is over";
+    const int survivor = state.soleSurvivor();
+    if (survivor >= 0) {
+      std::cout << ": p" << (survivor + 1) << " is the last player standing.\n";
+    } else {
+      std::cout << ", with nobody left standing.\n";
+    }
+    printChance();
+    std::cout << "\n";
+    return;
+  }
+  if (state.needsReload()) {
+    // A narrated round asks for the next load before it asks for advice, so
+    // only a written position gets here.
+    std::cout << "\nAdvising seat p" << (seat + 1)
+              << ". The tube is empty and a reload is due (after a reload "
+              << reloadTurnText(config)
+              << "). To ask about the next load, give its shells in tube=.\n";
+    printChance();
+    printFooter();
+    return;
+  }
+  if (result.ranked.empty() && opponent == OpponentModel::Dealer && result.mover != seat) {
+    // The dealer does not choose between moves, so there is nothing to rank,
+    // but the position still has a worth to the advised seat.
+    std::cout << "\nAdvising seat p" << (seat + 1) << ". The dealer (p" << (result.mover + 1)
+              << ") is to move and plays by its script";
+    const bool skipped = result.mover != static_cast<int>(state.current);
+    if (skipped) {
+      std::cout << " (p" << (static_cast<int>(state.current) + 1) << " is handcuffed and skipped)";
+    }
+    std::cout << ".\n";
+    printChance();
+    if (narratedMidTurn) {
+      std::cout << "  Note: the dealer is part-way through its turn. This value assumes it starts "
+                   "the turn afresh and forgets the target and shell it chose earlier (saw, "
+                   "inverter, glass), so it can be wrong.\n";
+    } else if (!skipped && looksMidDealerTurn(state, seat)) {
+      std::cout << "  Note: this looks like the middle of a dealer turn, and the value assumes its "
+                   "turn starts here.\n";
+    } else {
+      std::cout << "  Its turn is taken to start here.\n";
+    }
+    printFooter();
+    return;
+  }
   if (result.ranked.empty()) {
     std::cout << "No legal move from this position.\n";
     return;
@@ -236,17 +489,13 @@ void printRanking(const SolveResult& result, const GameState& state, int seat) {
                  "It does not have to average: this position is worth "
               << std::fixed << std::setprecision(4) << result.value << " to you.\n";
   }
-  if (result.truncated) {
-    std::cout << "  Note: the search hit its reload budget in some lines, so those were "
-                 "valued by charges in hand.\n";
-  }
-  std::cout << "  " << result.assumptions << "\n";
-  std::cout << "  " << result.nodes << " states examined.\n\n";
+  printFooter();
 }
 
 /// An item that the chosen rule set never deals is still parsed, still printed
-/// on the board, and never offered as a move. Saying so is the difference
-/// between an answer that looks complete and one that is.
+/// on the board, and still used by whichever seat holds it, the dealer's script
+/// included; only a reload never brings more. Holding one is usually a sign
+/// that the mode is not the one meant, so the answer says so.
 std::string itemsOutsideThePool(const GameState& state, const RuleConfig& config) {
   std::string names;
   for (int index = 0; index < kItemCount; ++index) {
@@ -264,7 +513,9 @@ std::string itemsOutsideThePool(const GameState& state, const RuleConfig& config
   }
   if (names.empty()) return names;
   return "These rules never deal " + names +
-         ", so a seat holding one has no move that uses it: " + config.describe();
+         ", so no reload brings one, but a seat already holding one still uses it. Check the "
+         "mode if that is not the table meant: " +
+         config.describe();
 }
 
 void printHelp() {
@@ -277,7 +528,12 @@ void printHelp() {
     state                 print the position in one line
     board                 print the position as a board
     seat p<N>             advise this seat (default p1)
-    mode don|story<N>|mp  rule set: double or nothing, story round N, multiplayer
+    mode don|story<N>|mp  double or nothing, story stage N, or multiplayer
+    opponent solver|dealer
+                          how p2 plays: to minimise your chance (default), or
+                          by the game's dealer script, which needs two seats,
+                          story or double or nothing, and seat p1 advised.
+                          opponent alone says which is in force
     reloads <n>           how many reloads to look through (default 2)
     rule <name> <value>   change a rule this engine had to assume, as in
                           rule reload-turn keep. rules lists them all
@@ -295,9 +551,12 @@ void printHelp() {
     shot self live        you shot yourself and it was live
     shot p<N> blank       the seat to move shot p<N> and it was blank
     eject live|blank      a beer ejected a shell of that type
-    mg live|blank         a magnifying glass showed the seat to move that shell
-    phone <k> live|blank  a burner phone named shell k, counting from 2, since
-                          a burner phone never names the chamber
+    mg live|blank|unseen  a magnifying glass showed the seat to move that shell
+    phone <k> live|blank|unseen
+                          a burner phone named shell k, counting from 2, since
+                          a burner phone never names the chamber.
+                          unseen records a result only another seat saw; the
+                          answer is the same whichever type it was
     use <item> [p<N>]     the seat to move used an item with no chance outcome
     use med ok|bad        expired medicine, and how it went
     use adr p<N> <item> [p<M>]
@@ -310,10 +569,25 @@ void printHelp() {
 )";
 }
 
+const char* opponentName(OpponentModel opponent) {
+  switch (opponent) {
+    case OpponentModel::Optimal:
+      return "solver";
+    case OpponentModel::Dealer:
+      return "dealer";
+    case OpponentModel::Paranoid:
+      return "paranoid";
+  }
+  return "";
+}
+
 /// Print a result as JSON, so another implementation can be compared against
-/// this one move by move.
-void printJson(const SolveResult& result) {
+/// this one move by move. `mover` and `opponent` tell an empty list of actions
+/// with the scripted dealer to move apart from a position with no move at all.
+void printJson(const SolveResult& result, OpponentModel opponent) {
   std::cout << "{\"value\": " << std::fixed << std::setprecision(12) << result.value
+            << ", \"mover\": \"p" << (result.mover + 1) << "\", \"opponent\": \""
+            << opponentName(opponent) << "\", \"refused\": " << (result.refused ? "true" : "false")
             << ", \"actions\": [";
   for (std::size_t i = 0; i < result.ranked.size(); ++i) {
     if (i > 0) std::cout << ", ";
@@ -325,7 +599,8 @@ void printJson(const SolveResult& result) {
 }
 
 int runOnce(const std::string& position, int seat, int reloads, const std::string& mode,
-            bool asJson, const std::vector<std::pair<std::string, std::string>>& ruleSettings) {
+            bool scriptedDealer, bool asJson,
+            const std::vector<std::pair<std::string, std::string>>& ruleSettings) {
   GameState state;
   std::string error;
   if (!notation::parse(position, &state, &error)) {
@@ -361,14 +636,22 @@ int runOnce(const std::string& position, int seat, int reloads, const std::strin
     std::cerr << settingError << "\n";
     return 1;
   }
+  if (scriptedDealer) {
+    std::string reason;
+    if (!dealerSupported(state, config, options, &reason)) {
+      std::cerr << "--opponent dealer: " << reason << "\n";
+      return 1;
+    }
+    options.opponent = OpponentModel::Dealer;
+  }
   const std::string outside = itemsOutsideThePool(state, config);
   if (!outside.empty() && !asJson) std::cerr << outside << "\n";
   const SolveResult result = solve(state, config, options);
   if (asJson) {
-    printJson(result);
+    printJson(result, options.opponent);
   } else {
     std::cout << notation::board(state);
-    printRanking(result, state, seat);
+    printRanking(result, state, config, seat, options.opponent, false);
   }
   return 0;
 }
@@ -388,13 +671,18 @@ int main(int argc, char** argv) {
   int startSeat = 0;
   int reloads = 2;
   bool asJson = false;
+  bool scriptedDealer = false;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     long number = 0;
     if (arg == "--help" || arg == "-h") {
-      std::cout << "advisor [--position \"<notation>\"] [--seat N] [--reloads N] "
-                   "[--mode don|story2|mp] [--json]\n"
-                   "        [rule settings, listed below]\n\n";
+      std::cout << "advisor [--position \"<notation>\"] [--seat N] [--reloads N]\n"
+                   "        [--mode don|story1|story2|story3|mp] [--opponent solver|dealer]\n"
+                   "        [--json] [rule settings, listed below]\n\n"
+                   "--seat, --reloads, --mode and --opponent set the starting value of the "
+                   "command\nof the same name below (seat p1, 2 reloads, don and solver by "
+                   "default).\n--position answers that one position and exits; --json prints "
+                   "that answer as\nJSON and needs --position.\n\n";
       printHelp();
       std::cout << "\n" << cli::ruleSettingsHelp();
       return 0;
@@ -414,6 +702,13 @@ int main(int argc, char** argv) {
       reloads = static_cast<int>(number);
     } else if (arg == "--mode") {
       if (!cli::nextValue(argc, argv, &i, arg, &startMode)) return 2;
+    } else if (arg == "--opponent") {
+      std::string value;
+      if (!cli::nextValue(argc, argv, &i, arg, &value)) return 2;
+      if (!parseOpponent(value, &scriptedDealer)) {
+        std::cerr << "--opponent takes solver or dealer, not " << value << "\n";
+        return 2;
+      }
     } else if (arg == "--json") {
       asJson = true;
     } else if (cli::isRuleSetting(arg)) {
@@ -432,7 +727,8 @@ int main(int argc, char** argv) {
     }
   }
   if (!startPosition.empty()) {
-    return runOnce(startPosition, startSeat, reloads, startMode, asJson, ruleSettings);
+    return runOnce(startPosition, startSeat, reloads, startMode, scriptedDealer, asJson,
+                   ruleSettings);
   }
   if (asJson) {
     std::cerr << "--json prints one answer, so it needs --position\n";
@@ -442,6 +738,7 @@ int main(int argc, char** argv) {
   if (!reapplySettings(&session)) return 2;
   session.options.seat = startSeat;
   session.options.reloadBudget = reloads;
+  session.scriptedDealer = scriptedDealer;
 
   if (BSR_ISATTY(BSR_FILENO(stdin)) != 0) {
     std::cout << "Buckshot Roulette advisor. Type help for commands, quit to leave.\n";
@@ -474,16 +771,16 @@ int main(int argc, char** argv) {
       continue;
     }
     if (command == "board") {
-      std::cout << notation::board(session.state);
+      printBoard(session);
       continue;
     }
     if (command == "undo") {
       if (session.history.empty()) {
         std::cout << "Nothing to undo.\n";
       } else {
-        session.state = session.history.back();
+        restore(&session, session.history.back());
         session.history.pop_back();
-        std::cout << notation::board(session.state);
+        printBoard(session);
       }
       continue;
     }
@@ -494,9 +791,10 @@ int main(int argc, char** argv) {
         std::cout << error << "\n";
         continue;
       }
-      session.history.push_back(session.state);
+      session.history.push_back(snapshot(session));
       session.state = parsed;
-      std::cout << notation::board(session.state);
+      session.narration = Narration{};
+      printBoard(session);
       continue;
     }
     if (command == "seat" && words.size() >= 2) {
@@ -542,6 +840,29 @@ int main(int argc, char** argv) {
       std::cout << session.config.describe() << "\n";
       continue;
     }
+    if (command == "opponent") {
+      if (words.size() < 2) {
+        if (session.scriptedDealer) {
+          std::cout << "p2 plays by the game's dealer script (dealer). Type opponent solver to "
+                       "switch.\n";
+        } else if (session.config.mode == Mode::Multiplayer) {
+          std::cout << "Every other seat plays to minimise your chance (solver), the only model "
+                       "multiplayer has.\n";
+        } else {
+          std::cout << "p2 plays to minimise your chance (solver). Type opponent dealer to "
+                       "switch.\n";
+        }
+        continue;
+      }
+      if (!parseOpponent(words[1], &session.scriptedDealer)) {
+        std::cout << "opponent takes solver or dealer, not " << words[1]
+                  << ", as in opponent dealer.\n";
+        continue;
+      }
+      std::cout << (session.scriptedDealer ? "p2 plays by the game's dealer script.\n"
+                                           : "p2 plays to minimise your chance.\n");
+      continue;
+    }
     if (command == "rule" && words.size() >= 3) {
       const std::string flag = words[1].rfind("--", 0) == 0 ? words[1] : "--" + words[1];
       std::string settingError;
@@ -556,7 +877,11 @@ int main(int argc, char** argv) {
       continue;
     }
     if (command == "rule" || command == "rules") {
-      std::cout << cli::ruleSettingsHelp() << "\n" << session.config.describe() << "\n";
+      std::cout << cli::ruleSettingsHelp() << "\n"
+                << session.config.describe() << "\n"
+                << "opponent: "
+                << (session.scriptedDealer ? "dealer script" : "solver, minimising your chance")
+                << "\n";
       continue;
     }
     if (command == "load" && words.size() >= 2) {
@@ -576,9 +901,10 @@ int main(int argc, char** argv) {
           next.players[seat].skipConsumed = false;
         }
       }
-      session.history.push_back(session.state);
+      session.history.push_back(snapshot(session));
       session.state = next;
-      std::cout << notation::board(session.state);
+      session.narration = Narration{};
+      printBoard(session);
       continue;
     }
     if (command == "hp" && words.size() >= 3) {
@@ -598,9 +924,9 @@ int main(int argc, char** argv) {
         std::cout << "That seat holds at most " << static_cast<int>(player.maxHp) << " charges.\n";
         continue;
       }
-      session.history.push_back(session.state);
+      session.history.push_back(snapshot(session));
       player.hp = static_cast<std::uint8_t>(charges);
-      std::cout << notation::board(session.state);
+      printBoard(session);
       continue;
     }
     if ((command == "give" || command == "take") && words.size() >= 3) {
@@ -610,14 +936,14 @@ int main(int argc, char** argv) {
         std::cout << "Say which seat and which item, as in give p1 saw.\n";
         continue;
       }
-      session.history.push_back(session.state);
+      session.history.push_back(snapshot(session));
       std::uint8_t& count = session.state.players[seat].items[itemIndex(item)];
       if (command == "give") {
         ++count;
       } else if (count > 0) {
         --count;
       }
-      std::cout << notation::board(session.state);
+      printBoard(session);
       continue;
     }
     if (command == "turn" && words.size() >= 2) {
@@ -626,10 +952,11 @@ int main(int argc, char** argv) {
         std::cout << "Name a seat, as in turn p2.\n";
         continue;
       }
-      session.history.push_back(session.state);
+      session.history.push_back(snapshot(session));
       session.state.current = static_cast<std::uint8_t>(seat);
       session.state.cuffUsedThisTurn = false;
-      std::cout << notation::board(session.state);
+      session.narration.dealerMidTurn = false;
+      printBoard(session);
       continue;
     }
     if ((command == "cuff" || command == "uncuff") && words.size() >= 2) {
@@ -638,19 +965,20 @@ int main(int argc, char** argv) {
         std::cout << "Name a seat, as in cuff p2.\n";
         continue;
       }
-      session.history.push_back(session.state);
+      session.history.push_back(snapshot(session));
       session.state.players[seat].cuffed = command == "cuff";
-      std::cout << notation::board(session.state);
+      printBoard(session);
       continue;
     }
     if (command == "saw" || command == "invert") {
-      session.history.push_back(session.state);
+      session.history.push_back(snapshot(session));
       if (command == "saw") {
         session.state.tube.sawed = true;
       } else {
+        if (unpinBeforeInversion(&session)) sayUnpinned();
         session.state.tube.invertChamber();
       }
-      std::cout << notation::board(session.state);
+      printBoard(session);
       continue;
     }
     if (command == "shot" && words.size() >= 3) {
@@ -661,7 +989,7 @@ int main(int argc, char** argv) {
         continue;
       }
       if (applyWithOutcome(&session, Action::shoot(target), true, shell)) {
-        std::cout << notation::board(session.state);
+        printBoard(session);
       }
       continue;
     }
@@ -672,14 +1000,16 @@ int main(int argc, char** argv) {
         continue;
       }
       if (applyWithOutcome(&session, Action::use(Item::Beer), true, shell)) {
-        std::cout << notation::board(session.state);
+        printBoard(session);
       }
       continue;
     }
     if (command == "mg" && words.size() >= 2) {
-      Shell shell;
-      if (!parseShell(words[1], &shell)) {
-        std::cout << "Say what it showed, as in mg live.\n";
+      const bool unseen = words[1] == "unseen";
+      Shell shell = Shell::Unknown;
+      if (!unseen && !parseShell(words[1], &shell)) {
+        std::cout << "Say what it showed, as in mg live, or mg unseen when only the seat using it "
+                     "saw.\n";
         continue;
       }
       if (session.state.tube.empty()) {
@@ -687,58 +1017,121 @@ int main(int argc, char** argv) {
         continue;
       }
       const int seat = session.state.current;
+      if (unseen && seat == session.options.seat) {
+        std::cout << "You saw what your own glass showed, so say which, as in mg live.\n";
+        continue;
+      }
+      const Snapshot point = snapshot(session);
+      const Tube& chamber = session.state.tube;
+      if (seat != session.options.seat && chamber.truth[0] == Shell::Unknown &&
+          chamber.chamberInverted) {
+        // Pinning a shell with an inversion pending moves the public counts by
+        // the type it is pinned to, which the advised seat did not see.
+        session.history.push_back(point);
+        std::uint8_t& count = session.state.players[seat].items[itemIndex(Item::MagnifyingGlass)];
+        if (count > 0) --count;
+        afterEvent(&session, point.state, true);
+        std::cout << "The chamber was inverted before anyone saw it, so the glass is recorded as "
+                     "used and what it showed is left out: p"
+                  << (seat + 1) << " is treated as not knowing the chamber.\n";
+        printBoard(session);
+        continue;
+      }
+      if (unseen) {
+        // Any type the tube can supply will do: the advised seat's answer
+        // averages over it either way.
+        const Tube& tube = session.state.tube;
+        shell = tube.truth[0] != Shell::Unknown ? tube.truth[0]
+                : tube.canFire(Shell::Live)     ? Shell::Live
+                                                : Shell::Blank;
+      } else if (!fitChamber(&session, shell)) {
+        continue;
+      }
       std::string why;
       if (!chamberCanFire(session.state.tube, shell, &why)) {
+        restore(&session, point);
         std::cout << why;
         continue;
       }
       GameState probe = session.state;
-      if (probe.tube.chamberInverted) {
-        const Shell drawn = shell == Shell::Live ? Shell::Blank : Shell::Live;
-        probe.tube.resolveChamberDraw(drawn, static_cast<std::uint8_t>(1u << seat));
+      if (probe.tube.chamberInverted && probe.tube.truth[0] == Shell::Unknown) {
+        probe.tube.resolveChamberDraw(opposite(shell), static_cast<std::uint8_t>(1u << seat));
       } else {
         probe.tube.resolve(0, shell, static_cast<std::uint8_t>(1u << seat));
       }
       if (!tubeStillFits(probe.tube)) {
+        restore(&session, point);
         std::cout << contradictionMessage(shell);
         continue;
       }
-      session.history.push_back(session.state);
+      const GameState before = session.state;
+      session.history.push_back(point);
       session.state = probe;
       std::uint8_t& count = session.state.players[seat].items[itemIndex(Item::MagnifyingGlass)];
       if (count > 0) --count;
-      std::cout << notation::board(session.state);
+      if (unseen)
+        session.narration.unseen = static_cast<std::uint8_t>(session.narration.unseen | 1u);
+      afterEvent(&session, before, true);
+      printBoard(session);
       continue;
     }
     if (command == "phone" && words.size() >= 3) {
       long parsed = 0;
       const bool number = cli::parseWholeNumber(words[1], 0, 64, &parsed);
       const int position = number ? static_cast<int>(parsed) : 0;
-      Shell shell;
+      const bool unseen = words[2] == "unseen";
+      Shell shell = Shell::Unknown;
       if (!number || position < 2 || position > session.state.tube.size() ||
-          !parseShell(words[2], &shell)) {
-        std::cout << "Say which shell and what it is, as in phone 3 blank. A burner phone "
-                     "never names the chamber, so the number starts at 2.\n";
+          (!unseen && !parseShell(words[2], &shell))) {
+        std::cout << "Say which shell and what it is, as in phone 3 blank, or phone 3 unseen when "
+                     "only the seat using it heard. A burner phone never names the chamber, so "
+                     "the number starts at 2.\n";
         continue;
       }
       const int seat = session.state.current;
-      const Shell already = session.state.tube.truth[position - 1];
-      if (already != Shell::Unknown && already != shell) {
-        std::cout << "Shell " << position << " is already recorded as "
-                  << (already == Shell::Live ? "live" : "blank") << ".\n";
+      if (unseen && seat == session.options.seat) {
+        std::cout << "You heard what your own phone said, so say which, as in phone 3 live.\n";
         continue;
       }
+      const int offset = position - 1;
+      const Snapshot point = snapshot(session);
+      const Shell already = session.state.tube.truth[offset];
+      if (unseen) {
+        const Tube& tube = session.state.tube;
+        shell = already != Shell::Unknown   ? already
+                : tube.unresolvedLive() > 0 ? Shell::Live
+                                            : Shell::Blank;
+      } else if (already == Shell::Unknown) {
+        makeRoomFor(&session, shell, offset);
+      } else if (already != shell) {
+        if (!typeUnseenByAdvised(session, offset)) {
+          std::cout << "Shell " << position << " is already recorded as "
+                    << (already == Shell::Live ? "live" : "blank") << ".\n";
+          continue;
+        }
+        if (!repin(&session, offset, shell)) {
+          std::cout << contradictionMessage(shell);
+          continue;
+        }
+      }
       GameState probe = session.state;
-      probe.tube.resolve(position - 1, shell, static_cast<std::uint8_t>(1u << seat));
+      probe.tube.resolve(offset, shell, static_cast<std::uint8_t>(1u << seat));
       if (!tubeStillFits(probe.tube)) {
+        restore(&session, point);
         std::cout << contradictionMessage(shell);
         continue;
       }
-      session.history.push_back(session.state);
+      const GameState before = session.state;
+      session.history.push_back(point);
       session.state = probe;
       std::uint8_t& count = session.state.players[seat].items[itemIndex(Item::BurnerPhone)];
       if (count > 0) --count;
-      std::cout << notation::board(session.state);
+      if (unseen) {
+        session.narration.unseen =
+            static_cast<std::uint8_t>(session.narration.unseen | (1u << offset));
+      }
+      afterEvent(&session, before, true);
+      printBoard(session);
       continue;
     }
     if (command == "use" && words.size() >= 2) {
@@ -786,7 +1179,26 @@ int main(int argc, char** argv) {
       // command that names the result, so that the advisor tracks what actually
       // happened rather than the likeliest branch.
       const Item effect = item == Item::Adrenaline ? action.stolen : item;
-      if (effect == Item::MagnifyingGlass || effect == Item::Beer || effect == Item::BurnerPhone) {
+      const bool privateItem = effect == Item::MagnifyingGlass || effect == Item::BurnerPhone;
+      if (privateItem && session.state.current != session.options.seat) {
+        // Only the seat using it learns what it says, and the advised seat's
+        // answer is the same whatever that was.
+        const std::string whose =
+            session.scriptedDealer && session.state.current == kDealerSeat
+                ? std::string("The dealer's")
+                : "p" + std::to_string(static_cast<int>(session.state.current) + 1) + "'s";
+        if (effect == Item::MagnifyingGlass) {
+          std::cout << whose
+                    << " glass is private: type mg unseen (or mg live or mg blank if you know; "
+                       "the answer is the same).\n";
+        } else {
+          std::cout << whose
+                    << " phone is private: type phone <k> unseen for the shell it read (or "
+                       "phone <k> live or blank if you know; the answer is the same).\n";
+        }
+        continue;
+      }
+      if (privateItem || effect == Item::Beer) {
         std::cout << "Say what it showed instead: mg live, eject blank, or phone 3 live.\n";
         continue;
       }
@@ -798,11 +1210,11 @@ int main(int argc, char** argv) {
           continue;
         }
         if (!applyMedicine(&session, action, outcome == "ok")) continue;
-        std::cout << notation::board(session.state);
+        printBoard(session);
         continue;
       }
       if (applyWithOutcome(&session, action, false, Shell::Unknown)) {
-        std::cout << notation::board(session.state);
+        printBoard(session);
       }
       continue;
     }
@@ -813,8 +1225,19 @@ int main(int argc, char** argv) {
       }
       const std::string outside = itemsOutsideThePool(session.state, session.config);
       if (!outside.empty()) std::cout << outside << "\n";
-      const SolveResult result = solve(session.state, session.config, session.options);
-      printRanking(result, session.state, session.options.seat);
+      SolveOptions options = session.options;
+      if (session.scriptedDealer) {
+        std::string reason;
+        if (!dealerSupported(session.state, session.config, options, &reason)) {
+          std::cout << "The dealer opponent cannot answer this: " << reason
+                    << ". Type opponent solver to go back.\n";
+          continue;
+        }
+        options.opponent = OpponentModel::Dealer;
+      }
+      const SolveResult result = solve(session.state, session.config, options);
+      printRanking(result, session.state, session.config, options.seat, options.opponent,
+                   session.narration.dealerMidTurn);
       continue;
     }
     std::cout << "I do not know the command " << words[0] << ". Type help.\n";

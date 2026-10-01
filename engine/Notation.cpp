@@ -384,20 +384,25 @@ std::string print(const GameState& state) {
   return out.str();
 }
 
-std::string board(const GameState& state) {
+std::string board(const GameState& state, std::uint8_t untyped) {
   std::ostringstream out;
   out << "tube: " << static_cast<int>(state.tube.live) << " live, "
       << static_cast<int>(state.tube.blank) << " blank";
   if (state.tube.sawed) out << ", barrel sawed";
   if (state.tube.chamberInverted) out << ", chamber inverted";
   out << "\n";
+  // A finished round has nobody to move, and a seat that is out has no turn
+  // to lose. With more than two seats the restraint is a Jammer.
+  const bool playing = !state.roundOver();
+  const char* restrained = state.playerCount > 2 ? "  jammed" : "  cuffed";
   for (int seat = 0; seat < state.playerCount; ++seat) {
     const PlayerState& player = state.players[seat];
-    out << (seat == state.current ? "> " : "  ") << "p" << (seat + 1) << "  "
+    const bool marked = playing && player.alive();
+    out << (marked && seat == state.current ? "> " : "  ") << "p" << (seat + 1) << "  "
         << static_cast<int>(player.hp) << "/" << static_cast<int>(player.maxHp) << " charges";
     if (!player.alive()) out << "  out";
-    if (player.cuffed) out << "  cuffed";
-    if (player.skipConsumed) out << "  owed a turn";
+    if (marked && player.cuffed) out << restrained;
+    if (marked && player.skipConsumed) out << "  lost a turn";
     if (player.itemCount() > 0) {
       out << "  items:";
       for (int k = 0; k < kItemCount; ++k) {
@@ -409,8 +414,12 @@ std::string board(const GameState& state) {
     bool anyKnown = false;
     for (int i = 0; i < state.tube.size(); ++i) {
       if (!state.tube.knows(seat, i)) continue;
-      out << (anyKnown ? ", " : "  knows: ") << "shell " << (i + 1) << " is "
-          << (state.tube.truth[i] == Shell::Live ? "live" : "blank");
+      out << (anyKnown ? ", " : "  knows: ") << "shell " << (i + 1);
+      if (((untyped >> i) & 1u) != 0u) {
+        out << " (unseen by you)";
+      } else {
+        out << " is " << (state.tube.truth[i] == Shell::Live ? "live" : "blank");
+      }
       anyKnown = true;
     }
     out << "\n";

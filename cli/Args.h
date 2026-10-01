@@ -28,10 +28,15 @@ inline bool parseWholeNumber(const std::string& text, long low, long high, long*
 }
 
 /// The value that follows a flag. Fails when the flag is last on the line or is
-/// followed by another flag, rather than quietly swallowing it.
+/// followed by another flag, rather than quietly swallowing it. A minus sign
+/// followed by a digit is a value, so that a negative number reaches the range
+/// check and is refused there with the range in the message.
 inline bool nextValue(int argc, char** argv, int* index, const std::string& flag,
                       std::string* out) {
-  if (*index + 1 >= argc || argv[*index + 1][0] == '-') {
+  const char* next = *index + 1 < argc ? argv[*index + 1] : nullptr;
+  const bool negative =
+      next != nullptr && next[0] == '-' && std::isdigit(static_cast<unsigned char>(next[1])) != 0;
+  if (next == nullptr || (next[0] == '-' && !negative)) {
     std::cerr << flag << " needs a value\n";
     return false;
   }

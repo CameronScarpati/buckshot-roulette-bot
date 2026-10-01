@@ -14,6 +14,9 @@ struct SolveOptions {
   /// The seat whose chance of surviving the round is being maximised.
   int seat = 0;
 
+  /// With `OpponentModel::Dealer`, seat 2 plays the game's dealer script
+  /// (engine/Dealer.h) instead of minimising, which needs a table that
+  /// `dealerSupported` accepts.
   OpponentModel opponent = OpponentModel::Optimal;
 
   /// How many reloads the search looks through before it stops recursing. Each
@@ -49,7 +52,14 @@ struct SolveResult {
   /// that arrives handcuffed is skipped before anything is asked of it, so the
   /// moves listed can be the opponent's.
   int mover = 0;
-  std::vector<ActionValue> ranked;  ///< best first for `mover`
+  /// Best first for `mover`. Empty when the scripted dealer is to move, since
+  /// the dealer does not choose between moves: `value` is then the worth of the
+  /// dealer's turn to the advised seat.
+  std::vector<ActionValue> ranked;
+  /// Set when the question could not be answered under the model asked for,
+  /// such as the scripted dealer at a table it does not play. Nothing is
+  /// searched, and `assumptions` says why.
+  bool refused = false;
   long long nodes = 0;
   bool truncated = false;  ///< a node hit the reload budget or the node limit
   /// Shells another seat has looked at and the advised seat has not. The value
@@ -74,6 +84,13 @@ SolveResult solve(const GameState& state, const RuleConfig& config, const SolveO
 /// The value of a position without ranking the moves, for tests and the oracle
 /// comparison.
 double solveValue(const GameState& state, const RuleConfig& config, const SolveOptions& options);
+
+/// Whether the scripted dealer can be the opponent here: two seats, the
+/// player's seat (p1) advised, and story mode or Double or Nothing. When it
+/// cannot, `reason` gets one line saying why. This does not look at
+/// `options.opponent`, so a caller can ask before switching the model on.
+bool dealerSupported(const GameState& state, const RuleConfig& config, const SolveOptions& options,
+                     std::string* reason);
 
 /// One line naming every assumption that could change the answer.
 std::string describeAssumptions(const RuleConfig& config, const SolveOptions& options);

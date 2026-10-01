@@ -1,0 +1,117 @@
+#pragma once
+
+#include <cstdint>
+#include <vector>
+
+#include "engine/Config.h"
+#include "engine/State.h"
+
+namespace bsr {
+
+/// The single-player dealer as the game scripts it.
+///
+/// The rules are read from a third-party decompilation of Buckshot Roulette
+/// v2.2.0 hotfix 6, pinned at commit 34531a4c5e26ec44320c5197e2f678ce1a7b8d00
+/// of https://github.com/thecatontheceiling/buckshotroulette, and every rule
+/// here cites a file there by line, as in
+/// https://github.com/thecatontheceiling/buckshotroulette/blob/34531a4c5e26ec44320c5197e2f678ce1a7b8d00/DealerIntelligence.gd#L85
+/// for the start of the dealer's decision (`DealerChoice`). The dealer is
+/// always seat index 1 (p2) and the player is seat index 0 (p1), because the
+/// script only exists for a two-seat table.
+///
+/// A dealer turn is a sequence of passes. Each pass either uses one item, after
+/// which another pass follows in the same turn with the turn memory kept, or
+/// fires one shot, after which the turn is over and the memory is discarded.
+/// `step` is one pass. Like everything in the engine it reads no input, writes
+/// no output and holds no random number generator: every coin the script flips
+/// and every shell it cannot see is a branch with a probability.
+///
+/// Four things differ from the script on purpose, and the solver states them
+/// with every answer they can change. The script walks its items in the order
+/// they sit on the table, and this model walks them by type in a fixed order.
+/// On the first pass of a turn the script decides whether it holds cigarettes
+/// from a list left by its previous turn, and this model reads it from whether
+/// the dealer holds Adrenaline now. A blank the dealer fires into itself clears
+/// a sawed barrel, as every other shot does, where the script leaves the barrel
+/// sawed. And a failed Expired Medicine always costs a charge, where the script
+/// leaves a dealer below the heal floor where it was; its guard against taking
+/// medicine on one charge means this can only arise with a floor above two.
+namespace dealer {
+
+/// Which of the script's two sets of decision rules is in force. Double or
+/// Nothing runs the script's endless rules, which add deduction from counts
+/// and weight the coin by the tube; story mode runs the plain ones.
+enum class Brain : std::uint8_t { Story, Endless };
+
+/// The brain a rule set calls for. Returns false for multiplayer, which has no
+/// scripted dealer.
+bool brainFor(const RuleConfig& config, Brain* brain);
+
+/// Printable name: "story" or "endless".
+const char* brainName(Brain brain);
+
+/// Who the dealer has decided to shoot.
+enum class Target : std::uint8_t { None, Self, Player };
+
+/// Whether the item list the previous pass built held the player's items, which
+/// it does when the dealer then held Adrenaline. Unset on the first pass.
+enum class AdrenalineList : std::uint8_t { Unset, True, False };
+
+/// What the dealer carries from one pass to the next within a turn. The script
+/// keeps these as dealerKnowsShell, knownShell, dealerTarget and usingMedicine
+/// (DealerIntelligence.gd lines 65-77). It clears the first three after every
+/// shot (lines 277-279) and usingMedicine at every turn start (line 68). A
+/// default-constructed memory is the memory a turn starts with.
+struct Memory {
+  bool knows = false;
+  Shell known = Shell::Unknown;  ///< Unknown when it knows nothing
+  Target target = Target::None;
+  bool usedMedicine = false;
+  AdrenalineList adrenalineList = AdrenalineList::Unset;
+
+  bool operator==(const Memory& other) const;
+};
+
+/// Why a pass did what it did, for narration.
+enum class Reason : std::uint8_t {
+  Item,         ///< the item scan found an item whose condition held
+  SawCoin,      ///< nothing else to use, and the coin said saw the barrel
+  SawCoinSelf,  ///< a saw was available, and the coin said shoot itself instead
+  Deduced,      ///< it worked out the chamber from what it has seen and the counts
+  LastShell,    ///< one shell left, so it knows what it is
+  KnownTarget,  ///< a target chosen earlier in the turn
+  Coin,         ///< no target, so a coin chose one
+};
+
+/// One outcome of a pass.
+struct Branch {
+  double probability = 1.0;
+  GameState state;
+  /// The memory the next pass starts from. After a shot the turn is over and
+  /// this is a fresh memory, because the next dealer turn starts from one.
+  Memory memory;
+  /// True when the pass fired a shot, or when the round ended during it. The
+  /// position then continues through the ordinary rules: the round may be
+  /// over, the tube may need a reload, and the next turn may be the dealer's
+  /// again, which starts with a fresh memory.
+  bool turnOver = false;
+  /// What the dealer did: an item, a stolen item, or a shot at a seat.
+  Action action;
+  bool stolen = false;  ///< the item came from p1 through Adrenaline
+  Reason reason = Reason::Coin;
+  /// Set when a shell left the tube in this branch, by a shot or a Beer.
+  bool shellFired = false;
+  Shell shellType = Shell::Unknown;
+};
+
+/// One pass of the dealer's turn from `state`, which must have p2 to move, a
+/// shell in the tube and the round still going. Returns every branch with its
+/// probability, summing to one, and nothing when the position is not a dealer
+/// turn. The pass reads the type of a shell only where the dealer has seen it
+/// or where the pass itself resolves it, so the same call works on a live game
+/// whose state pins down shells the dealer has not seen.
+std::vector<Branch> step(const GameState& state, const Memory& memory, const RuleConfig& config,
+                         Brain brain);
+
+}  // namespace dealer
+}  // namespace bsr

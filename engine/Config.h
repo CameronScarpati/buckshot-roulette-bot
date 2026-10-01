@@ -25,15 +25,18 @@ enum class ReloadTurn : std::uint8_t {
 
 /// How the solver treats the other seats. Stated in every advisor answer,
 /// because "optimal" has no meaning without it.
-/// The scripted single-player dealer is deliberately absent: its policy would
-/// have to be re-derived rule by rule from the game before it could be called
-/// a model of the dealer, and a guess presented as one would be worse than
-/// naming the assumption honestly. Both models below minimise within the limits
-/// the solver states: the other seats choose from their own information state
-/// and spend no information items unless the search is told to let them.
+/// The first two minimise within the limits the solver states: the other seats
+/// choose from their own information state and spend no information items
+/// unless the search is told to let them. The third is the single-player
+/// dealer as the game scripts it, rule by rule, with the decompiled script's
+/// lines cited in engine/Dealer.h and engine/Dealer.cpp. It plays its script
+/// rather than minimising, so it is a model of the dealer and not of the
+/// strongest possible opponent, and it exists only for a two-seat table in
+/// story mode or Double or Nothing with the player's seat advised.
 enum class OpponentModel : std::uint8_t {
   Optimal,   ///< the opponent minimises our win probability (two players)
   Paranoid,  ///< three or more players: everyone else plays to minimise us
+  Dealer,    ///< seat 2 is the scripted single-player dealer (engine/Dealer.h)
 };
 
 /// Everything a rule set needs to decide. Defaults describe Double or Nothing
