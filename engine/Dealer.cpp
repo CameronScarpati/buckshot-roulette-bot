@@ -3,6 +3,7 @@
 #include <initializer_list>
 #include <utility>
 
+#include "engine/Position.h"
 #include "engine/Rules.h"
 
 namespace bsr {
@@ -12,14 +13,6 @@ namespace {
 constexpr int kPlayer = 0;
 constexpr int kDealer = 1;
 constexpr std::uint8_t kDealerMask = static_cast<std::uint8_t>(1u << kDealer);
-
-/// The order the item scan walks, one side at a time. The script walks the
-/// items in the order they sit on the table; fixing it by type is one of the
-/// stated approximations, and it only matters when two conditions hold at once.
-constexpr Item kScanOrder[] = {
-    Item::MagnifyingGlass, Item::Cigarettes, Item::ExpiredMedicine, Item::Beer,
-    Item::Handcuffs,       Item::HandSaw,    Item::BurnerPhone,     Item::Inverter,
-};
 
 /// A pass part of the way through, before it has used an item or shot.
 struct Partial {
@@ -35,15 +28,6 @@ struct Resolved {
   double probability = 1.0;
   GameState state;
 };
-
-bool holds(const PlayerState& player, Item item) {
-  return player.items[itemIndex(item)] > 0;
-}
-
-void consume(PlayerState* player, Item item) {
-  std::uint8_t& count = player->items[itemIndex(item)];
-  if (count > 0) --count;
-}
 
 /// Branches for the type at `offset`, with `observers` added to whoever has
 /// seen it. A position already pinned down gives one branch; otherwise the
@@ -155,14 +139,14 @@ bool conditionHolds(Item item, const GameState& state, const Memory& memory, boo
   return false;
 }
 
-/// Pay for an item: the dealer's own copy, or one of its Adrenalines and the
-/// player's copy (DealerIntelligence.gd lines 243-256).
+/// Pay for an item: the dealer's first copy of it, or its first Adrenaline and
+/// the player's first copy (DealerIntelligence.gd lines 243-261).
 void pay(GameState* state, Item item, bool stolen) {
   if (stolen) {
-    consume(&state->players[kDealer], Item::Adrenaline);
-    consume(&state->players[kPlayer], item);
+    state->players[kDealer].hand.removeCopy(Item::Adrenaline, 0);
+    state->players[kPlayer].hand.removeCopy(item, 0);
   } else {
-    consume(&state->players[kDealer], item);
+    state->players[kDealer].hand.removeCopy(item, 0);
   }
 }
 
@@ -342,7 +326,80 @@ const char* brainName(Brain brain) {
 
 bool Memory::operator==(const Memory& other) const {
   return knows == other.knows && known == other.known && target == other.target &&
-         usedMedicine == other.usedMedicine && adrenalineList == other.adrenalineList;
+         usedMedicine == other.usedMedicine;
+}
+
+bool listCigsAfterPass(const GameState& before, const GameState& after) {
+  return before.players[kDealer].hand.holds(Item::Adrenaline) &&
+         after.players[kPlayer].hand.holds(Item::Cigarettes);
+}
+
+bool checkMemory(const Position& position, std::string* error) {
+  const Memory& memory = position.dealerMemory;
+  if (memory == Memory{}) return true;
+  const GameState& state = position.state;
+  if (state.playerCount != 2) {
+    *error = "listcigs and dealer need exactly two seats";
+    return false;
+  }
+  if (state.tube.empty()) {
+    *error = "dealer needs shells left in the tube";
+    return false;
+  }
+  if (state.current != kDealer) {
+    *error = "dealer needs p2 to move";
+    return false;
+  }
+  if (state.players[kDealer].cuffed) {
+    *error = "a cuffed seat cannot be in the middle of its turn";
+    return false;
+  }
+  const bool sawLive = state.tube.knows(kDealer, 0) && state.tube.truth[0] == Shell::Live;
+  if (memory.knows &&
+      (memory.known == Shell::Unknown || (memory.known == Shell::Live && !sawLive))) {
+    *error = "dealer=seen needs known=p2:0L or known=p2:0B";
+    return false;
+  }
+  // The memories a turn can leave between passes: the chamber seen live or
+  // seen (or believed) blank with the matching target, a target left by an
+  // endless Beer or by the saw coin, or no target at all.
+  const bool matchesACore =
+      memory.knows
+          ? (memory.target == (memory.known == Shell::Live ? Target::Player : Target::Self))
+          : memory.known == Shell::Unknown;
+  if (!matchesACore) {
+    *error =
+        "dealer must be seen, believes:B, aim:self or aim:p1, optionally followed by med, as in "
+        "dealer=seen,med";
+    return false;
+  }
+  if (!memory.knows && memory.target == Target::Player && !state.tube.sawed) {
+    *error = "dealer=aim:p1 needs the barrel sawed";
+    return false;
+  }
+  if (state.tube.sawed && memory.target == Target::Self) {
+    *error =
+        "the dealer saws only when it aims at p1, so a sawed barrel cannot go with this dealer "
+        "memory";
+    return false;
+  }
+  return true;
+}
+
+bool validateMemory(const Position& position, Brain brain, std::string* error) {
+  if (!checkMemory(position, error)) return false;
+  const Memory& memory = position.dealerMemory;
+  const Tube& tube = position.state.tube;
+  const bool sawBlank = tube.knows(kDealer, 0) && tube.truth[0] == Shell::Blank;
+  if (brain == Brain::Endless && memory.knows && memory.known == Shell::Blank && !sawBlank) {
+    *error = "dealer=believes:B happens only in story mode";
+    return false;
+  }
+  if (brain == Brain::Story && !memory.knows && memory.target == Target::Self) {
+    *error = "dealer=aim:self happens only in double or nothing";
+    return false;
+  }
+  return true;
 }
 
 std::vector<Branch> step(const GameState& state, const Memory& memory, const RuleConfig& config,
@@ -384,27 +441,24 @@ std::vector<Branch> step(const GameState& state, const Memory& memory, const Rul
   for (Partial& pass : passes) {
     const PlayerState& me = pass.state.players[kDealer];
     const PlayerState& player = pass.state.players[kPlayer];
-    const bool adrenaline = holds(me, Item::Adrenaline);
+    const bool adrenaline = me.hand.holds(Item::Adrenaline);
 
     // Step 3: the item scan (DealerIntelligence.gd lines 113-201). Whether the
     // dealer holds cigarettes is read from the list the previous pass built,
-    // which holds the player's items when the dealer then held Adrenaline. The
-    // first pass of a turn has no such list here and takes the dealer's
-    // Adrenaline now in its place.
-    const bool listHasPlayerItems = pass.memory.adrenalineList == AdrenalineList::Unset
-                                        ? adrenaline
-                                        : pass.memory.adrenalineList == AdrenalineList::True;
-    const bool hasCigs =
-        holds(me, Item::Cigarettes) || (listHasPlayerItems && holds(player, Item::Cigarettes));
-    pass.memory.adrenalineList = adrenaline ? AdrenalineList::True : AdrenalineList::False;
+    // before this pass rebuilds it: the dealer's own Cigarettes, and the
+    // player's when that pass began with the dealer holding Adrenaline. The
+    // scan then walks the dealer's items in the order they sit on the table,
+    // and the player's after them when the dealer holds Adrenaline, and takes
+    // the first whose condition holds.
+    const bool hasCigs = me.hand.holds(Item::Cigarettes) || pass.state.dealerListCigs;
 
     bool used = false;
     for (int side = 0; side < 2 && !used; ++side) {
       const bool stolen = side == 1;
       if (stolen && !adrenaline) break;
-      const PlayerState& owner = stolen ? player : me;
-      for (const Item item : kScanOrder) {
-        if (!holds(owner, item)) continue;
+      const Hand& hand = stolen ? player.hand : me.hand;
+      for (int index = 0; index < hand.size(); ++index) {
+        const Item item = hand.at[static_cast<std::size_t>(index)];
         if (!conditionHolds(item, pass.state, pass.memory, hasCigs)) continue;
         useItem(pass, item, stolen, Reason::Item, config, brain, &out);
         used = true;
@@ -415,8 +469,10 @@ std::vector<Branch> step(const GameState& state, const Memory& memory, const Rul
 
     // Step 4: nothing else to use, so a saw within reach is a coin flip
     // between sawing and shooting itself (DealerIntelligence.gd lines 203-215).
-    const bool ownSaw = holds(me, Item::HandSaw);
-    const bool hasSaw = ownSaw || (adrenaline && holds(player, Item::HandSaw));
+    // The script looks for it in the same list, so a saw of the player's counts
+    // when the dealer holds Adrenaline.
+    const bool ownSaw = me.hand.holds(Item::HandSaw);
+    const bool hasSaw = ownSaw || (adrenaline && player.hand.holds(Item::HandSaw));
     if (hasSaw && !pass.state.tube.sawed && pass.memory.known != Shell::Blank) {
       for (const auto& [chance, face] : coin(pass.state.tube, brain)) {
         Partial flipped = pass;
@@ -444,6 +500,10 @@ std::vector<Branch> step(const GameState& state, const Memory& memory, const Rul
       shoot(flipped, face == 0 ? Target::Self : Target::Player, Reason::Coin, config, &out);
     }
   }
+
+  // Every pass rebuilds the list, so every branch leaves the bit the next pass
+  // reads (DealerIntelligence.gd 113-149).
+  for (Branch& branch : out) branch.state.dealerListCigs = listCigsAfterPass(state, branch.state);
   return out;
 }
 

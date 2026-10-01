@@ -28,9 +28,9 @@ TEST(Notation, ReadsEveryField) {
   EXPECT_EQ(state.playerCount, 2);
   EXPECT_EQ(state.players[0].hp, 3);
   EXPECT_EQ(state.players[0].maxHp, 4);
-  EXPECT_EQ(state.players[0].items[itemIndex(Item::HandSaw)], 1);
-  EXPECT_EQ(state.players[0].items[itemIndex(Item::Beer)], 1);
-  EXPECT_EQ(state.players[1].items[itemIndex(Item::MagnifyingGlass)], 1);
+  EXPECT_EQ(state.players[0].hand.count(Item::HandSaw), 1);
+  EXPECT_EQ(state.players[0].hand.count(Item::Beer), 1);
+  EXPECT_EQ(state.players[1].hand.count(Item::MagnifyingGlass), 1);
   EXPECT_EQ(state.tube.live, 2);
   EXPECT_EQ(state.tube.blank, 3);
   EXPECT_EQ(state.current, 1);
@@ -110,8 +110,8 @@ TEST(Notation, CarriesTheFlagsThatDecideWhoMayBeRestrained) {
 
 TEST(Notation, AcceptsItemNamesAsWellAsTokens) {
   const GameState state = parseOk("p1=2/2[handsaw,magnifyingglass] p2=2/2 tube=1L1B turn=p1");
-  EXPECT_EQ(state.players[0].items[itemIndex(Item::HandSaw)], 1);
-  EXPECT_EQ(state.players[0].items[itemIndex(Item::MagnifyingGlass)], 1);
+  EXPECT_EQ(state.players[0].hand.count(Item::HandSaw), 1);
+  EXPECT_EQ(state.players[0].hand.count(Item::MagnifyingGlass), 1);
 }
 
 TEST(Notation, TheBoardNamesWhatEachSeatKnows) {

@@ -42,6 +42,7 @@ add_library(bsr_core STATIC
     engine/Config.cpp
     engine/Notation.cpp
     engine/Dealer.cpp
+    engine/Position.cpp
     solver/Solver.cpp
 )
 target_include_directories(bsr_core PUBLIC ${CMAKE_SOURCE_DIR})

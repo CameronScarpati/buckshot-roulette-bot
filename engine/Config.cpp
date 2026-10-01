@@ -64,6 +64,7 @@ RuleConfig RuleConfig::storyRound(int round) {
   config.itemsPerLoad = round <= 1 ? 0 : (round == 2 ? 2 : 4);
   config.itemsPerLoadMax = config.itemsPerLoad;
   config.reloadTurn = ReloadTurn::PlayerFirst;
+  config.sawSurvivesReload = true;
   return config;
 }
 
@@ -72,10 +73,15 @@ RuleConfig RuleConfig::doubleOrNothing(std::uint8_t charges) {
   config.mode = Mode::DoubleOrNothing;
   config.charges = charges;
   config.itemPool = doubleOrNothingPool();
-  // The count is redrawn at every load rather than fixed.
-  config.itemsPerLoad = 1;
+  // The count is drawn from 2 to 5 at every load (RoundManager.gd 154).
+  config.itemsPerLoad = 2;
   config.itemsPerLoadMax = 5;
+  // The game draws a total of 2 to 8 shells and loads half of them live,
+  // rounded down and at least one (RoundManager.gd 148-152), which gives these
+  // seven loads, each with chance one in seven.
+  config.loadTable = {{1, 1}, {1, 2}, {2, 2}, {2, 3}, {3, 3}, {3, 4}, {4, 4}};
   config.reloadTurn = ReloadTurn::PlayerFirst;
+  config.sawSurvivesReload = true;
   return config;
 }
 
@@ -88,6 +94,7 @@ RuleConfig RuleConfig::multiplayer(std::uint8_t /*players*/, std::uint8_t charge
   config.itemsPerLoad = 2;
   config.itemsPerLoadMax = 2;
   config.reloadTurn = ReloadTurn::KeepCurrent;
+  config.dealerSeatBlankKeepsSaw = false;
   return config;
 }
 

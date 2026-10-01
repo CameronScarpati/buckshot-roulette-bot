@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -10,10 +11,46 @@
 
 namespace bsr {
 
+/// A seat never holds more items than this: the game stops placing items on a
+/// seat's side of the table at eight (ItemManager.gd 258, 279, 347).
+constexpr int kMaxItemsPerSeat = 8;
+
+/// The items one seat holds, in the order it received them, oldest first. The
+/// order matters because the game's dealer reads it: its item scan walks the
+/// items in the order they sit on the table, and its own use and its steals
+/// take the first copy of a type (DealerIntelligence.gd 118-149, 243-261).
+///
+/// Entries at `len` and above are always Magnifying Glass, so that two equal
+/// hands compare and hash equal whatever they held before.
+struct Hand {
+  std::array<Item, kMaxItemsPerSeat> at{};
+  std::uint8_t len = 0;
+
+  int size() const { return len; }
+  int count(Item item) const;
+  bool holds(Item item) const { return indexOfCopy(item, 0) >= 0; }
+  /// Add an item at the end. The hand must have room.
+  void append(Item item);
+  /// Remove the entry at `index` and close the gap.
+  void removeAt(int index);
+  /// The index of the `ordinal`-th copy of `item`, counted from the front and
+  /// from zero, or -1 when there is no such copy.
+  int indexOfCopy(Item item, int ordinal) const;
+  /// Remove the `ordinal`-th copy of `item`. Returns false when there is none.
+  bool removeCopy(Item item, int ordinal);
+  /// Sort by item type, keeping the order of equal entries.
+  void sortCanonical();
+  /// How many separate runs of adjacent copies of `item` the hand holds.
+  int runs(Item item) const;
+  /// Which copy of its type the entry at `index` is, counted from zero.
+  int ordinalAt(int index) const;
+  bool operator==(const Hand& other) const;
+};
+
 struct PlayerState {
   std::uint8_t hp = 0;
   std::uint8_t maxHp = 0;
-  ItemCounts items{};
+  Hand hand{};
   bool cuffed = false;  ///< skips the next turn that would come to this seat
   /// Set when a skip was consumed and cleared when this seat next acts. The
   /// real game gives a cuffed seat one turn before it can be cuffed again, so
@@ -35,6 +72,12 @@ struct GameState {
   std::int8_t direction = 1;  ///< +1 clockwise, -1 after a Remote
   Tube tube;
   bool cuffUsedThisTurn = false;  ///< no stacking within one turn
+  /// The dealer's item list from its last pass still holds Cigarettes that
+  /// belong to p1. The script reads whether it holds cigarettes from the list
+  /// its previous pass built (DealerIntelligence.gd 113-116), and that list
+  /// holds p1's items when the dealer then held Adrenaline (lines 127-129,
+  /// 146-149). Only a two-seat table against the dealer reads it.
+  bool dealerListCigs = false;
 
   int aliveCount() const;
   /// The only seat left alive, or -1 when more than one remains.
@@ -58,6 +101,13 @@ struct Action {
   Item item = Item::Beer;      ///< meaningful when kind == UseItem
   Item stolen = Item::Beer;    ///< the item Adrenaline takes
   std::uint8_t stealFrom = 0;  ///< the seat Adrenaline takes it from
+  /// Which copy of the item leaves the hand it is taken from: the seat's own
+  /// hand for a use, the victim's for a steal. Counted from the front of that
+  /// hand among copies of the same type, from zero.
+  std::uint8_t copy = 0;
+  /// Set when the hand holds this type in more than one place, so that the
+  /// move has to say which copy it means. Display only: it is not compared.
+  bool named = false;
 
   static Action shoot(int seat) {
     Action a;
@@ -86,9 +136,28 @@ struct Action {
     a.target = static_cast<std::uint8_t>(victim);
     return a;
   }
+  /// Use an Adrenaline and take nothing. The game allows it, and the timer then
+  /// spends the Adrenaline with nothing to show for it.
+  static Action adrenalineAlone(int mover) {
+    Action a = use(Item::Adrenaline);
+    a.stolen = Item::Adrenaline;
+    a.stealFrom = static_cast<std::uint8_t>(mover);
+    a.target = static_cast<std::uint8_t>(mover);
+    return a;
+  }
+
+  /// True for an Adrenaline used on its own.
+  bool isAdrenalineAlone() const {
+    return kind == Kind::UseItem && item == Item::Adrenaline && stolen == Item::Adrenaline;
+  }
+  /// True for an Adrenaline that takes another seat's item.
+  bool isSteal() const {
+    return kind == Kind::UseItem && item == Item::Adrenaline && stolen != Item::Adrenaline;
+  }
 
   bool operator==(const Action& other) const;
-  /// "shoot self", "shoot p2", "use saw", "steal saw from p3".
+  /// "shoot self", "shoot p2", "use Beer #2", "steal Hand Saw from p2 and use
+  /// it".
   std::string describe(int actingSeat) const;
 };
 

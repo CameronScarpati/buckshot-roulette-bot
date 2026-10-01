@@ -46,8 +46,7 @@ struct DealerHash {
     const dealer::Memory& memory = key.memory;
     const std::size_t packed =
         (memory.knows ? 1u : 0u) | static_cast<std::size_t>(memory.known) << 1u |
-        static_cast<std::size_t>(memory.target) << 3u | (memory.usedMedicine ? 1u : 0u) << 5u |
-        static_cast<std::size_t>(memory.adrenalineList) << 6u;
+        static_cast<std::size_t>(memory.target) << 3u | (memory.usedMedicine ? 1u : 0u) << 5u;
     h ^= packed + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
     return h;
   }
@@ -403,17 +402,14 @@ std::string describeAssumptions(const RuleConfig& config, const SolveOptions& op
         << dealer::brainName(brain)
         << " rules: it uses items, aims and flips coins as the decompiled script does, rather "
            "than playing to minimise your chance of surviving the round. "
-        << (config.healFloor > 2 ? "Five" : "Four")
-        << " approximations: it considers its item types in a fixed order rather than the "
-           "order they sit on the table, the first pass of each of its turns reads whether it "
-           "can reach cigarettes from the items held then rather than from its previous turn, "
-           "a blank it fires into itself clears a sawed barrel, ";
+        << (config.healFloor > 2 ? "Two approximations: " : "One approximation: ");
     // The script's own guard keeps it off medicine at one charge, so a failed
     // dose can only cross the heal floor when the floor is above two.
     if (config.healFloor > 2) {
-      out << "a failed Expired Medicine always costs it a charge, even below the heal floor, ";
+      out << "a failed Expired Medicine always costs it a charge, even below the heal floor, "
+             "and ";
     }
-    out << "and a position with the dealer to move is taken as the start of its turn, so "
+    out << "a position with the dealer to move is taken as the start of its turn, so "
            "anything it decided earlier in that turn (the target a coin chose before it sawed "
            "the barrel, medicine already taken, what it worked out about the chamber) is not "
            "carried over. Your own moves are chosen from what you have "

@@ -63,10 +63,11 @@ struct RuleConfig {
   std::vector<Item> itemPool;
 
   /// Items dealt to each player per load, as the range the game draws from,
-  /// and the table limit. Double or Nothing redraws the count at every load, so
-  /// the two ends differ there; equal ends mean a fixed deal. See the items
-  /// dealt per load row in docs/RULES.md.
-  std::uint8_t itemsPerLoad = 1;
+  /// and the table limit. Double or Nothing draws a count of 2 to 5 at every
+  /// load (RoundManager.gd 154) and both seats take that many, stopping at the
+  /// limit of 8 (ItemManager.gd 331, 346-347); equal ends mean a fixed deal.
+  /// See the items dealt per load row in docs/RULES.md.
+  std::uint8_t itemsPerLoad = 2;
   std::uint8_t itemsPerLoadMax = 5;
   std::uint8_t itemLimit = 8;
 
@@ -84,11 +85,21 @@ struct RuleConfig {
 
   ReloadTurn reloadTurn = ReloadTurn::PlayerFirst;
 
-  /// Whether a sawed barrel survives a reload. The game says it does not, and
-  /// that is the default; it stays a setting because the answer changes what
-  /// emptying a tube with Beer is worth. See the sawed barrel across a reload
-  /// row in docs/RULES.md.
+  /// Whether a sawed barrel survives a reload. In story mode and Double or
+  /// Nothing it does: a Beer that empties the tube starts the next load without
+  /// touching the saw (ItemInteraction.gd 130-141, RoundManager.gd 196-234), and
+  /// only the end of a shot turn resets it (RoundManager.gd 273). Every shot
+  /// already spends the saw before an empty tube reloads, so keeping it at the
+  /// reload is exact. Multiplayer has no sourced answer and keeps the old
+  /// default. See the sawed barrel across a reload row in docs/RULES.md.
   bool sawSurvivesReload = false;
+
+  /// Whether a blank that seat 2 fires into itself at a two-seat table leaves
+  /// a sawed barrel sawed while shells remain. The dealer's turn goes on
+  /// without the end-of-turn reset that spends the saw (DealerIntelligence.gd
+  /// 305-324, 387), where the player's turn ends through it (RoundManager.gd
+  /// 264-295). Story mode and Double or Nothing; not multiplayer.
+  bool dealerSeatBlankKeepsSaw = true;
 
   /// Whether handcuffs come off every player when items are dealt, including a
   /// mid-round reload. The decompiled single-player scripts say yes.

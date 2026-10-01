@@ -1,19 +1,87 @@
 #include "engine/State.h"
 
+#include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <sstream>
 
 namespace bsr {
 
-int PlayerState::itemCount() const {
+int Hand::count(Item item) const {
   int total = 0;
-  for (std::uint8_t count : items) total += count;
+  for (int i = 0; i < len; ++i) {
+    if (at[static_cast<std::size_t>(i)] == item) ++total;
+  }
   return total;
+}
+
+void Hand::append(Item item) {
+  assert(len < kMaxItemsPerSeat);
+  if (len >= kMaxItemsPerSeat) return;
+  at[len] = item;
+  ++len;
+}
+
+void Hand::removeAt(int index) {
+  if (index < 0 || index >= len) return;
+  for (int i = index; i + 1 < len; ++i) {
+    at[static_cast<std::size_t>(i)] = at[static_cast<std::size_t>(i + 1)];
+  }
+  --len;
+  at[len] = Item::MagnifyingGlass;
+}
+
+int Hand::indexOfCopy(Item item, int ordinal) const {
+  int seen = 0;
+  for (int i = 0; i < len; ++i) {
+    if (at[static_cast<std::size_t>(i)] != item) continue;
+    if (seen == ordinal) return i;
+    ++seen;
+  }
+  return -1;
+}
+
+bool Hand::removeCopy(Item item, int ordinal) {
+  const int index = indexOfCopy(item, ordinal);
+  if (index < 0) return false;
+  removeAt(index);
+  return true;
+}
+
+void Hand::sortCanonical() {
+  std::stable_sort(at.begin(), at.begin() + len,
+                   [](Item a, Item b) { return itemIndex(a) < itemIndex(b); });
+}
+
+int Hand::runs(Item item) const {
+  int total = 0;
+  for (int i = 0; i < len; ++i) {
+    if (at[static_cast<std::size_t>(i)] != item) continue;
+    if (i == 0 || at[static_cast<std::size_t>(i - 1)] != item) ++total;
+  }
+  return total;
+}
+
+int Hand::ordinalAt(int index) const {
+  const Item item = at[static_cast<std::size_t>(index)];
+  int ordinal = 0;
+  for (int i = 0; i < index; ++i) {
+    if (at[static_cast<std::size_t>(i)] == item) ++ordinal;
+  }
+  return ordinal;
+}
+
+bool Hand::operator==(const Hand& other) const {
+  return len == other.len && at == other.at;
+}
+
+int PlayerState::itemCount() const {
+  return hand.len;
 }
 
 bool PlayerState::operator==(const PlayerState& other) const {
   return hp == other.hp && maxHp == other.maxHp && cuffed == other.cuffed &&
-         skipConsumed == other.skipConsumed && items == other.items;
+         skipConsumed == other.skipConsumed && hand == other.hand;
 }
 
 int GameState::aliveCount() const {
@@ -47,7 +115,8 @@ int GameState::nextSeat(int from) const {
 
 bool GameState::operator==(const GameState& other) const {
   if (playerCount != other.playerCount || current != other.current ||
-      direction != other.direction || cuffUsedThisTurn != other.cuffUsedThisTurn) {
+      direction != other.direction || cuffUsedThisTurn != other.cuffUsedThisTurn ||
+      dealerListCigs != other.dealerListCigs) {
     return false;
   }
   if (!(tube == other.tube)) return false;
@@ -65,25 +134,20 @@ std::string GameState::debugString() const {
   for (int i = 0; i < playerCount; ++i) {
     out << " | p" << (i + 1) << " hp=" << static_cast<int>(players[i].hp);
     if (players[i].cuffed) out << " cuffed";
-    for (int k = 0; k < kItemCount; ++k) {
-      if (players[i].items[k] > 0) {
-        out << " " << itemToken(itemAt(k)) << "x" << static_cast<int>(players[i].items[k]);
-      }
+    const Hand& hand = players[i].hand;
+    for (int k = 0; k < hand.len; ++k) {
+      const Item item = hand.at[static_cast<std::size_t>(k)];
+      out << " " << itemToken(item);
+      if (hand.runs(item) > 1) out << "#" << hand.ordinalAt(k) + 1;
     }
   }
+  if (dealerListCigs) out << " | listcigs";
   return out.str();
 }
 
 bool Action::operator==(const Action& other) const {
-  if (kind != other.kind) return false;
-  if (kind == Kind::Shoot) return target == other.target;
-  if (item != other.item) return false;
-  if (item == Item::Adrenaline) {
-    if (stolen != other.stolen || stealFrom != other.stealFrom) return false;
-    return !itemNeedsTarget(stolen) || target == other.target;
-  }
-  if (itemNeedsTarget(item) && target != other.target) return false;
-  return true;
+  return kind == other.kind && target == other.target && item == other.item &&
+         stolen == other.stolen && stealFrom == other.stealFrom && copy == other.copy;
 }
 
 std::string Action::describe(int actingSeat) const {
@@ -96,13 +160,16 @@ std::string Action::describe(int actingSeat) const {
     }
     return out.str();
   }
+  if (isAdrenalineAlone()) return "use Adrenaline";
   if (item == Item::Adrenaline) {
-    out << "steal " << itemName(stolen) << " from p" << (static_cast<int>(stealFrom) + 1)
-        << " and use it";
+    out << "steal " << itemName(stolen);
+    if (named) out << " #" << (static_cast<int>(copy) + 1);
+    out << " from p" << (static_cast<int>(stealFrom) + 1) << " and use it";
     if (itemNeedsTarget(stolen)) out << " on p" << (static_cast<int>(target) + 1);
     return out.str();
   }
   out << "use " << itemName(item);
+  if (named) out << " #" << (static_cast<int>(copy) + 1);
   if (itemNeedsTarget(item)) out << " on p" << (static_cast<int>(target) + 1);
   return out.str();
 }
@@ -133,10 +200,12 @@ std::size_t hash<bsr::GameState>::operator()(const bsr::GameState& state) const 
     const bsr::PlayerState& player = state.players[i];
     mix(player.hp * 131u + player.maxHp);
     mix((player.cuffed ? 2u : 0u) + (player.skipConsumed ? 1u : 0u));
-    for (int k = 0; k < bsr::kItemCount; ++k) {
-      mix(static_cast<std::size_t>(player.items[k]) * 17u + static_cast<std::size_t>(k));
+    mix(player.hand.len);
+    for (const bsr::Item item : player.hand.at) {
+      mix(static_cast<std::uint64_t>(bsr::itemIndex(item)));
     }
   }
+  mix(state.dealerListCigs ? 1u : 0u);
   return static_cast<std::size_t>(h);
 }
 

@@ -502,7 +502,7 @@ std::string itemsOutsideThePool(const GameState& state, const RuleConfig& config
     const Item item = itemAt(index);
     bool held = false;
     for (int seat = 0; seat < state.playerCount; ++seat) {
-      if (state.players[seat].items[index] > 0) held = true;
+      if (state.players[seat].hand.holds(item)) held = true;
     }
     if (!held) continue;
     if (std::find(config.itemPool.begin(), config.itemPool.end(), item) != config.itemPool.end()) {
@@ -936,12 +936,16 @@ int main(int argc, char** argv) {
         std::cout << "Say which seat and which item, as in give p1 saw.\n";
         continue;
       }
+      Hand& hand = session.state.players[seat].hand;
+      if (command == "give" && hand.size() >= kMaxItemsPerSeat) {
+        std::cout << "a seat holds at most 8 items\n";
+        continue;
+      }
       session.history.push_back(snapshot(session));
-      std::uint8_t& count = session.state.players[seat].items[itemIndex(item)];
       if (command == "give") {
-        ++count;
-      } else if (count > 0) {
-        --count;
+        hand.append(item);
+      } else {
+        hand.removeCopy(item, 0);
       }
       printBoard(session);
       continue;
@@ -1028,8 +1032,7 @@ int main(int argc, char** argv) {
         // Pinning a shell with an inversion pending moves the public counts by
         // the type it is pinned to, which the advised seat did not see.
         session.history.push_back(point);
-        std::uint8_t& count = session.state.players[seat].items[itemIndex(Item::MagnifyingGlass)];
-        if (count > 0) --count;
+        session.state.players[seat].hand.removeCopy(Item::MagnifyingGlass, 0);
         afterEvent(&session, point.state, true);
         std::cout << "The chamber was inverted before anyone saw it, so the glass is recorded as "
                      "used and what it showed is left out: p"
@@ -1067,8 +1070,7 @@ int main(int argc, char** argv) {
       const GameState before = session.state;
       session.history.push_back(point);
       session.state = probe;
-      std::uint8_t& count = session.state.players[seat].items[itemIndex(Item::MagnifyingGlass)];
-      if (count > 0) --count;
+      session.state.players[seat].hand.removeCopy(Item::MagnifyingGlass, 0);
       if (unseen)
         session.narration.unseen = static_cast<std::uint8_t>(session.narration.unseen | 1u);
       afterEvent(&session, before, true);
@@ -1124,8 +1126,7 @@ int main(int argc, char** argv) {
       const GameState before = session.state;
       session.history.push_back(point);
       session.state = probe;
-      std::uint8_t& count = session.state.players[seat].items[itemIndex(Item::BurnerPhone)];
-      if (count > 0) --count;
+      session.state.players[seat].hand.removeCopy(Item::BurnerPhone, 0);
       if (unseen) {
         session.narration.unseen =
             static_cast<std::uint8_t>(session.narration.unseen | (1u << offset));
@@ -1155,7 +1156,7 @@ int main(int argc, char** argv) {
           std::cout << "Adrenaline cannot take another adrenaline.\n";
           continue;
         }
-        if (session.state.players[from].items[itemIndex(stolen)] == 0) {
+        if (!session.state.players[from].hand.holds(stolen)) {
           std::cout << "p" << (from + 1) << " is not holding a " << itemName(stolen) << ".\n";
           continue;
         }

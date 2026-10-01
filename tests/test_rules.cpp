@@ -133,7 +133,7 @@ TEST(Rules, AMagnifyingGlassTellsOnlyItsUser) {
     EXPECT_TRUE(outcome.state.tube.knows(0, 0));
     EXPECT_FALSE(outcome.state.tube.knows(1, 0));
     EXPECT_EQ(outcome.state.current, 0);
-    EXPECT_EQ(outcome.state.players[0].items[itemIndex(Item::MagnifyingGlass)], 0);
+    EXPECT_EQ(outcome.state.players[0].hand.count(Item::MagnifyingGlass), 0);
   }
 }
 
@@ -166,9 +166,13 @@ TEST(Rules, TheFadedBandIsOneChargeNothingCanHeal) {
   EXPECT_EQ(RuleConfig::multiplayer(3, 4).healFloor, 1);
 
   // A seat on one charge here is a seat with no normal charges left in the
-  // game, so cigarettes are not offered: they would change nothing.
+  // game. The game still lets it smoke: the cigarettes go and heal nothing.
   const GameState faded = parse("p1=1/5[cig] p2=2/5 tube=1L1B turn=p1");
-  EXPECT_FALSE(contains(rules::legalActions(faded, stage3), Action::use(Item::Cigarettes)));
+  ASSERT_TRUE(contains(rules::legalActions(faded, stage3), Action::use(Item::Cigarettes)));
+  const std::vector<Outcome> wasted = rules::apply(faded, Action::use(Item::Cigarettes), stage3);
+  ASSERT_EQ(wasted.size(), 1u);
+  EXPECT_EQ(wasted.front().state.players[0].hp, 1);
+  EXPECT_EQ(wasted.front().state.players[0].hand.count(Item::Cigarettes), 0);
 
   // One charge higher is one normal charge left, and healing works there.
   const GameState hurt = parse("p1=2/5[cig] p2=2/5 tube=1L1B turn=p1");
@@ -201,15 +205,21 @@ TEST(Rules, MedicineInTheFadedBandCanOnlyCost) {
   EXPECT_NE(out.front().state.players[0].alive(), out.back().state.players[0].alive());
 }
 
-TEST(Rules, CigarettesHealOneAndAreNotOfferedAtFullCharges) {
+TEST(Rules, CigarettesHealOneAndAreWastedAtFullCharges) {
   const GameState wounded = parse("p1=1/3[cig] p2=2/2 tube=1L1B turn=p1");
   const std::vector<Outcome> outcomes =
       rules::apply(wounded, Action::use(Item::Cigarettes), config());
   ASSERT_EQ(outcomes.size(), 1u);
   EXPECT_EQ(outcomes.front().state.players[0].hp, 2);
 
+  // The game lets a seat smoke at full charges: the item goes and nothing
+  // else changes.
   const GameState full = parse("p1=3/3[cig] p2=2/2 tube=1L1B turn=p1");
-  EXPECT_FALSE(contains(rules::legalActions(full, config()), Action::use(Item::Cigarettes)));
+  ASSERT_TRUE(contains(rules::legalActions(full, config()), Action::use(Item::Cigarettes)));
+  const std::vector<Outcome> wasted = rules::apply(full, Action::use(Item::Cigarettes), config());
+  ASSERT_EQ(wasted.size(), 1u);
+  EXPECT_EQ(wasted.front().state.players[0].hp, 3);
+  EXPECT_EQ(wasted.front().state.players[0].hand.size(), 0);
 }
 
 TEST(Rules, ExpiredMedicineIsATossUpThatCanKillItsUser) {
@@ -236,16 +246,20 @@ TEST(Rules, AdrenalineTakesAnItemAndSpendsItImmediately) {
   ASSERT_EQ(outcomes.size(), 1u);
   const GameState& after = outcomes.front().state;
   EXPECT_TRUE(after.tube.sawed);
-  EXPECT_EQ(after.players[0].items[itemIndex(Item::Adrenaline)], 0);
-  EXPECT_EQ(after.players[1].items[itemIndex(Item::HandSaw)], 0);
+  EXPECT_EQ(after.players[0].hand.count(Item::Adrenaline), 0);
+  EXPECT_EQ(after.players[1].hand.count(Item::HandSaw), 0);
   EXPECT_EQ(after.current, 0);
 }
 
 TEST(Rules, AdrenalineCannotTakeAnotherAdrenaline) {
+  // The only action that names Adrenaline as its item taken is Adrenaline
+  // used on its own, which takes from nobody (PermissionManager.gd 65-80).
   const GameState state = parse("p1=2/2[adr] p2=2/2[adr] tube=1L1B turn=p1");
   for (const Action& action : rules::legalActions(state, config())) {
-    EXPECT_FALSE(action.kind == Action::Kind::UseItem && action.item == Item::Adrenaline &&
-                 action.stolen == Item::Adrenaline);
+    if (action.kind != Action::Kind::UseItem || action.item != Item::Adrenaline) continue;
+    if (action.stolen != Item::Adrenaline) continue;
+    EXPECT_EQ(action.stealFrom, state.current);
+    EXPECT_TRUE(action == Action::adrenalineAlone(state.current));
   }
 }
 
@@ -293,12 +307,24 @@ TEST(Rules, TurnOrderSkipsTheDeadAndFollowsTheDirection) {
   EXPECT_EQ(state.nextSeat(2), 0);
 }
 
-TEST(Rules, NoMagnifyingGlassWhenTheAnswerIsAlreadyCertain) {
+TEST(Rules, AMagnifyingGlassOnACertainChamberIsSpentForNothing) {
+  // The game lets a seat look at a chamber it already knows, or one the counts
+  // already settle: the glass goes, the seat knows the chamber, and nothing
+  // else changes.
   const GameState allLive = parse("p1=2/2[mg] p2=2/2 tube=2L0B turn=p1");
-  EXPECT_FALSE(
-      contains(rules::legalActions(allLive, config()), Action::use(Item::MagnifyingGlass)));
+  ASSERT_TRUE(contains(rules::legalActions(allLive, config()), Action::use(Item::MagnifyingGlass)));
+  const std::vector<Outcome> certain =
+      rules::apply(allLive, Action::use(Item::MagnifyingGlass), config());
+  ASSERT_EQ(certain.size(), 1u);
+  EXPECT_EQ(notation::print(certain.front().state), "p1=2/2 p2=2/2 tube=2L0B turn=p1 known=p1:0L");
+
   const GameState known = parse("p1=2/2[mg] p2=2/2 tube=1L1B turn=p1 known=p1:0L");
-  EXPECT_FALSE(contains(rules::legalActions(known, config()), Action::use(Item::MagnifyingGlass)));
+  ASSERT_TRUE(contains(rules::legalActions(known, config()), Action::use(Item::MagnifyingGlass)));
+  const std::vector<Outcome> seen =
+      rules::apply(known, Action::use(Item::MagnifyingGlass), config());
+  ASSERT_EQ(seen.size(), 1u);
+  EXPECT_EQ(notation::print(seen.front().state), "p1=2/2 p2=2/2 tube=1L1B turn=p1 known=p1:0L");
+
   const GameState unknown = parse("p1=2/2[mg] p2=2/2 tube=1L1B turn=p1");
   EXPECT_TRUE(contains(rules::legalActions(unknown, config()), Action::use(Item::MagnifyingGlass)));
 }
@@ -328,10 +354,23 @@ TEST(Rules, EveryTransitionKeepsItsProbabilityMass) {
 }
 
 TEST(Rules, AReloadDistributionIsAProperDistribution) {
+  // Double or Nothing draws a total of 2 to 8 and makes half of it live,
+  // rounded down and at least one (RoundManager.gd 148-152): seven loads, each
+  // as likely as the others.
+  const std::vector<std::pair<int, int>> expected = {{1, 1}, {1, 2}, {2, 2}, {2, 3},
+                                                     {3, 3}, {3, 4}, {4, 4}};
+  const auto don = rules::loadDistribution(config());
+  ASSERT_EQ(don.size(), expected.size());
+  for (std::size_t i = 0; i < don.size(); ++i) {
+    EXPECT_EQ(std::get<0>(don[i]), expected[i].first);
+    EXPECT_EQ(std::get<1>(don[i]), expected[i].second);
+    EXPECT_NEAR(std::get<2>(don[i]), 1.0 / 7.0, 1e-12);
+  }
+
   double total = 0.0;
   int loads = 0;
   bool sawBlankHeavy = false;
-  for (const auto& entry : rules::loadDistribution(config())) {
+  for (const auto& entry : rules::loadDistribution(RuleConfig::storyRound(2))) {
     const int live = std::get<0>(entry);
     const int blank = std::get<1>(entry);
     EXPECT_GE(live, 1);

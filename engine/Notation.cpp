@@ -7,6 +7,8 @@
 #include <sstream>
 #include <vector>
 
+#include "engine/Dealer.h"
+
 namespace bsr {
 namespace notation {
 namespace {
@@ -14,8 +16,18 @@ namespace {
 /// A seat cannot hold more charges than this. The real game never comes close;
 /// the cap exists so that a typo is refused rather than wrapped around.
 constexpr int kMaxCharges = 64;
-/// Likewise for how many items one seat may be given in a written position.
-constexpr int kMaxItemsPerSeat = 32;
+/// A seat makes at most this many phone reads in one load: each read spends an
+/// item, and a seat holds at most eight.
+constexpr int kMaxReadsPerSeat = kMaxItemsPerSeat;
+
+const char* const kPhonedShape = "phoned must look like phoned=p2@5 or phoned=p2@5,4";
+const char* const kDealerShape =
+    "dealer must be seen, believes:B, aim:self or aim:p1, optionally followed by med, as in "
+    "dealer=seen,med";
+
+/// The part of the dealer's memory a `dealer=` token names before the position
+/// around it is known.
+enum class Core : std::uint8_t { None, Seen, BelievesBlank, AimSelf, AimPlayer };
 
 std::vector<std::string> split(const std::string& text, char sep) {
   std::vector<std::string> parts;
@@ -67,9 +79,95 @@ bool parseSeat(const std::string& text, int playerCount, int* seat) {
   return true;
 }
 
-}  // namespace
+/// Read `dealer=` after the equals sign: one core, optionally followed by med,
+/// or med alone.
+bool parseDealer(const std::string& value, Core* core, bool* med, std::string* error) {
+  const std::vector<std::string> parts = split(value, ',');
+  if (parts.empty()) {
+    *error = kDealerShape;
+    return false;
+  }
+  for (const std::string& part : parts) {
+    Core named = Core::None;
+    if (part == "seen") {
+      named = Core::Seen;
+    } else if (part == "believes:b") {
+      named = Core::BelievesBlank;
+    } else if (part == "aim:self") {
+      named = Core::AimSelf;
+    } else if (part == "aim:p1") {
+      named = Core::AimPlayer;
+    } else if (part == "believes:l") {
+      *error =
+          "dealer=believes:L cannot happen: the dealer never drinks a Beer on a shell it saw was "
+          "live";
+      return false;
+    } else if (part != "med") {
+      *error = kDealerShape;
+      return false;
+    }
+    if (named == Core::None) {
+      if (*med) {
+        *error = kDealerShape;
+        return false;
+      }
+      *med = true;
+      continue;
+    }
+    if (*core != Core::None) {
+      *error = "dealer names at most one of seen, believes:B, aim:self and aim:p1";
+      return false;
+    }
+    if (*med) {
+      // The core comes first, as in dealer=seen,med.
+      *error = kDealerShape;
+      return false;
+    }
+    *core = named;
+  }
+  return true;
+}
 
-bool parse(const std::string& text, GameState* state, std::string* error) {
+/// Read `phoned=` after the equals sign: a seat, then the tube sizes at which
+/// it used a phone.
+bool parsePhoned(const std::string& value, int* seatNumber, std::vector<int>* sizes,
+                 std::string* error) {
+  const std::size_t at = value.find('@');
+  if (at == std::string::npos || value.size() < 2 || value[0] != 'p' ||
+      !parseInt(value.substr(1, at - 1), seatNumber) || *seatNumber < 1 ||
+      *seatNumber > kMaxPlayers) {
+    *error = kPhonedShape;
+    return false;
+  }
+  const std::string list = value.substr(at + 1);
+  const std::vector<std::string> parts = split(list, ',');
+  if (parts.empty() || list.front() == ',' || list.back() == ',' ||
+      list.find(",,") != std::string::npos) {
+    *error = kPhonedShape;
+    return false;
+  }
+  for (const std::string& part : parts) {
+    int size = 0;
+    if (!parseInt(part, &size)) {
+      *error = kPhonedShape;
+      return false;
+    }
+    if (size < 2 || size > kMaxShells) {
+      *error = "a phone read names a tube of 2 to 8 shells";
+      return false;
+    }
+    sizes->push_back(size);
+  }
+  if (static_cast<int>(sizes->size()) > kMaxReadsPerSeat) {
+    *error = "a seat makes at most 8 phone reads in one load";
+    return false;
+  }
+  return true;
+}
+
+/// Everything `parse` and `parsePosition` share. With `whole` unset, the tokens
+/// that only a whole position carries are refused.
+bool parseText(const std::string& text, bool whole, Position* position, std::string* error) {
   GameState result;
   result.playerCount = 0;
   int highestSeat = -1;
@@ -85,6 +183,12 @@ bool parse(const std::string& text, GameState* state, std::string* error) {
   std::vector<std::string> skippedTokens;
   std::vector<std::string> knownTokens;
   std::string turnToken;
+  bool listCigs = false;
+  bool dealerGiven = false;
+  Core core = Core::None;
+  bool med = false;
+  IndexedArray<bool, kMaxPlayers> phonedGiven{};
+  std::vector<UnseenRead> reads;
 
   for (const std::string& rawToken : split(text, ' ')) {
     const std::string token = lower(rawToken);
@@ -92,8 +196,37 @@ bool parse(const std::string& text, GameState* state, std::string* error) {
     const std::string key = eq == std::string::npos ? token : token.substr(0, eq);
     const std::string value = eq == std::string::npos ? "" : token.substr(eq + 1);
 
+    if ((key == "phoned" || key == "dealer") && !whole) {
+      *error = "phoned and dealer are read only where a whole position is expected";
+      return false;
+    }
     if (key == "sawed") {
       sawed = true;
+    } else if (key == "listcigs") {
+      listCigs = true;
+    } else if (key == "dealer") {
+      if (dealerGiven) {
+        *error = "dealer is given twice";
+        return false;
+      }
+      dealerGiven = true;
+      if (!parseDealer(value, &core, &med, error)) return false;
+    } else if (key == "phoned") {
+      int seatNumber = 0;
+      std::vector<int> sizes;
+      if (!parsePhoned(value, &seatNumber, &sizes, error)) return false;
+      if (phonedGiven[seatNumber - 1]) {
+        *error = "phoned is given twice for p" + std::to_string(seatNumber);
+        return false;
+      }
+      phonedGiven[seatNumber - 1] = true;
+      std::sort(sizes.begin(), sizes.end(), [](int a, int b) { return a > b; });
+      for (int size : sizes) {
+        UnseenRead read;
+        read.seat = static_cast<std::uint8_t>(seatNumber - 1);
+        read.sizeAtUse = static_cast<std::uint8_t>(size);
+        reads.push_back(read);
+      }
     } else if (key == "inverted") {
       inverted = true;
     } else if (key == "restraintused") {
@@ -197,18 +330,18 @@ bool parse(const std::string& text, GameState* state, std::string* error) {
       }
       result.players[seat].hp = static_cast<std::uint8_t>(hp);
       result.players[seat].maxHp = static_cast<std::uint8_t>(maxHp);
-      int itemsHere = 0;
+      Hand& hand = result.players[seat].hand;
       for (const std::string& itemToken : split(itemList, ',')) {
         Item item;
         if (!itemFromToken(itemToken, &item)) {
           *error = "no item is called " + itemToken;
           return false;
         }
-        if (++itemsHere > kMaxItemsPerSeat) {
-          *error = "a seat holds at most " + std::to_string(kMaxItemsPerSeat) + " items";
+        if (hand.size() >= kMaxItemsPerSeat) {
+          *error = "a seat holds at most 8 items";
           return false;
         }
-        ++result.players[seat].items[itemIndex(item)];
+        hand.append(item);
       }
     } else if (!token.empty()) {
       *error = "unrecognised token " + rawToken;
@@ -228,6 +361,12 @@ bool parse(const std::string& text, GameState* state, std::string* error) {
       return false;
     }
   }
+
+  if (listCigs && result.playerCount != 2) {
+    *error = "listcigs and dealer need exactly two seats";
+    return false;
+  }
+  result.dealerListCigs = listCigs;
 
   if (!turnToken.empty() && !parseSeat(turnToken, result.playerCount, &turnSeat)) {
     *error = "turn must name a seat, as in turn=p1";
@@ -329,8 +468,105 @@ bool parse(const std::string& text, GameState* state, std::string* error) {
     return false;
   }
 
-  *state = result;
+  for (const UnseenRead& read : reads) {
+    if (read.seat >= result.playerCount) {
+      *error = kPhonedShape;
+      return false;
+    }
+    if (read.sizeAtUse < result.tube.size()) {
+      *error = "a phone read names a tube at least as large as the one in the position";
+      return false;
+    }
+  }
+
+  Position out;
+  out.state = result;
+  out.unseenReads = reads;
+  if (dealerGiven) {
+    dealer::Memory& memory = out.dealerMemory;
+    memory.usedMedicine = med;
+    switch (core) {
+      case Core::None:
+        break;
+      case Core::Seen:
+        // The chamber the dealer saw is the one the position pins for p2. A
+        // chamber it has not seen is refused below.
+        memory.knows = true;
+        memory.known = result.tube.knows(1, 0) ? result.tube.truth[0] : Shell::Unknown;
+        memory.target = memory.known == Shell::Live ? dealer::Target::Player : dealer::Target::Self;
+        break;
+      case Core::BelievesBlank:
+        memory.knows = true;
+        memory.known = Shell::Blank;
+        memory.target = dealer::Target::Self;
+        break;
+      case Core::AimSelf:
+        memory.target = dealer::Target::Self;
+        break;
+      case Core::AimPlayer:
+        memory.target = dealer::Target::Player;
+        break;
+    }
+    if (result.playerCount != 2) {
+      *error = "listcigs and dealer need exactly two seats";
+      return false;
+    }
+    if (!dealer::checkMemory(out, error)) return false;
+  }
+
+  *position = out;
   return true;
+}
+
+/// The `dealer=` text for a memory, or empty for the memory a turn starts with.
+std::string dealerToken(const Position& position) {
+  const dealer::Memory& memory = position.dealerMemory;
+  const Tube& tube = position.state.tube;
+  std::string core;
+  if (memory.knows && memory.known == Shell::Live) {
+    core = "seen";
+  } else if (memory.knows && memory.known == Shell::Blank) {
+    core = tube.knows(1, 0) && tube.truth[0] == Shell::Blank ? "seen" : "believes:B";
+  } else if (!memory.knows && memory.target == dealer::Target::Self) {
+    core = "aim:self";
+  } else if (!memory.knows && memory.target == dealer::Target::Player) {
+    core = "aim:p1";
+  }
+  if (memory.usedMedicine) core += core.empty() ? "med" : ",med";
+  return core.empty() ? core : "dealer=" + core;
+}
+
+}  // namespace
+
+bool parse(const std::string& text, GameState* state, std::string* error) {
+  Position position;
+  if (!parseText(text, false, &position, error)) return false;
+  *state = position.state;
+  return true;
+}
+
+bool parsePosition(const std::string& text, Position* position, std::string* error) {
+  return parseText(text, true, position, error);
+}
+
+std::string printPosition(const Position& position) {
+  std::string out = print(position.state);
+  for (int seat = 0; seat < position.state.playerCount; ++seat) {
+    std::vector<int> sizes;
+    for (const UnseenRead& read : position.unseenReads) {
+      if (read.seat == seat) sizes.push_back(read.sizeAtUse);
+    }
+    if (sizes.empty()) continue;
+    std::sort(sizes.begin(), sizes.end(), [](int a, int b) { return a > b; });
+    out += " phoned=p" + std::to_string(seat + 1) + "@";
+    for (std::size_t i = 0; i < sizes.size(); ++i) {
+      if (i > 0) out += ",";
+      out += std::to_string(sizes[i]);
+    }
+  }
+  const std::string memory = dealerToken(position);
+  if (!memory.empty()) out += " " + memory;
+  return out;
 }
 
 std::string print(const GameState& state) {
@@ -341,13 +577,9 @@ std::string print(const GameState& state) {
         << static_cast<int>(player.maxHp);
     if (player.itemCount() > 0) {
       out << "[";
-      bool first = true;
-      for (int k = 0; k < kItemCount; ++k) {
-        for (int n = 0; n < player.items[k]; ++n) {
-          if (!first) out << ",";
-          out << itemToken(itemAt(k));
-          first = false;
-        }
+      for (int i = 0; i < player.hand.size(); ++i) {
+        if (i > 0) out << ",";
+        out << itemToken(player.hand.at[static_cast<std::size_t>(i)]);
       }
       out << "]";
     }
@@ -381,6 +613,7 @@ std::string print(const GameState& state) {
       anyKnown = true;
     }
   }
+  if (state.dealerListCigs) out << " listcigs";
   return out.str();
 }
 
@@ -404,11 +637,14 @@ std::string board(const GameState& state, std::uint8_t untyped) {
     if (marked && player.cuffed) out << restrained;
     if (marked && player.skipConsumed) out << "  lost a turn";
     if (player.itemCount() > 0) {
-      out << "  items:";
-      for (int k = 0; k < kItemCount; ++k) {
-        if (player.items[k] == 0) continue;
-        out << " " << itemName(itemAt(k));
-        if (player.items[k] > 1) out << " x" << static_cast<int>(player.items[k]);
+      // In the order the seat received them, with the copy named where the
+      // type sits in more than one place, as moves name it.
+      out << "  items: ";
+      for (int i = 0; i < player.hand.size(); ++i) {
+        const Item item = player.hand.at[static_cast<std::size_t>(i)];
+        if (i > 0) out << ", ";
+        out << itemName(item);
+        if (player.hand.runs(item) > 1) out << " #" << (player.hand.ordinalAt(i) + 1);
       }
     }
     bool anyKnown = false;

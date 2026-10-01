@@ -1,12 +1,15 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "engine/Config.h"
 #include "engine/State.h"
 
 namespace bsr {
+
+struct Position;
 
 /// The single-player dealer as the game scripts it.
 ///
@@ -26,16 +29,16 @@ namespace bsr {
 /// no output and holds no random number generator: every coin the script flips
 /// and every shell it cannot see is a branch with a probability.
 ///
-/// Four things differ from the script on purpose, and the solver states them
-/// with every answer they can change. The script walks its items in the order
-/// they sit on the table, and this model walks them by type in a fixed order.
-/// On the first pass of a turn the script decides whether it holds cigarettes
-/// from a list left by its previous turn, and this model reads it from whether
-/// the dealer holds Adrenaline now. A blank the dealer fires into itself clears
-/// a sawed barrel, as every other shot does, where the script leaves the barrel
-/// sawed. And a failed Expired Medicine always costs a charge, where the script
-/// leaves a dealer below the heal floor where it was; its guard against taking
-/// medicine on one charge means this can only arise with a floor above two.
+/// The scan walks the dealer's items in the order they sit on the table, then
+/// the player's when the dealer holds Adrenaline, and whether it holds
+/// cigarettes is read from the list its previous pass built, which
+/// `GameState::dealerListCigs` carries between passes (DealerIntelligence.gd
+/// 113-149). Two things differ from the script on purpose, and the solver
+/// states them with every answer they can change. The list is taken to be
+/// empty at the start of every round. And a failed Expired Medicine always
+/// costs a charge, where the script leaves a dealer below the heal floor where
+/// it was; its guard against taking medicine on one charge means this can only
+/// arise with a floor above two.
 namespace dealer {
 
 /// Which of the script's two sets of decision rules is in force. Double or
@@ -53,10 +56,6 @@ const char* brainName(Brain brain);
 /// Who the dealer has decided to shoot.
 enum class Target : std::uint8_t { None, Self, Player };
 
-/// Whether the item list the previous pass built held the player's items, which
-/// it does when the dealer then held Adrenaline. Unset on the first pass.
-enum class AdrenalineList : std::uint8_t { Unset, True, False };
-
 /// What the dealer carries from one pass to the next within a turn. The script
 /// keeps these as dealerKnowsShell, knownShell, dealerTarget and usingMedicine
 /// (DealerIntelligence.gd lines 65-77). It clears the first three after every
@@ -67,7 +66,6 @@ struct Memory {
   Shell known = Shell::Unknown;  ///< Unknown when it knows nothing
   Target target = Target::None;
   bool usedMedicine = false;
-  AdrenalineList adrenalineList = AdrenalineList::Unset;
 
   bool operator==(const Memory& other) const;
 };
@@ -112,6 +110,30 @@ struct Branch {
 /// whose state pins down shells the dealer has not seen.
 std::vector<Branch> step(const GameState& state, const Memory& memory, const RuleConfig& config,
                          Brain brain);
+
+/// Whether the list a pass leaves behind holds Cigarettes that belong to the
+/// player, given the state the pass started from and the state it left. The
+/// list holds the player's items when the dealer held Adrenaline as the pass
+/// began (DealerIntelligence.gd 127-129, 146-149), and only its count of
+/// Cigarettes is ever read (lines 113-116). `step` writes this into every
+/// branch as `GameState::dealerListCigs`.
+bool listCigsAfterPass(const GameState& before, const GameState& after);
+
+/// The checks on a dealer memory that hold whatever the rules: a memory other
+/// than the fresh one needs a two-seat table, shells in the tube, the dealer to
+/// move and not cuffed; a chamber the memory says was seen must be one the
+/// dealer saw; aiming at the player without having seen the chamber happens
+/// only after the coin saws the barrel; and a memory that aims at the dealer
+/// itself cannot go with a sawed barrel, because the dealer saws only when it
+/// aims at the player (DealerIntelligence.gd 181-186, 203-215). Returns false
+/// and fills `error` otherwise.
+bool checkMemory(const Position& position, std::string* error);
+
+/// `checkMemory`, then the checks that depend on the brain: believing a blank
+/// the dealer has not seen is left only by the story rules' Beer, and aiming
+/// at itself without knowing the chamber only by the endless rules' Beer
+/// (DealerIntelligence.gd 170-176).
+bool validateMemory(const Position& position, Brain brain, std::string* error);
 
 }  // namespace dealer
 }  // namespace bsr

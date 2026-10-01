@@ -78,7 +78,7 @@ bool used(const Branch& branch, Item item) {
 }
 
 int held(const GameState& state, int seat, Item item) {
-  return state.players[seat].items[itemIndex(item)];
+  return state.players[seat].hand.count(item);
 }
 
 SolveOptions againstTheDealer() {
@@ -460,11 +460,22 @@ TEST(Dealer, CigarettesWithinReachBlockMedicine) {
   EXPECT_NEAR(chanceOf(then, [](const Branch& b) { return used(b, Item::ExpiredMedicine); }), 1.0,
               1e-12);
 
-  // The player's cigarettes, with Adrenaline to reach them, block the dealer's
-  // own medicine even though medicine comes first in the scan: the dealer
-  // steals the cigarettes instead.
-  const std::vector<Branch> stealable =
+  // Whether it holds cigarettes is read from the list its previous pass
+  // built. With no such list the player's cigarettes do not count, so the
+  // medicine, first in the dealer's own items, is taken.
+  const std::vector<Branch> fresh =
       pass(parse("p1=2/2[cig] p2=2/4[med,adr] tube=2L2B turn=p2"), Brain::Endless);
+  ASSERT_FALSE(fresh.empty());
+  for (const Branch& branch : fresh) {
+    EXPECT_FALSE(branch.stolen);
+    EXPECT_TRUE(used(branch, Item::ExpiredMedicine));
+  }
+
+  // A list left holding the player's cigarettes blocks the dealer's own
+  // medicine even though medicine comes first in the scan: the dealer steals
+  // the cigarettes instead.
+  const std::vector<Branch> stealable =
+      pass(parse("p1=2/2[cig] p2=2/4[med,adr] tube=2L2B turn=p2 listcigs"), Brain::Endless);
   ASSERT_EQ(stealable.size(), 1u);
   EXPECT_TRUE(stealable.front().stolen);
   EXPECT_TRUE(used(stealable.front(), Item::Cigarettes));
@@ -527,18 +538,26 @@ TEST(Dealer, HandcuffsOnlyWhenThePlayerCanBeCuffedAndMoreThanOneShellIsLeft) {
 }
 
 TEST(Dealer, TheItemListFromThePreviousPassStillHoldsThePlayersCigarettes) {
-  // Pass 1: the dealer holds Adrenaline, so the player's cigarettes are within
-  // reach and block its own medicine; it steals the glass and spends its only
+  // With no list left from an earlier pass, nothing blocks the medicine, the
+  // first item whose condition holds.
+  for (const Branch& branch :
+       pass(parse("p1=2/2[mg,cig] p2=2/4[adr,med] tube=2L2B turn=p2"), Brain::Endless)) {
+    EXPECT_TRUE(used(branch, Item::ExpiredMedicine));
+    EXPECT_FALSE(branch.stolen);
+  }
+
+  // Pass 1: the list from the previous pass holds the player's cigarettes, so
+  // they block its own medicine; it steals the glass and spends its only
   // Adrenaline. Pass 2: the list it reads was built while it held Adrenaline,
   // so the cigarettes still block the medicine, and it goes on to shoot.
-  const GameState start = parse("p1=2/2[mg,cig] p2=2/4[adr,med] tube=2L2B turn=p2");
+  const GameState start = parse("p1=2/2[mg,cig] p2=2/4[adr,med] tube=2L2B turn=p2 listcigs");
   const std::vector<Branch> first = pass(start, Brain::Endless);
   ASSERT_EQ(first.size(), 2u);
   for (const Branch& branch : first) {
     ASSERT_TRUE(used(branch, Item::MagnifyingGlass));
     EXPECT_TRUE(branch.stolen);
     EXPECT_EQ(held(branch.state, kDealer, Item::Adrenaline), 0);
-    EXPECT_EQ(branch.memory.adrenalineList, dealer::AdrenalineList::True);
+    EXPECT_TRUE(branch.state.dealerListCigs);
     for (const Branch& next : pass(branch.state, Brain::Endless, branch.memory)) {
       EXPECT_TRUE(next.turnOver);
       EXPECT_EQ(next.action.kind, Action::Kind::Shoot);
@@ -644,16 +663,18 @@ TEST(DealerSolve, AShellOnlyTheDealerHasSeenIsRedrawnFromThePlayersView) {
       1.0 / 3.0, 1e-12);
 }
 
-TEST(DealerSolve, EveryShotClearsTheSawEvenABlankIntoItself) {
+TEST(DealerSolve, ADealerBlankIntoItselfKeepsTheSaw) {
   // 1L2B sawed, both on two charges. The blank-heavy coin says itself. Live
-  // (1/3) takes both its charges: 1. Blank (2/3): the saw clears, and a fresh
-  // turn on 1L1B is a fair coin. Itself: live leaves it on one and hands p1 a
-  // blank, then the boundary scores 2 of 3; blank keeps the gun, and the last
-  // live puts p1 on one, 1 of 3; so 1/2. p1: live puts p1 on one with a blank
-  // to come, 1/3; blank hands p1 the live, 2/3; so 1/2. 1/3 + 2/3 * 1/2 = 2/3.
+  // (1/3) takes both its charges: 1. Blank (2/3): the dealer goes again with
+  // the barrel still sawed (DealerIntelligence.gd 305-324, 387), and a fresh
+  // pass on 1L1B is a fair coin. Itself: live ends it, 1; blank keeps the saw,
+  // and the last live, sawed, takes both of p1's charges, 0; so 1/2. p1: live,
+  // sawed, takes both of p1's charges, 0; blank clears the saw and hands p1 the
+  // live, which leaves the dealer on one and the boundary scores 2 of 3; so
+  // 1/3. 1/3 + 2/3 * (1/2 * 1/2 + 1/2 * 1/3) = 11/18.
   const SolveResult result =
       solveAgainstTheDealer("p1=2/2 p2=2/2 tube=1L2B turn=p2 sawed", Brain::Endless);
-  EXPECT_NEAR(result.value, 2.0 / 3.0, 1e-12);
+  EXPECT_NEAR(result.value, 11.0 / 18.0, 1e-12);
   EXPECT_TRUE(result.truncated) << "the empty tube is scored by charges in hand";
 }
 
@@ -672,9 +693,6 @@ TEST(DealerSolve, TheAnswerNamesTheDealerAndItsApproximations) {
   const SolveResult result = solveAgainstTheDealer("p1=1/1 p2=1/1 tube=1L1B turn=p2", Brain::Story);
   EXPECT_NE(result.assumptions.find("dealer script"), std::string::npos);
   EXPECT_NE(result.assumptions.find("story rules"), std::string::npos);
-  EXPECT_NE(result.assumptions.find("fixed order"), std::string::npos);
-  EXPECT_NE(result.assumptions.find("clears a sawed barrel"), std::string::npos);
-  EXPECT_NE(result.assumptions.find("Four approximations"), std::string::npos);
   // A root with the dealer to move is the start of its turn, and the answer
   // has to say so: a position part-way through one loses what it decided.
   EXPECT_NE(result.assumptions.find("start of its turn"), std::string::npos);
@@ -690,8 +708,7 @@ TEST(DealerSolve, AHealFloorAboveTwoAddsTheMedicineDeparture) {
   config.healFloor = 3;
   const SolveResult result =
       solve(parse("p1=4/4 p2=4/4 tube=1L1B turn=p2"), config, againstTheDealer());
-  EXPECT_NE(result.assumptions.find("Five approximations"), std::string::npos)
-      << result.assumptions;
+  EXPECT_NE(result.assumptions.find("Two approximations"), std::string::npos) << result.assumptions;
   EXPECT_NE(result.assumptions.find("Expired Medicine always costs it a charge"), std::string::npos)
       << result.assumptions;
 }

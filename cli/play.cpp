@@ -149,8 +149,8 @@ int dealItems(GameState* state, const RuleConfig& config, const LiveLoads& loads
     PlayerState& player = state->players[seat];
     if (!player.alive()) continue;
     for (int i = 0; i < offered; ++i) {
-      if (player.itemCount() >= config.itemLimit) break;
-      ++player.items[itemIndex(config.itemPool[pick(*rng)])];
+      if (player.itemCount() >= std::min<int>(config.itemLimit, kMaxItemsPerSeat)) break;
+      player.hand.append(config.itemPool[pick(*rng)]);
       ++placed;
     }
   }
