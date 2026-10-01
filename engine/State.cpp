@@ -25,7 +25,7 @@ void Hand::append(Item item) {
 void Hand::removeAt(int index) {
   if (index < 0 || index >= len) return;
   for (int i = index; i + 1 < len; ++i) {
-    at[static_cast<std::size_t>(i)] = at[static_cast<std::size_t>(i + 1)];
+    at[static_cast<std::size_t>(i)] = at[static_cast<std::size_t>(i) + 1];
   }
   --len;
   at[len] = Item::MagnifyingGlass;

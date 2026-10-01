@@ -574,9 +574,12 @@ std::string refusalFor(const Position& position, const RuleConfig& config,
   for (const UnseenRead& read : position.unseenReads) {
     if (read.seat != options.seat) continue;
     const std::string seat = "p" + std::to_string(options.seat + 1);
-    return "phoned names " + seat +
-           ", the seat being advised, which saw where its own phone looked; give known=" + seat +
-           " instead";
+    std::string message = "phoned names ";
+    message += seat;
+    message += ", the seat being advised, which saw where its own phone looked; give known=";
+    message += seat;
+    message += " instead";
+    return message;
   }
   return "";
 }
