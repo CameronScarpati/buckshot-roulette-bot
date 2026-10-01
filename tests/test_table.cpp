@@ -145,7 +145,7 @@ TEST(Table, TheLoadEventCarriesTheDeal) {
   EXPECT_EQ(table.loadNumber(), 1);
 }
 
-TEST(Table, ADealFillsTheLowestFreePlaces) {
+TEST(Table, APlayerDealFillsTheLowestFreePlaces) {
   const Table table = firstLoad(doubleOrNothing(2));
   const std::array<int, kMaxItemsPerSeat> places = table.tray(0);
   EXPECT_EQ(places[0], itemIndex(Item::MagnifyingGlass));
@@ -154,6 +154,78 @@ TEST(Table, ADealFillsTheLowestFreePlaces) {
   EXPECT_EQ(places[3], -1);
   EXPECT_EQ(table.slotOf(0, Item::Handcuffs, 0), 2);
   EXPECT_EQ(table.slotOf(0, Item::Handcuffs, 1), -1);
+}
+
+/// The places the dealer's side gives `items`, dealt in that order onto an
+/// empty table: each on a free place drawn from a generator seeded with the
+/// table's seed mixed with 0x9E3779B9, written out again here so that the
+/// test does not lean on the code it checks.
+std::array<int, kMaxItemsPerSeat> dealerPlaces(std::uint32_t seed, const std::vector<Item>& items) {
+  std::mt19937 rng(seed ^ 0x9E3779B9u);
+  std::vector<int> free;
+  for (int place = 0; place < kMaxItemsPerSeat; ++place) free.push_back(place);
+  std::array<int, kMaxItemsPerSeat> places{};
+  places.fill(-1);
+  for (const Item item : items) {
+    const int k = uniformInt(&rng, 0, static_cast<int>(free.size()) - 1);
+    places[static_cast<std::size_t>(free[static_cast<std::size_t>(k)])] = itemIndex(item);
+    free.erase(free.begin() + k);
+  }
+  return places;
+}
+
+TEST(Table, TheDealersDealTakesFreePlacesDrawnAtRandom) {
+  // Seed 2 deals the dealer Cigarettes, Handcuffs and a Magnifying Glass, and
+  // the game puts each on a free place drawn at random (ItemManager.gd
+  // 383-393).
+  const Table table = firstLoad(doubleOrNothing(2));
+  const std::array<int, kMaxItemsPerSeat> places = table.tray(1);
+  std::array<int, kMaxItemsPerSeat> pinned{};
+  pinned.fill(-1);
+  pinned[1] = itemIndex(Item::Cigarettes);
+  pinned[3] = itemIndex(Item::MagnifyingGlass);
+  pinned[6] = itemIndex(Item::Handcuffs);
+  EXPECT_EQ(places, pinned);
+  EXPECT_EQ(places, dealerPlaces(2, {Item::Cigarettes, Item::Handcuffs, Item::MagnifyingGlass}));
+  EXPECT_EQ(table.slotOf(1, Item::Handcuffs, 0), 6);
+  // Over a hundred seeds, the first item dealt lands on every place.
+  std::array<int, kMaxItemsPerSeat> firstItemAt{};
+  for (std::uint32_t seed = 1; seed <= 100; ++seed) {
+    const Table dealt = firstLoad(doubleOrNothing(seed));
+    const Hand& hand = dealt.state().players[1].hand;
+    ASSERT_GE(hand.size(), 1);
+    const std::vector<Item> items(hand.at.begin(), hand.at.begin() + hand.size());
+    EXPECT_EQ(dealt.tray(1), dealerPlaces(seed, items)) << "seed " << seed;
+    ++firstItemAt[static_cast<std::size_t>(dealt.slotOf(1, hand.at[0], 0))];
+  }
+  for (int place = 0; place < kMaxItemsPerSeat; ++place) {
+    EXPECT_GT(firstItemAt[static_cast<std::size_t>(place)], 0) << "place " << place;
+  }
+}
+
+TEST(Table, AWrittenDealerHandTakesFreePlacesDrawnAtRandom) {
+  TableOptions options = doubleOrNothing(5);
+  Table table = fromText("p1=2/2[mg,beer] p2=2/2[saw,beer,cuff] tube=1L2B turn=p2", options);
+  const std::array<int, kMaxItemsPerSeat> mine = table.tray(0);
+  EXPECT_EQ(mine[0], itemIndex(Item::MagnifyingGlass));
+  EXPECT_EQ(mine[1], itemIndex(Item::Beer));
+  EXPECT_EQ(mine[2], -1);
+  std::array<int, kMaxItemsPerSeat> pinned{};
+  pinned.fill(-1);
+  pinned[0] = itemIndex(Item::HandSaw);
+  pinned[1] = itemIndex(Item::Beer);
+  pinned[5] = itemIndex(Item::Handcuffs);
+  EXPECT_EQ(table.tray(1), pinned);
+  EXPECT_EQ(table.tray(1), dealerPlaces(5, {Item::HandSaw, Item::Beer, Item::Handcuffs}));
+  // The dealer drinks its Beer, and the event names the place it left.
+  const int beerAt = table.slotOf(1, Item::Beer, 0);
+  EXPECT_EQ(beerAt, 1);
+  table.dealerPass();
+  const std::vector<const Event*> items = eventsOf(table, Event::Kind::Item);
+  ASSERT_EQ(items.size(), 1u);
+  EXPECT_EQ(items[0]->item, Item::Beer);
+  EXPECT_EQ(items[0]->slot, beerAt);
+  EXPECT_EQ(table.tray(1)[static_cast<std::size_t>(beerAt)], -1);
 }
 
 TEST(Table, TheDealerReadsItsItemsInTheOrderTheySit) {

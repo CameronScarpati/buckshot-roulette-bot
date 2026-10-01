@@ -66,7 +66,9 @@ struct Event {
 };
 
 /// A round being played: the true state, a seeded generator that draws every
-/// load, deal, shell and coin, and what each seat has seen. Every seat that
+/// load, deal, shell and coin, and what each seat has seen. A second generator,
+/// seeded from the same seed, draws only the places the dealer's items take on
+/// the table, so those places leave every other draw as it is. Every seat that
 /// chooses a move should choose it from `view(seat)`, which holds only what
 /// that seat can know.
 class Table {
@@ -110,7 +112,12 @@ class Table {
   bool dealerMidTurn() const { return midTurn_; }
 
   /// Each seat's eight places on the table, holding item indices, -1 when
-  /// empty. A deal fills the lowest free place and a use empties its place.
+  /// empty. In story mode and double or nothing, the dealer's side of the
+  /// table, seat 2, puts each item it is dealt, or each item of a written
+  /// position, on a free place drawn at random, as the game does
+  /// (ItemManager.gd 383-393). Every other seat fills its lowest free place,
+  /// which stands in for the player's own choice of place (ItemManager.gd
+  /// 310-321). A use empties its place.
   std::array<int, kMaxItemsPerSeat> tray(int seat) const;
   /// The tray slot of `seat`'s `ordinal`-th copy of `item`, or -1.
   int slotOf(int seat, Item item, int ordinal) const;
@@ -139,6 +146,8 @@ class Table {
 
   std::uint32_t draw();
   int uniformInt(int lo, int hi);
+  /// The place on the table the next item `seat` is dealt goes to.
+  int freePlace(int seat);
   double unitReal();
   std::size_t sample(const std::vector<double>& weights);
 
@@ -168,6 +177,7 @@ class Table {
   TableOptions options_;
   RuleConfig config_;
   std::mt19937 rng_;
+  std::mt19937 placeRng_;
   GameState state_;
   int charges_ = 0;
   int loadNumber_ = 0;

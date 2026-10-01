@@ -12,6 +12,22 @@ namespace {
 constexpr int kPlayer = 0;
 constexpr int kDealer = 1;
 
+/// What the table's seed is mixed with to seed the generator of the dealer's
+/// places on the table.
+constexpr std::uint32_t kPlaceSeed = 0x9E3779B9u;
+
+/// An integer from `lo` to `hi`, each equally likely, drawn from `rng` by
+/// rejecting the 32-bit draws past the last whole multiple of the range.
+int uniformFrom(std::mt19937* rng, int lo, int hi) {
+  if (lo == hi) return lo;
+  const std::uint64_t range = static_cast<std::uint64_t>(hi - lo) + 1;
+  const std::uint64_t span = std::uint64_t{1} << 32;
+  const std::uint64_t limit = span - span % range;
+  std::uint64_t x = static_cast<std::uint32_t>((*rng)());
+  while (x >= limit) x = static_cast<std::uint32_t>((*rng)());
+  return lo + static_cast<int>(x % range);
+}
+
 const char* shellWord(Shell shell) {
   return shell == Shell::Live ? "live" : "blank";
 }
@@ -178,6 +194,7 @@ std::string chargesText(const PlayerState& player) {
 
 Table::Table(const TableOptions& options) : options_(options), config_(options.config) {
   rng_.seed(options.seed);
+  placeRng_.seed(options.seed ^ kPlaceSeed);
   const int players = config_.mode == Mode::Multiplayer
                           ? std::max(2, std::min(options.players, static_cast<int>(kMaxPlayers)))
                           : 2;
@@ -211,6 +228,7 @@ bool Table::fromPosition(const Position& position, const TableOptions& options, 
   table.options_ = options;
   table.config_ = options.config;
   table.rng_.seed(options.seed);
+  table.placeRng_.seed(options.seed ^ kPlaceSeed);
   const GameState& state = position.state;
   if (!position.unseenReads.empty()) {
     *error = "a table cannot start from phone reads whose result nobody at it saw";
@@ -240,7 +258,9 @@ bool Table::fromPosition(const Position& position, const TableOptions& options, 
   table.config_.charges = static_cast<std::uint8_t>(table.charges_);
   table.loadNumber_ = 1;
   for (int seat = 0; seat < state.playerCount; ++seat) {
-    for (int i = 0; i < state.players[seat].hand.size(); ++i) table.slots_[seat].push_back(i);
+    for (int i = 0; i < state.players[seat].hand.size(); ++i) {
+      table.slots_[seat].push_back(table.freePlace(seat));
+    }
   }
   // A written chamber bit is what the writer saw, so it counts as public.
   table.publicChamber_ = state.tube.empty() ? 0 : state.tube.knownBy[0];
@@ -254,13 +274,7 @@ std::uint32_t Table::draw() {
 }
 
 int Table::uniformInt(int lo, int hi) {
-  if (lo == hi) return lo;
-  const std::uint64_t range = static_cast<std::uint64_t>(hi - lo) + 1;
-  const std::uint64_t span = std::uint64_t{1} << 32;
-  const std::uint64_t limit = span - span % range;
-  std::uint64_t x = draw();
-  while (x >= limit) x = draw();
-  return lo + static_cast<int>(x % range);
+  return uniformFrom(&rng_, lo, hi);
 }
 
 double Table::unitReal() {
@@ -316,6 +330,22 @@ std::array<int, kMaxItemsPerSeat> Table::tray(int seat) const {
         itemIndex(hand.at[static_cast<std::size_t>(i)]);
   }
   return places;
+}
+
+int Table::freePlace(int seat) {
+  const std::vector<int>& slots = slots_[seat];
+  std::vector<int> free;
+  for (int place = 0; place < kMaxItemsPerSeat; ++place) {
+    if (std::find(slots.begin(), slots.end(), place) == slots.end()) free.push_back(place);
+  }
+  if (free.empty()) throw std::logic_error("a seat holds at most eight items");
+  // The dealer's side of the table puts each item it is dealt on a free place
+  // drawn at random (ItemManager.gd 383-393). The player chooses a place for
+  // each of its own (ItemManager.gd 310-321), and the lowest free place
+  // stands in for that choice.
+  if (config_.mode == Mode::Multiplayer || seat != kDealer) return free.front();
+  return free[static_cast<std::size_t>(
+      uniformFrom(&placeRng_, 0, static_cast<int>(free.size()) - 1))];
 }
 
 int Table::slotOf(int seat, Item item, int ordinal) const {
@@ -654,10 +684,7 @@ void Table::load() {
       const Item item =
           pool[static_cast<std::size_t>(uniformInt(0, static_cast<int>(pool.size()) - 1))];
       player.hand.append(item);
-      std::vector<int>& slots = slots_[seat];
-      int place = 0;
-      while (std::find(slots.begin(), slots.end(), place) != slots.end()) ++place;
-      slots.push_back(place);
+      slots_[seat].push_back(freePlace(seat));
       event.dealtItems[static_cast<std::size_t>(seat)].push_back(item);
       ++placed;
     }
