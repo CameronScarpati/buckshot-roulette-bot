@@ -143,10 +143,15 @@ DEALER_POSITIONS = [
     "p1=2/2[mg,saw] p2=2/2[adr,adr] tube=2L2B turn=p2",
     "p1=2/2[phone] p2=2/2[adr] tube=2L2B turn=p2",
     "p1=2/2[inv] p2=2/2[mg,adr] tube=1L2B turn=p2",
-    # Expired Medicine blocked by reachable cigarettes, by the item list left
-    # after the last Adrenaline is spent, at one charge, and after one use.
+    # Expired Medicine. While the item list the Dealer's previous pass built is
+    # empty, its own medicine comes first even with p1's Cigarettes in reach.
+    # With p1's Cigarettes on that list the medicine waits: the Cigarettes are
+    # stolen, or a stolen glass spends the last Adrenaline and the list still
+    # blocks the medicine. It is also refused at one charge and after one use.
     "p1=2/2[cig] p2=3/4[adr,med] tube=2L2B turn=p2",
     "p1=2/2[mg,cig] p2=2/4[adr,med] tube=2L2B turn=p2",
+    "p1=2/2[cig] p2=3/4[adr,med] tube=2L2B turn=p2 listcigs",
+    "p1=2/2[mg,cig] p2=2/4[adr,med] tube=2L2B turn=p2 listcigs",
     "p1=2/2 p2=1/4[med] tube=2L2B turn=p2",
     "p1=2/2 p2=2/5[med,med] tube=2L2B turn=p2",
     # Handcuffs refused: p1 already cuffed, p1 skipped at the root, one shell.
@@ -185,14 +190,30 @@ DEALER_POSITIONS = [
     "p1=2/2 p2=2/2[beer] tube=2L3B turn=p2 known=p2:2B",
     "p1=2/2 p2=2/2[beer] tube=2L3B turn=p2 known=p2:3B",
     "p1=2/2 p2=2/2[beer] tube=2L3B turn=p2 known=p2:4B",
-    # The scan walks the hands in the order they were dealt, and spends first
-    # copies.
+    # The scan walks the hands in the order they were dealt.
     "p1=2/2[beer,mg,beer] p2=2/2[adr] tube=1L2B turn=p2",
     "p1=2/2[adr] p2=2/2[cig,beer] tube=1L2B turn=p1",
+    # Which copy goes decides the order a later scan meets: the Dealer spends
+    # its own first copy, a steal takes the Dealer's first Adrenaline and p1's
+    # first copy, and each of p1's named copy moves leaves its own hand.
+    "p1=2/2 p2=2/4[beer,mg,beer] tube=2L3B turn=p2",
+    "p1=2/2[beer,cig,beer] p2=2/4[adr,adr] tube=2L2B turn=p2",
+    "p1=2/2[cig,beer,cig] p2=1/4[adr] tube=2L3B turn=p1",
     # The stale item list: p1's Cigarettes block the medicine, and a pass with
-    # an Adrenaline in hand puts them on the list.
+    # an Adrenaline in hand puts them on the list. In the third the glass
+    # pass puts them there and blocks the medicine on the passes after it. In
+    # the fourth p1 has smoked them, and the list outlives the turn and a
+    # reload.
     "p1=2/3[cig] p2=2/3[med] tube=2L2B turn=p2 listcigs",
     "p1=2/3[cig] p2=2/3[adr,mg] tube=2L2B turn=p2",
+    "p1=2/2[cig,cig] p2=2/4[mg,adr,med] tube=2L2B turn=p2",
+    "p1=2/2 p2=3/4[med] tube=0L1B turn=p1 listcigs",
+    # Shells only the Dealer has seen, more of them than the minimising model
+    # averages over. The Dealer acts on every one of them, so p1's chances
+    # are those of a Dealer that knows the tube.
+    "p1=2/2 p2=2/2 tube=3L3B turn=p2 known=p2:1L,2L,3L,4B,5B",
+    "p1=1/2 p2=2/2 tube=3L3B turn=p1 known=p2:1L,2L,3B,4B,5L",
+    "p1=3/4[beer,mg] p2=3/4[saw,beer] tube=4L4B turn=p1 known=p2:1L,2L,3B,4B,5L,6B,7L",
     # The Dealer in the middle of its turn.
     "p1=2/2 p2=2/2[saw] tube=2L2B turn=p2 known=p2:0L dealer=seen",
     "p1=2/2 p2=2/2[saw] tube=2L2B turn=p2 known=p1:0L known=p2:0L dealer=seen",
@@ -229,11 +250,14 @@ def tubes(max_shells: int | None) -> list[str]:
     return kept
 
 
-def random_phoned(rng: random.Random, seat: str, shells: int) -> str:
+def random_phoned(rng: random.Random, seat: str, shells: int, lowest: int = 2) -> str:
     """phoned= for one seat: one or two reads, at tube sizes from the current
-    size up to 8, largest first."""
+    size up to 8, largest first. A size under lowest is raised to lowest, which
+    leaves the draws, and so the rest of the random list, as they are for a
+    lowest of 2."""
     low = max(2, shells)
-    sizes = sorted((rng.randint(low, 8) for _ in range(rng.randint(1, 2))), reverse=True)
+    sizes = sorted((max(lowest, rng.randint(low, 8)) for _ in range(rng.randint(1, 2))),
+                   reverse=True)
     return f"phoned={seat}@" + ",".join(map(str, sizes))
 
 
@@ -290,9 +314,11 @@ def random_positions(count: int, seed: int, max_items: int | None = None,
         if rng.random() < 0.10:
             extras.append("cuffed=" + ("p2" if turn == "p1" else "p1"))
         # The seat not being advised used a phone and the advised seat never
-        # learned what it read.
+        # learned what it read. p2 sits where the Dealer does, and the Dealer
+        # phones only with more than two shells in the tube
+        # (DealerIntelligence.gd 187).
         if rng.random() < 0.20:
-            extras.append(random_phoned(rng, other, live + blank))
+            extras.append(random_phoned(rng, other, live + blank, 3 if other == "p2" else 2))
         out.append(
             f"p1={hp1}/{maxhp}{held[0]} p2={hp2}/{maxhp}{held[1]} "
             f"tube={tube} turn={turn} {' '.join(extras)}".rstrip()
@@ -345,11 +371,14 @@ def random_dealer_positions(count: int, seed: int, mode: str, max_items: int | N
         elif roll < 0.15:
             extras.append("cuffed=" + turn)
         # The stale item list holds p1's Cigarettes. Only the Double or
-        # Nothing pool has the Adrenaline that puts them there.
-        if mode == "don" and "cig" in held[0] and rng.random() < 0.25:
+        # Nothing pool has the Adrenaline that puts them there, and p1 may
+        # have smoked them since.
+        if mode == "don" and rng.random() < (0.25 if "cig" in held[0] else 0.10):
             extras.append("listcigs")
+        # The Dealer phones only with more than two shells in the tube
+        # (DealerIntelligence.gd 187).
         if rng.random() < 0.20:
-            extras.append(random_phoned(rng, "p2", live + blank))
+            extras.append(random_phoned(rng, "p2", live + blank, 3))
         # The Dealer in the middle of its turn, with a memory it can have.
         if turn == "p2" and "cuffed=p2" not in extras and rng.random() < 0.25:
             chamber = None

@@ -72,8 +72,10 @@ HEAL_FLOOR = 1
 # at pool index i + DEAL_INDEX_BASE, cycling through the pool, appended to its
 # hand in that order.
 DEAL_INDEX_BASE = 0
-# How many shells another seat has looked at the root averages over before it
-# gives up and forgets them all.
+# Under the minimising opponent, how many shells another seat has looked at the
+# root averages over before it gives up and forgets them all.  The Dealer
+# opponent has no limit: the Dealer acts on every shell it has seen
+# (DealerIntelligence.gd 187-191 and 282-303), so the root draws them all.
 KNOWLEDGE_LIMIT = 4
 
 EPS = 1e-9
@@ -251,8 +253,8 @@ def seats_in(mask: int) -> tuple[int, ...]:
     return tuple(i for i in range(8) if mask >> i & 1)
 
 
-def knowledge_branches(st: State, seat: int, limit: int = KNOWLEDGE_LIMIT,
-                       extra: dict[int, int] | None = None, keep_chamber: bool = False):
+def knowledge_branches(st: State, seat: int, limit: int | None = KNOWLEDGE_LIMIT,
+                       extra: dict[int, int] | None = None):
     """The position as `seat` sees it, split into the ways the shells another
     seat has looked at could have fallen.
 
@@ -263,10 +265,9 @@ def knowledge_branches(st: State, seat: int, limit: int = KNOWLEDGE_LIMIT,
 
     `extra` maps an offset to a mask of further seats that looked at it with a
     phone whose reading this seat never saw; those offsets are drawn too, and an
-    offset this seat already knows just gains the seats.  With `keep_chamber`
-    the chamber is always drawn and is not counted against the limit.  Returns
-    the branches, how many counted shells there were, and whether the limit
-    dropped them."""
+    offset this seat already knows just gains the seats.  A `limit` of None
+    draws every such shell.  Returns the branches, how many such shells there
+    were, and whether the limit dropped them."""
     extra = {j: m for j, m in (extra or {}).items() if m}
     blind = blind_to(st, seat)
     slots = list(blind.slots)
@@ -277,12 +278,12 @@ def knowledge_branches(st: State, seat: int, limit: int = KNOWLEDGE_LIMIT,
     blind = blind._replace(slots=tuple(slots))
     spots = sorted(set(foreign_known(st, seat))
                    | {j for j in extra if seat not in st.slots[j][1]})
-    counted = [j for j in spots if not (keep_chamber and j == 0)]
-    dropped = len(counted) > limit
+    count = len(spots)
+    dropped = limit is not None and count > limit
     if dropped:
-        spots = [0] if (keep_chamber and 0 in spots) else []
+        spots = []
     if not spots:
-        return [(1.0, blind)], len(counted), dropped
+        return [(1.0, blind)], count, dropped
     ul, ub = unresolved_counts(blind)
     out = []
     for combo in itertools.product("LB", repeat=len(spots)):
@@ -304,7 +305,7 @@ def knowledge_branches(st: State, seat: int, limit: int = KNOWLEDGE_LIMIT,
             seers |= set(seats_in(extra.get(idx, 0)))
             slots[idx] = (ty, tuple(sorted(seers)))
         out.append((p, blind._replace(slots=tuple(slots))))
-    return (out or [(1.0, blind)]), len(counted), dropped
+    return (out or [(1.0, blind)]), count, dropped
 
 
 def two_seat_dealer_phone(st: State, seat: int, mode: str) -> bool:
@@ -1045,6 +1046,8 @@ MSG_BELIEVES_STORY_ONLY = "dealer=believes:B happens only in story mode"
 MSG_AIM_SELF_DON_ONLY = "dealer=aim:self happens only in double or nothing"
 MSG_PHONED_ADVISED_SEAT = ("phoned names p{0}, the seat being advised, which saw where its own phone "
        "looked; give known=p{0} instead")
+MSG_DEALER_READ_TOO_SMALL = ("phoned=p2@{0} cannot happen: the dealer uses a burner phone only with "
+       "more than two shells in the tube")
 
 
 class Refused(Exception):
@@ -1345,6 +1348,12 @@ def check_solvable(pos: Position, seat: int, mode: str, opponent: str) -> None:
             raise Refused(MSG_AIM_SELF_DON_ONLY)
     if any(who == seat for who, _ in pos.reads):
         raise Refused(MSG_PHONED_ADVISED_SEAT.format(seat + 1))
+    if opponent == "dealer":
+        # The Dealer uses a Burner Phone, its own or a stolen one, only with
+        # more than two shells in the tube (DealerIntelligence.gd 187).
+        small = [n for who, n in pos.reads if who == DEALER and n <= 2]
+        if small:
+            raise Refused(MSG_DEALER_READ_TOO_SMALL.format(small[0]))
 
 
 def root_starts(pos: Position, seat: int, mode: str = "don", opponent: str = "optimal"):
@@ -1352,14 +1361,14 @@ def root_starts(pos: Position, seat: int, mode: str = "don", opponent: str = "op
     unseen phone reads could have fallen, times one per way the shells other
     seats have looked at could have fallen.  Each start carries the Dealer's
     memory, has its root skips applied and, under any model but the Dealer, is
-    in sorted form.  Returns (starts, counted shells, dropped)."""
+    in sorted form.  Only the minimising model limits how many of those shells
+    are drawn.  Returns (starts, most such shells, dropped)."""
     check_solvable(pos, seat, mode, opponent)
-    keep = pos.dealer is not None and pos.dealer[0] == "seen"
+    limit = None if opponent == "dealer" else KNOWLEDGE_LIMIT
     starts = []
     most, dropped = 0, False
     for w, extra in expand_reads(pos.state, pos.reads, mode):
-        branches, count, drop = knowledge_branches(pos.state, seat, KNOWLEDGE_LIMIT,
-                                                   extra, keep)
+        branches, count, drop = knowledge_branches(pos.state, seat, limit, extra)
         dropped = dropped or drop
         if w > 0.0:
             most = max(most, count)
@@ -1814,13 +1823,22 @@ def notation_selftest(check_true) -> None:
          MSG_PHONED_ADVISED_SEAT.format(1)),
         ("p1=2/2 p2=2/2 tube=2L2B turn=p1 phoned=p2@4", 1, "don", "optimal",
          MSG_PHONED_ADVISED_SEAT.format(2)),
+        # The Dealer phones only with more than two shells in the tube; the
+        # minimising model's p2 is not held to that.
+        ("p1=2/2 p2=2/2[beer] tube=1L1B turn=p2 phoned=p2@2", 0, "don", "dealer",
+         MSG_DEALER_READ_TOO_SMALL.format(2)),
+        ("p1=2/2 p2=2/2 tube=1L0B turn=p1 phoned=p2@3,2", 0, "story", "dealer",
+         MSG_DEALER_READ_TOO_SMALL.format(2)),
+        ("p1=2/2 p2=2/2 tube=1L0B turn=p1 phoned=p2@3", 0, "don", "dealer", "solved"),
+        ("p1=2/2 p2=2/2[beer] tube=1L1B turn=p2 phoned=p2@2", 0, "don", "optimal", "solved"),
     ):
         try:
             root_starts(parse_position(text, 0), seat, mode, opp)
             got = "solved"
         except Refused as exc:
             got = str(exc)
-        check_true(f"not solved: {want[:40]}", got == want, got)
+        name = f"solved: {text.split()[-1]} {opp}" if want == "solved" else f"not solved: {want[:40]}"
+        check_true(name, got == want, got)
 
 
 def dealer_selftest(check, check_true) -> None:
@@ -2065,21 +2083,48 @@ def dealer_selftest(check, check_true) -> None:
         check_true(f"dealer= memory: {pos.split('dealer=')[1]}",
                    len(starts) == 1 and starts[0][2] == want, f"{starts[0][2]}")
 
-    # dealer=seen keeps the chamber past the knowledge limit: five other
-    # offsets are over the limit and dropped, the chamber is still drawn.
-    pos = parse_position("p1=2/2 p2=2/2 tube=4L4B turn=p2 known=p2:0L,1L,2B,3B,4L,5B "
-                         "dealer=seen", 0)
-    starts, _, dropped = root_starts(pos, 0, "don", "dealer")
-    ok = (dropped and len(starts) == 2
-          and sorted((s.slots[0], round(w, 12)) for w, s, _ in starts)
-          == [(("B", (1,)), 0.5), (("L", (1,)), 0.5)]
+    # The Dealer acts on every shell it has seen, so against it the root draws
+    # all of them.  Six shells only p2 has seen in 4L4B, the chamber among
+    # them, are drawn from p1's pool: 2, 3 or 4 of them live, C(6,2) + C(6,3)
+    # + C(6,4) = 50 starts, each keeping every mark, and dealer=seen follows
+    # the chamber drawn in each.  The minimising model gives up past 4.
+    text = "p1=2/2 p2=2/2 tube=4L4B turn=p2 known=p2:0L,1L,2B,3B,4L,5B"
+    pos = parse_position(text + " dealer=seen", 0)
+    starts, most, dropped = root_starts(pos, 0, "don", "dealer")
+    ok = (not dropped and most == 6 and len(starts) == 50
+          and abs(sum(w for w, _, _ in starts) - 1.0) < tight
+          and all(all(s.slots[j][0] is not None and s.slots[j][1] == (DEALER,)
+                      for j in range(6)) and s.slots[6:] == ((None, ()),) * 2
+                  for _, s, _ in starts)
           and all(m == Memory(True, s.slots[0][0], aim(s.slots[0][0]), False)
-                  for _, s, m in starts)
-          and all(t is None for _, s, _ in starts for t, _ in s.slots[1:]))
-    check_true("dealer=seen past the knowledge limit", ok,
+                  for _, s, m in starts))
+    check_true("dealer: every seen shell is drawn", ok,
+               f"dropped={dropped} most={most} starts={len(starts)}")
+    starts, _, dropped = root_starts(parse_position(text, 0), 0, "don", "optimal")
+    check_true("optimal: the limit of 4 still drops", dropped and len(starts) == 1,
                f"dropped={dropped} starts={len(starts)}")
-    v, d, nodes, dropped = solve_position(pos, 0, "don", "dealer")
-    check_true("dealer=seen past the limit solves", dropped and d == [], f"value={v:.6f}")
+
+    # p1=1/1 p2=1/1 tube=3L3B turn=p2 known=p2:1L,2L,3L,4B,5B.  p2 has seen
+    # five of the six shells, so in every start the counts give it the
+    # chamber as well (lines 96-104).  It fires each blank into itself and the
+    # first live shell at p1, who has one charge: 0.  Forgetting what it saw
+    # would leave it a fair coin on 3L3B instead.  With two charges each, p1
+    # takes that live shell and gets the gun on one charge with two live
+    # shells left.  A live shell into p1 ends it, and any shot at p2 hands p2
+    # the gun with a live shell still in the tube, which it fires at p1: 0.
+    for pos_text in ("p1=1/1 p2=1/1 tube=3L3B turn=p2 known=p2:1L,2L,3L,4B,5B",
+                     "p1=2/2 p2=2/2 tube=3L3B turn=p2 known=p2:1L,2L,3L,4B,5B"):
+        v, _, _ = dealer(pos_text)
+        check(f"dealer reads five shells: {pos_text.split()[0]}", v, 0.0, tight)
+    # p1=1/2 p2=2/2 tube=3L3B turn=p1 known=p2:1L,2L,3B,4B,5L.  Whatever p1
+    # fires first, p2 then knows every shell left.  A live shell into p1 ends
+    # it.  A live shell at p2 hands p2 the gun with two live shells left, and
+    # a blank at p2 with three, and p2 fires its blanks into itself and the
+    # next live shell at p1.  So p1 never wins: 0 for both shots.
+    v, d, _ = dealer("p1=1/2 p2=2/2 tube=3L3B turn=p1 known=p2:1L,2L,3B,4B,5L")
+    check("dealer reads five shells, p1 to move: value", v, 0.0, tight)
+    check("dealer reads five shells, p1 to move: shoot p2", d["shoot p2"], 0.0, tight)
+    check("dealer reads five shells, p1 to move: shoot self", d["shoot self"], 0.0, tight)
 
     # Beer after the glass showed a blank: the stale target survives.  ENDLESS
     # forgets the shell but keeps the target, STORY keeps both.

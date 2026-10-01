@@ -163,6 +163,13 @@ jobs:
         run: >
           python3 tools/compare_solvers.py --advisor build/advisor --opponent dealer --reloads 1
           --random 20 --seed 37 --max-items 3 --max-shells 4 --quiet
+      # A load that deals no items leaves the Dealer without fresh Cigarettes, so
+      # the item list its last pass built still decides its medicine after the
+      # reload.
+      - name: Compare the two solvers against the dealer through a reload that deals no items
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --opponent dealer --reloads 1
+          --items-per-load 0 --random 20 --seed 53 --quiet
       - name: Compare the two solvers against the dealer through a reload in the story stages
         run: >
           python3 tools/compare_solvers.py --advisor build/advisor --opponent dealer --mode story

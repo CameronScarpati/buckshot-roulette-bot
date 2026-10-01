@@ -37,14 +37,16 @@ counts distinct states expanded (positions and Dealer passes), i.e. cache misses
 so it is a cost signal and **not** something to compare against the C++.
 `nodeLimitHit` is always `false`: this tool has no node limit, and the field is
 there so both tools write the same keys. `opponentKnowledgeDropped` is `true`
-when the root had more shells seen by other seats than it averages over (see
-"Root value") and forgot them.
+when, under the minimising opponent, the root had more shells seen by other
+seats than it averages over (see "Root value") and forgot them. Under
+`--opponent dealer` it is always `false`.
 `--json` is accepted and ignored, so the same argv works for both binaries; note
 the C++ advisor also emits a `truncated` field, which this tool does not.
 
 A position that parses but cannot be solved under the flags given (a `dealer=`
 token without `--opponent dealer`, a Dealer memory the chosen brain never
-reaches, or a `phoned=` read for the seat being advised) exits 2 and writes
+reaches, a `phoned=` read for the seat being advised, or a Dealer read at two
+shells or fewer under `--opponent dealer`) exits 2 and writes
 `{"refused": true, "assumptions": ["Not solved: <reason>"], "actions": [], "nodeLimitHit": false}`
 on stdout, with the same reason on stderr.
 
@@ -73,7 +75,10 @@ The other tokens:
   2 to 8 and at least the current tube size; at most 8 sizes per seat and one
   `phoned=` per seat. A read whose shell has since left the tube names nothing.
   Naming the seat being advised is refused at solve time: it saw its own read,
-  so write it as `known=` instead.
+  so write it as `known=` instead. Under `--opponent dealer` a read by p2, the
+  Dealer, is 3 to 8: the Dealer uses a Burner Phone, its own or a stolen one,
+  only with more than two shells in the tube (`DealerIntelligence.gd` 187), so
+  a smaller size is refused at solve time.
 * `dealer=<core>[,med]` or `dealer=med` (two seats, p2 to move, p2 not cuffed,
   shells in the tube): the Dealer is in the middle of its turn with this
   memory. See "Dealer memory in a written position".
@@ -124,16 +129,18 @@ It checks a fixed list of positions (one list per opponent model) and `--random`
 more drawn from `--seed`. Random hands are drawn in a random order, with at most
 `--max-items` items per seat (2 by default, 3 under `--opponent dealer`), and
 random tubes hold at most `--max-shells` shells. A fifth of the random positions
-carry a `phoned=` read for the seat not being advised; under `--opponent dealer`
-a quarter of the Double or Nothing positions where p1 holds Cigarettes carry
-`listcigs`, and a quarter of those with an uncuffed p2 to move carry a `dealer=`
-memory the Dealer can have. `--items-per-load` goes to both tools;
-`--node-limit` goes to the advisor only, and a position it stops at is printed
-as `SKIP <position>` and counted apart. `--jobs` checks that many positions at
-once and keeps the report in order. A position both tools refuse to solve (a
-`phoned=` read by the seat being advised, for example) agrees; one refused by
-only one of them disagrees. The last line reads `A of B positions agree, S
-skipped`, and the exit status is non-zero only when a position disagrees.
+carry a `phoned=` read for the seat not being advised, made at 3 shells or more
+when that seat is p2, which sits where the Dealer does; under `--opponent dealer`
+a quarter of the Double or Nothing positions where p1 holds Cigarettes, and a
+tenth of the others, carry `listcigs`, and a quarter of those with an uncuffed
+p2 to move carry a `dealer=` memory the Dealer can have. `--items-per-load` goes
+to both tools; `--node-limit` goes to the advisor only, and a position it stops
+at is printed as `SKIP <position>` and counted apart. `--jobs` checks that many
+positions at once and keeps the report in order. A position both tools refuse
+to solve (a `phoned=` read by the seat being advised, for example) agrees; one
+refused by only one of them disagrees. The last line reads `A of B positions
+agree, S skipped`, and the exit status is non-zero only when a position
+disagrees.
 
 ## Opponent models
 
@@ -211,6 +218,8 @@ fair on a tie.
 `known=p2:<offset><L|B>` records only that the Dealer has seen that shell.
 Unless the same fact is also written for p1, the root knowledge branches redraw
 its type from p1's unresolved pool, and the Dealer remembers the redrawn type.
+Every such shell is redrawn, however many there are, since the Dealer acts on
+all it has seen (lines 187 to 191 and `FigureOutShell` from line 282).
 To pin a Dealer memory, write it for both seats (`known=p1:1B known=p2:1B`).
 
 `dealer=` puts the root in the middle of a Dealer turn. The core is one of:
@@ -249,11 +258,13 @@ so `value` is the best averaged row (the first entry of `actions`). Otherwise
 
 A `phoned=` read adds the shells it may have named: each way the read could have
 fallen is weighted by the phone's own odds, and the shell it names is redrawn
-and marked seen by the reading seat. The root averages over at most 4 such
-shells. With more, it forgets every shell other seats have seen and solves the
+and marked seen by the reading seat. Under `--opponent dealer` the root redraws
+every shell another seat has seen or may have read, however many there are.
+Under the minimising opponent it averages over at most 4 of them, counting both
+kinds; with more, it forgets every shell other seats have seen and solves the
 position as the solved seat's own knowledge describes it, and
-`opponentKnowledgeDropped` is `true`. Under `dealer=seen` the chamber is always
-drawn and does not count toward the 4.
+`opponentKnowledgeDropped` is `true`. The limit belongs to the
+minimising model, which the game's scripts do not describe.
 
 The solved seat's legal moves come from what it knows, at the root and at every
 later node. When the seat to move cannot see a shell another seat has resolved,
@@ -303,7 +314,9 @@ compositions from 1L1B to 4L4B, each 1/7), cuffs and skips are cleared, p1
 moves first, the `listcigs` flag is kept, and a sawed barrel stays sawed except
 in `mp`.
 
-Both opponent models are modelling choices too; see "Opponent models".
+Both opponent models are modelling choices too; see "Opponent models". The
+minimising model's limit of 4 shells other seats have seen at the root is one of
+its choices (see "Root value"); the Dealer model has no such limit.
 
 ## Where the spec left room, and what this file chose
 
@@ -342,8 +355,8 @@ away in `oracle.py`.
   as the Dealer does in the game; this holds under both opponent models. Every
   other shot spends the saw.
 * **A `phoned=` read on a shell the seat already knows** adds the reading seat
-  to that shell's observers. Past the limit of 4 those observers are kept on the
-  shells the solved seat knows and dropped elsewhere.
+  to that shell's observers. Past the minimising model's limit of 4 those
+  observers are kept on the shells the solved seat knows and dropped elsewhere.
 
 ## Cost
 
