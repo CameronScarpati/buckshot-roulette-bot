@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Narrated sessions piped into the advisor, each held to the exact position it
 # must print afterwards: fresh loads, which copy of an item leaves a hand, steals
-# in both directions, phone reads nobody else heard, and the dealer's memory
-# part-way through its turn.
+# in both directions, phone reads nobody else heard, the shells a phone can
+# name, medicine that heals nothing, and the dealer's memory part-way through
+# its turn.
 #
 #     tools/check_advisor_session.sh [path-to-build-directory]
 #
@@ -128,6 +129,33 @@ session "another seat's phone is recorded unseen" "$PLAIN" \
 session "a seat makes at most eight phone reads in one load" "$PLAIN" \
   "set p1=2/2 p2=2/2[phone] tube=2L3B turn=p2 phoned=p2@8,8,8,8,8,8,8,8\nphone unseen\n" \
   "a seat makes at most 8 phone reads in one load"
+
+# The player's phone moves a pick of the eighth shell to the seventh, so with
+# eight loaded it names shells 2 to 7; the dealer's names any of 2 to 8
+# (BurnerPhone.gd 13-15, DealerIntelligence.gd 187-194).
+session "the player's phone never names shell 8 of 8" "$PLAIN" \
+  "set p1=2/2[phone] p2=2/2 tube=4L4B turn=p1\nphone 8 live\nstate\nphone 7 live\nstate\n" \
+  "This phone never names shell 8 when 8 shells are loaded: it names shells 2 to 7." \
+  "p1=2/2[phone] p2=2/2 tube=4L4B turn=p1" \
+  "p1=2/2 p2=2/2 tube=4L4B turn=p1 known=p1:6L"
+session "the dealer's phone can name shell 8 of 8" "$PLAIN --seat 2" \
+  "set p1=2/2 p2=2/2[phone] tube=4L4B turn=p2\nphone 8 live\nstate\n" \
+  "p1=2/2 p2=2/2 tube=4L4B turn=p2 known=p2:7L"
+
+# Expired Medicine that works heals nothing at full charges or in the faded
+# band, and a failure always costs a charge (MedicineManager.gd 17-38,
+# HealthCounter.gd 141-153), so the two outcomes stay apart there too.
+session "medicine at full charges" "$PLAIN" \
+  "set p1=4/4[med] p2=4/4 tube=1L1B turn=p1\nuse med ok\nstate\nset p1=4/4[med] p2=4/4 tube=1L1B turn=p1\nuse med bad\nstate\n" \
+  "p1=4/4 p2=4/4 tube=1L1B turn=p1" \
+  "p1=3/4 p2=4/4 tube=1L1B turn=p1"
+session "medicine in the faded band" "--reloads 0 --opponent dealer --mode story3" \
+  "set p1=1/5[med] p2=4/5 tube=1L1B turn=p1\nuse med ok\nstate\nset p1=1/5[med] p2=4/5 tube=1L1B turn=p1\nuse med bad\nstate\n" \
+  "p1=1/5 p2=4/5 tube=1L1B turn=p1" \
+  "p1=0/5 p2=4/5 tube=1L1B turn=p1"
+session "stolen medicine at full charges" "$PLAIN" \
+  "set p1=4/4[adr] p2=3/4[med] tube=1L1B turn=p1\nuse adr p2 med ok\nstate\n" \
+  "p1=4/4 p2=3/4 tube=1L1B turn=p1"
 
 # The dealer's memory part-way through its turn.
 session "a glass then a Beer on a blank leaves the endless dealer aiming at itself" "$DEALER" \

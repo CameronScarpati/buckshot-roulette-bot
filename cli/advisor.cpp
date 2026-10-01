@@ -3,6 +3,7 @@
 /// that you are the last player standing, under the stated opponent model.
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <iomanip>
@@ -530,7 +531,10 @@ bool applyWithOutcome(Session* session, const Action& action, bool haveShell, Sh
 }
 
 /// Expired medicine has two branches of equal weight, so the caller says which
-/// one happened and the matching branch is taken.
+/// one happened and the matching branch is taken. They are told apart by the
+/// failure, which always takes a charge (MedicineManager.gd 25-27): a success
+/// can leave the charges as they were, at the maximum or below the heal floor
+/// (HealthCounter.gd 141-153).
 bool applyMedicine(Session* session, const Action& action, bool healed) {
   if (!isLegal(*session, action)) {
     std::cout << "That move is not available here.\n";
@@ -539,8 +543,8 @@ bool applyMedicine(Session* session, const Action& action, bool healed) {
   const int seat = session->state.current;
   const GameState before = session->state;
   for (const Outcome& outcome : rules::apply(before, action, session->config)) {
-    const bool wentUp = outcome.state.players[seat].hp > before.players[seat].hp;
-    if (wentUp != healed) continue;
+    const bool failed = outcome.state.players[seat].hp < before.players[seat].hp;
+    if (failed == healed) continue;
     session->history.push_back(snapshot(*session));
     session->state = outcome.state;
     finishEvent(session, before, before, action, Shell::Unknown);
@@ -741,6 +745,16 @@ bool recordPhone(Session* session, const Action& action, const std::string& form
               << " 3 blank, or " << form
               << " unseen for another seat's phone. A burner phone never names the chamber, so "
                  "the number starts at 2.\n";
+    return false;
+  }
+  // The player's phone moves a pick of the eighth shell to the seventh, so it
+  // never names shell 8 of 8; the dealer's can (BurnerPhone.gd 13-15,
+  // DealerIntelligence.gd 187-194).
+  const std::array<double, kMaxShells> weights =
+      rules::phoneOffsetWeights(seat, session->state.playerCount, size);
+  if (weights[static_cast<std::size_t>(position - 1)] <= 0.0) {
+    std::cout << "This phone never names shell " << position << " when " << size
+              << " shells are loaded: it names shells 2 to " << (size - 1) << ".\n";
     return false;
   }
   if (!isLegal(*session, action)) {
