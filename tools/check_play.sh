@@ -86,11 +86,21 @@ if ! diff -q "$work/a1" "$work/a2" > /dev/null; then
 fi
 echo "ok   the same position gives the same answer, byte for byte"
 
-line=$(grep "survived" "$work/first")
+# A round that reaches the move cap without a winner is reported on a line of
+# its own and left out of the rate, so the rounds the rate is over and the
+# capped rounds add up to the batch.
+line=$(grep "survived" "$work/first" || true)
+if [ -z "$line" ]; then
+  echo "no round of the batch finished:" >&2
+  cat "$work/first" >&2
+  exit 1
+fi
 survived=$(echo "$line" | sed -E 's/.* survived ([0-9]+) of .*/\1/')
-rounds=$(echo "$line" | sed -E 's/.* of ([0-9]+) rounds.*/\1/')
-if [ "$rounds" != "$CEILING" ]; then
-  echo "expected $CEILING rounds, read: $line" >&2
+rounds=$(echo "$line" | sed -E 's/.* of ([0-9]+) (finished )?rounds.*/\1/')
+capped=$( (grep -E "^[0-9]+ rounds reached the 400 move cap" "$work/first" || true) | sed -E 's/^([0-9]+) .*/\1/')
+capped=${capped:-0}
+if [ $((rounds + capped)) -ne "$CEILING" ]; then
+  echo "expected $CEILING rounds, read: $line, with $capped capped" >&2
   exit 1
 fi
 if [ "$survived" -lt "$FLOOR" ]; then
