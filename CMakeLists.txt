@@ -57,6 +57,11 @@ target_link_libraries(advisor PRIVATE bsr_core bsr_warnings)
 add_executable(play cli/play.cpp)
 target_link_libraries(play PRIVATE bsr_core bsr_warnings)
 
+# The engine compiled to WebAssembly for the web page. Emscripten builds only.
+if(EMSCRIPTEN)
+    add_subdirectory(web)
+endif()
+
 # ---------------------------------------------------------------------------
 # Tests. On by default: a test suite nobody runs is not a test suite, and the
 # README's build instructions used to fail because this defaulted to OFF.

@@ -184,3 +184,35 @@ jobs:
         run: >
           python3 tools/compare_solvers.py --advisor build/advisor --mode story --heal-floor 2
           --random 20 --seed 47 --quiet
+
+  web:
+    # The engine compiled to WebAssembly for the page under web/, played through
+    # seeded rounds and compared with the native advisor by the smoke test. The
+    # build and test commands are those printed in web/README.md, so that they
+    # cannot drift away from what works.
+    runs-on: ubuntu-latest
+    env:
+      EMSCRIPTEN_RELEASE: "6.0.10"
+    steps:
+      - uses: actions/checkout@v4
+      # The smoke test reads the page's own checks, which need Node 22 or newer.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Install Emscripten
+        run: |
+          git clone --depth 1 --branch "$EMSCRIPTEN_RELEASE" https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          cd "$RUNNER_TEMP/emsdk"
+          ./emsdk install "$EMSCRIPTEN_RELEASE"
+          ./emsdk activate "$EMSCRIPTEN_RELEASE"
+      - name: Build the engine for the page
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+          cmake --build build-web --target web_engine
+      - name: Build the advisor
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target advisor
+      - name: Smoke test
+        run: node web/test/smoke.mjs build-web/web build/advisor
