@@ -20,15 +20,19 @@ It also plays.
 - **Advises.** Give it a position, by one line of notation or by narrating the round as it
   happens, and it ranks the legal moves it considers useful with a win probability, marks
   ties, and names the opponent model it used.
-- **Plays.** Take a seat against the solver. The shells come from a seed, so a whole round
-  replays exactly.
+- **Plays.** Take a seat against the solver or against the game's scripted dealer, or watch
+  the solver play the dealer with every move explained. The shells and the dealer's coins come
+  from a seed, so a whole round replays exactly.
+- **Models the dealer, as an option.** The single-player dealer's script, read rule by rule
+  from a decompilation of the game, can stand in for the opponent in the advisor and in play.
+  The default opponent model is unchanged: it plays to minimise your chance.
 - **Covers the game.** Two to four seats, all eleven items, and the single-player and
   multiplayer rule sets as settings on one engine.
 
 The numbers are probabilities, not scores. A move worth 0.60 wins the round three times in
 five against the model described in [docs/RULES.md](docs/RULES.md), and that document marks
-every rule as verified against the game, sourced to a citable page, or assumed by this engine
-because nothing settles it.
+every rule as verified against the game or its decompiled script, sourced to a citable page, or
+assumed by this engine because nothing settles it.
 
 ## Quick start
 
@@ -148,6 +152,56 @@ Knowing the chamber is blank turns shooting yourself from the worst move into th
 because a blank fired at yourself costs nothing and keeps the turn. `help` lists every
 command: shots, ejections, reveals, item use, edits to charges and inventories, and `undo`.
 
+### Against the scripted dealer
+
+By default p2 plays to minimise your chance (`--opponent solver`). `--opponent dealer`
+replaces it with the single-player dealer as the game scripts it: it uses items, picks a
+target and flips its coin by the rules in
+[docs/RULES.md](docs/RULES.md#the-scripted-dealer), so the value is your chance against that
+dealer rather than against a minimising opponent. It needs two seats and p1 advised, and
+`--mode` chooses between Double or Nothing (`don`, the default) and the story stages
+(`story1`, `story2`, `story3`), which run the dealer's simpler story rules.
+
+```sh
+./build/advisor --position "p1=2/4[saw,mg] p2=4/4[beer,cuff] tube=2L3B turn=p1" --reloads 1 --opponent dealer
+```
+
+```
+tube: 2 live, 3 blank
+> p1  2/4 charges  items: Magnifying Glass Hand Saw
+  p2  4/4 charges  items: Beer Handcuffs
+
+Advising seat p1, to move: p1
+  * shoot p2                          0.4967
+    use Magnifying Glass              0.4952   (-0.0015)
+    use Hand Saw                      0.4507   (-0.0460)
+    shoot self                        0.3629   (-0.1337)
+  Note: the search hit its reload budget in some lines, so those were valued by charges in hand.
+  Model: double or nothing, 4 charges, [...] The other seat is the dealer, and it plays the game's own dealer script with its endless rules: [...]
+  240573 states examined.
+```
+
+This is the position at the top of Asking about a position, and the values differ from the
+ones there because the opponent model differs. When the dealer is to move there is nothing to
+rank, since it does not choose between moves, so the advisor prints your chance from that
+position instead:
+
+```sh
+./build/advisor --position "p1=3/4[saw] p2=3/4[mg,beer] tube=2L2B turn=p2" --reloads 1 --opponent dealer
+```
+
+```
+tube: 2 live, 2 blank
+  p1  3/4 charges  items: Hand Saw
+> p2  3/4 charges  items: Magnifying Glass Beer
+
+Advising seat p1. The dealer (p2) is to move and plays by its script.
+  Your chance of being the last player standing: 0.7792
+  [...]
+```
+
+While narrating a round, `opponent dealer` and `opponent solver` switch between the two.
+
 ## Playing
 
 ```sh
@@ -155,8 +209,165 @@ command: shots, ejections, reveals, item use, edits to charges and inventories, 
 ```
 
 You take seat 1 and choose from a numbered menu. The solver answers from the same engine
-that produced the advice above, and it says what it rates its own chances at before each
-move.
+that produced the advice above, and with each of its moves it says what it rates its own
+chances at. The board you see shows the shells you have seen and none that the solver has
+looked at.
+
+### Against the dealer
+
+```sh
+./build/play --opponent dealer --seed 6 --charges 2 --reloads 0
+```
+
+Seat 2 is now the scripted dealer. Each of its moves is drawn from its rules with the seeded
+generator, and you are told what it does but not what it learns: the board you see leaves out
+the shells it has looked at, as the game does. A turn you lose to its handcuffs is reported
+when it is lost.
+
+```
+tube: 4 live, 4 blank
+> p1  2/2 charges  items: Magnifying Glass x2 Beer Cigarettes Inverter
+  p2  2/2 charges  items: Magnifying Glass x2 Handcuffs Burner Phone Expired Medicine
+
+Your move:
+  1) shoot self
+  2) shoot p2
+  3) use Magnifying Glass
+  4) use Beer
+  5) use Inverter
+> 2
+  The shell was blank.
+
+tube: 4 live, 3 blank
+  p1  2/2 charges  items: Magnifying Glass x2 Beer Cigarettes Inverter
+> p2  2/2 charges  items: Magnifying Glass x2 Handcuffs Burner Phone Expired Medicine
+The dealer uses its Magnifying Glass.
+  It looks into the chamber.
+The dealer uses its Handcuffs.
+  You are handcuffed and will lose the next turn.
+The dealer uses its Burner Phone.
+  It listens to the type of one shell past the chamber.
+The dealer shoots you.
+  The shell was LIVE.
+You are handcuffed and lose this turn.
+```
+
+`--mode story1`, `story2` or `story3` plays a story stage instead, with that stage's charges.
+The game takes a story stage's loads from fixed data for each round, which is not in the
+decompiled scripts, so here a story stage draws its loads at random from the solver's
+distribution instead.
+
+### Watching the solver play the dealer
+
+```sh
+./build/play --watch --seed 6 --charges 2 --reloads 0
+```
+
+The solver takes seat 1. Before each of its moves it prints the board and up to three of the
+moves it ranks highest, with their values. A star marks each move worth the most, and when
+several tie, a line says so and that p1 plays the first one listed. What p1's own glass or
+phone shows is printed after its move. When some of the values stop at the reload budget, the
+weighing calls its chance estimated, and the first such weighing in a round adds a note that
+says what that means. Every dealer move comes with the rule that produced it. A spectator is
+shown what the dealer learned privately, and each such line says so. Shells are numbered from
+the chamber, which is shell 1, so a shell's number drops as the shells ahead of it leave.
+`--pace 800` waits 800 milliseconds before each move, so a round can be followed as it plays.
+
+```
+tube: 4 live, 3 blank
+> p1  2/2 charges  items: Beer Cigarettes Inverter  knows: shell 1 is live
+  p2  2/2 charges  items: Magnifying Glass x2 Handcuffs Burner Phone Expired Medicine
+p1 (solver) weighs, by its estimated chance of surviving the round:
+  * shoot p2                                    0.3100
+    use Inverter                                0.2017
+    use Beer                                    0.1792
+p1 plays: shoot p2
+  The shell was LIVE.
+
+tube: 3 live, 3 blank
+  p1  2/2 charges  items: Beer Cigarettes Inverter
+> p2  1/2 charges  items: Magnifying Glass x2 Handcuffs Burner Phone Expired Medicine
+The dealer uses its Magnifying Glass.
+  Seen only by the dealer: the chamber is blank.
+  Why: it does not know the chamber and more than one shell is left.
+The dealer uses its Handcuffs.
+  p1 is handcuffed and will lose the next turn.
+  Why: p1 is free to be handcuffed and more than one shell is left.
+The dealer uses its Burner Phone.
+  Heard only by the dealer: shell 3 is live.
+  Why: more than two shells are left.
+The dealer shoots itself.
+  Why: it keeps the target it chose earlier this turn, when the glass showed the
+       chamber was blank.
+  The shell was blank.
+  A blank at itself lets the dealer move again.
+
+tube: 3 live, 2 blank
+  p1  2/2 charges  cuffed  items: Beer Cigarettes Inverter
+> p2  1/2 charges  items: Magnifying Glass Expired Medicine  knows: shell 2 is live
+The dealer uses its Magnifying Glass.
+  Seen only by the dealer: the chamber is blank.
+  Why: it does not know the chamber and more than one shell is left.
+The dealer shoots itself.
+  Why: it keeps the target it chose earlier this turn, when the glass showed the
+       chamber was blank.
+  The shell was blank.
+  A blank at itself lets the dealer move again.
+
+tube: 3 live, 1 blank
+  p1  2/2 charges  cuffed  items: Beer Cigarettes Inverter
+> p2  1/2 charges  items: Expired Medicine  knows: shell 1 is live
+The dealer shoots p1.
+  Why: it heard this shell on a Burner Phone earlier and p1 did not, so only it
+       knows it is live.
+  The shell was LIVE.
+p1 is handcuffed and loses this turn.
+
+tube: 2 live, 1 blank
+  p1  1/2 charges  lost a turn  items: Beer Cigarettes Inverter
+> p2  1/2 charges  items: Expired Medicine
+The dealer shoots p1.
+  Why: with no target and more live than blank shells, it always shoots p1.
+  The shell was blank.
+
+tube: 2 live, 0 blank
+> p1  1/2 charges  items: Beer Cigarettes Inverter
+  p2  1/2 charges  items: Expired Medicine
+p1 (solver) weighs, by its estimated chance of surviving the round:
+  * shoot p2                                    1.0000
+  * use Beer                                    1.0000
+  * use Cigarettes                              1.0000
+  4 moves tie at the top (3 shown), and p1 plays the first one listed.
+p1 plays: shoot p2
+  The shell was LIVE.
+
+tube: 1 live, 0 blank
+  p1  1/2 charges  items: Beer Cigarettes Inverter
+  p2  0/2 charges  out  items: Expired Medicine
+p1 (solver) wins the round.
+```
+
+### A batch against the dealer
+
+```sh
+./build/play --dealer 20 --seed 1 --charges 2 --reloads 0
+./build/play --dealer 20 --seed 1 --reloads 0 --mode story2
+```
+
+`--dealer ROUNDS` plays the solver as seat 1 against the scripted dealer for that many rounds,
+each seeded from the seed plus its round number, and prints how many rounds seat 1 survived
+and a 95 percent Wilson score interval for that rate: the range of long-run survival rates
+that the count is consistent with, which for a batch this small is wide. Like the other
+batches it stops searching at the load in the tube with `--reloads 0`.
+
+In Double or Nothing every game against the dealer, whether you play it, watch it or run it as
+a batch, draws the counts for each load the way the game's script does: 2 to 8 shells with the
+live count half the total, rounded down, and 2 to 5 items a seat unless `--items-per-load` is
+given. So live shells never outnumber blanks when a load is dealt. A story stage draws its
+loads from the solver's distribution instead, a total of 2 to 8 and a live count anywhere from
+1 to one less than the total, which includes loads the stage never deals, so a rate from a
+story stage batch is not measured on the game's own loads. In both modes the search itself
+still looks past a reload through the solver's distribution.
 
 ## How it works
 
@@ -198,14 +409,24 @@ prints all of this.
 
 ## What it does not do
 
-- **The scripted dealer is not modelled.** Its policy would have to be derived rule by rule
-  from the game before it could honestly be called a model of the dealer, so the opponent
-  minimises your chance instead, within the limits described above: it spends no magnifying
+- **The default opponent is not the dealer.** Unless `--opponent dealer` is given, the
+  opponent minimises your chance within the limits described above: it spends no magnifying
   glasses and no burner phones, and it picks evenly between moves it cannot tell apart. That
   is not the strongest opponent possible, so a number is not a worst case, and it is not a
   bound on how you would fare against the real dealer either. It is the chance of winning
   under the stated opponent model, looking a set number of reloads ahead, with positions past
   that horizon scored by each seat's share of the charges left.
+- **The dealer model is not the game, exactly.** It walks its items by type in a fixed order
+  rather than in the order they sit on the table, it reads one cigarette check on the first
+  pass of a turn from the items it holds then, and a blank it fires into itself clears a sawed
+  barrel. Your own moves never infer a shell's type from what the dealer chose to do. It plays
+  only at a two-seat table. And the reloads the search sees are this engine's: in Double or
+  Nothing the game draws shells and items for a load differently, so a value that looks past a
+  reload is not the game's for that reason. A game played against the dealer draws a Double or
+  Nothing load's counts the way the game's script does, but a story stage's loads at random
+  rather than from the stage's fixed data, so a story stage played or batched here can meet
+  loads the game never deals. [docs/RULES.md](docs/RULES.md#the-scripted-dealer) lists each
+  rule and each approximation with its source line.
 - **The reload boundary is a cutoff.** Looking through more reloads costs more time, and at
   the end of the budget a position is valued by charges in hand.
 - **The item deal at a reload is one fixed spread, not a distribution.** Inside the search,
@@ -289,8 +510,8 @@ another move at every turn that does not end one. The state counts behind that a
 | Unit tests | Tube arithmetic, every rule transition with its probability mass, the notation round trip |
 | Golden values | Solver values pinned to positions worked out by hand, with the arithmetic in the test |
 | Invariance | A shell the advised seat never saw must give the same answer whichever type the position names it, so naming it live and naming it blank are compared directly |
-| Differential | An independently written Python solver in `tools/oracle/`, compared move by move over fixed and random positions by `tools/compare_solvers.py` |
-| Determinism | The same seed replays the same batch byte for byte, the same position gives the same answer, and a seeded batch is pinned to a band, by `tools/check_play.sh` |
+| Differential | An independently written Python solver in `tools/oracle/`, compared move by move over fixed and random positions by `tools/compare_solvers.py`, against both the minimising opponent and the scripted dealer |
+| Determinism | The same seed replays the same batch and the same round against the dealer byte for byte, the same position gives the same answer, a seeded batch is pinned to a band, and a Double or Nothing load against the dealer never holds more live shells than blanks, by `tools/check_play.sh` |
 | Sanitizers | The suite under the address and undefined behaviour sanitizers in CI |
 | Build | Four compiler and configuration combinations, with warnings as errors |
 
@@ -311,9 +532,10 @@ engine/          Rules as pure functions: no input, no output, no global state
   State.*          Seats, positions, actions
   Rules.*          Legal moves and transitions, each with its probability
   Config.*         Rule sets and the settings that separate them
+  Dealer.*         The single-player dealer's script, one pass at a time
   Notation.*       Positions as one line of text
 solver/          The expectiminimax search over the rules
-cli/             advisor (ranks moves) and play (plays a round)
+cli/             advisor (ranks moves) and play (plays a round or a batch)
 tests/           Unit, rule, notation, golden value and invariance tests
 tools/           The Python oracle and the differential comparison
 docs/RULES.md    Every rule, its confidence, and the setting that controls it
