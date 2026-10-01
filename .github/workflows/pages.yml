@@ -1,0 +1,62 @@
+name: Pages
+
+# The page under web/ with the engine compiled to WebAssembly next to it,
+# published with GitHub Pages. The build commands are those printed in
+# web/README.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. A deployment already under way is left to finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      EMSCRIPTEN_RELEASE: "6.0.10"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Emscripten
+        run: |
+          git clone --depth 1 --branch "$EMSCRIPTEN_RELEASE" https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          cd "$RUNNER_TEMP/emsdk"
+          ./emsdk install "$EMSCRIPTEN_RELEASE"
+          ./emsdk activate "$EMSCRIPTEN_RELEASE"
+      - name: Build the engine for the page
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+          cmake --build build-web --target web_engine
+      # The page loads the engine from js/, next to engine-worker.js. The
+      # sources, the build file, the tests and the README stay behind.
+      - name: Assemble the page
+        run: |
+          mkdir _site
+          cp web/index.html web/style.css _site/
+          cp -r web/js _site/
+          cp build-web/web/engine.mjs build-web/web/engine.wasm _site/js/
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

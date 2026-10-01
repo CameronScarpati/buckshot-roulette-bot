@@ -34,6 +34,26 @@ five against the model described in [docs/RULES.md](docs/RULES.md), and that doc
 every rule as verified against the game or its decompiled script, sourced to a citable page, or
 assumed by this engine because nothing settles it.
 
+## In the browser
+
+![Watch: the solver ranks its moves before each turn against the dealer](docs/images/web-watch.jpg)
+
+The engine and the solver also run on a web page, compiled to WebAssembly. It has three modes.
+
+- **Watch.** The solver plays the scripted dealer and shows its top three moves, with their
+  chances, before each of its turns.
+- **Play.** You play the scripted dealer, and the solver ranks your moves when you ask for a
+  hint.
+- **Advise.** Write down a position, or paste a line of notation, and the solver ranks the
+  moves in it against the scripted dealer or against an opponent that plays to minimise your
+  chance.
+
+The page runs entirely in the browser. It is static files and the compiled engine, and it
+requests nothing from any other site. [web/README.md](web/README.md) has the commands to build
+the engine with Emscripten and to serve the page locally.
+
+The page is published with GitHub Pages from this repository.
+
 ## Quick start
 
 ```sh
@@ -513,6 +533,7 @@ another move at every turn that does not end one. The state counts behind that a
 | Differential | An independently written Python solver in `tools/oracle/`, compared move by move over fixed and random positions by `tools/compare_solvers.py`, against both the minimising opponent and the scripted dealer |
 | Determinism | The same seed replays the same batch and the same round against the dealer byte for byte, the same position gives the same answer, a seeded batch is pinned to a band, and a Double or Nothing load against the dealer never holds more live shells than blanks, by `tools/check_play.sh` |
 | Sanitizers | The suite under the address and undefined behaviour sanitizers in CI |
+| WebAssembly | The engine compiled for the web page plays seeded rounds in every mode, replays each one exactly, and ranks written positions as the native advisor does, by `web/test/smoke.mjs` in CI |
 | Build | Four compiler and configuration combinations, with warnings as errors |
 
 The differential test is the one that matters most. Two implementations of the same rules

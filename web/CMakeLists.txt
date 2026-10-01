@@ -1,6 +1,6 @@
 # The engine for the web page: the engine and the solver with web/bridge.cpp
 # on top, compiled to WebAssembly. Only an Emscripten build reaches this file
-# (emcmake cmake), so a native build, its tests and CI never see it.
+# (emcmake cmake), so a native build and its tests never see it.
 #
 #   emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
 #   cmake --build build-web --target web_engine

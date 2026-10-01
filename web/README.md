@@ -23,7 +23,7 @@ cmake --build build-web --target web_engine
 
 This writes `build-web/web/engine.mjs` (an ES module of about 28 KB) and
 `build-web/web/engine.wasm` (about 320 KB). Only an Emscripten build reaches `web/`, so the
-native build, its tests and CI are unchanged by it.
+native build and its tests are unchanged by it.
 
 ## Serving it locally
 
@@ -38,7 +38,8 @@ python3 -m http.server 8000 --directory web
 Then open <http://localhost:8000/>. The engine runs in a module Worker, which browsers do not
 start from a `file://` page, so the folder has to be served. To publish the page, copy `web/`
 with the two built files in `web/js/` to the host; `bridge.cpp`, `CMakeLists.txt`, `test/` and
-this file are not needed there.
+this file are not needed there. `.github/workflows/pages.yml` does this on every push to `main`
+and publishes the folder with GitHub Pages.
 
 ## The three modes
 
@@ -142,3 +143,6 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target advisor
 node web/test/smoke.mjs build-web/web build/advisor
 ```
+
+The `web` job in `.github/workflows/build.yml` installs Emscripten 6.0.10 and runs the build
+commands above and these three on every push to `main` and every pull request against it.
