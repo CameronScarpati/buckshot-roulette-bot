@@ -41,7 +41,9 @@ struct SolveOptions {
   /// Guard rail. The search counts the positions it has not met before, and
   /// once that count passes this limit it stops recursing and reports
   /// `nodeLimitHit` rather than running forever. Positions it has already
-  /// solved keep their values.
+  /// solved keep their values. Each position met for the first time after
+  /// that is scored by charges in hand and counted once, so the count can end
+  /// above the limit.
   long long nodeLimit = 40000000;
 
   /// Under `OpponentModel::Dealer`, merge positions that differ only in the
@@ -74,7 +76,8 @@ struct SolveResult {
   /// searched, and `assumptions` says why.
   bool refused = false;
   /// Positions the search met for the first time, counting a dealer pass
-  /// separately from the position it starts from.
+  /// separately from the position it starts from. Past the node limit this
+  /// takes in the positions scored by charges in hand without a search.
   long long nodes = 0;
   /// Some line ran past the reload budget and was scored by charges in hand.
   bool budgetReached = false;

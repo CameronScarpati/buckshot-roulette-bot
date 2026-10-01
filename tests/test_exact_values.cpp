@@ -450,6 +450,33 @@ TEST(ExactValues, TheNodeLimitKeepsEveryValueItReached) {
   EXPECT_FALSE(cut.budgetReached);
 }
 
+TEST(ExactValues, PastTheNodeLimitAPositionReachedTwoWaysIsCountedOnce) {
+  // Three seats on one charge each in 1L1B, p1 to move, no reload searched.
+  // Each of p1's three shots is live or blank, which makes six outcomes but
+  // only five positions: a blank at p2 and a blank at p3 both hand the gun to
+  // p2 with the live left. With a limit of one, only the first is searched,
+  // p1 shooting itself with the live. Nothing below it counts, since each
+  // shot from there empties the tube and is scored at the reload budget. The
+  // other four are scored by charges in hand, and the one met twice is
+  // counted once.
+  const std::string text = "p1=1/1 p2=1/1 p3=1/1 tube=1L1B turn=p1";
+  SolveOptions limited = optimal();
+  limited.nodeLimit = 1;
+  const SolveResult result = solveText(text, RuleConfig::multiplayer(3, 1), limited);
+  EXPECT_TRUE(result.nodeLimitHit);
+  EXPECT_EQ(result.nodes, 5);
+  // Scored by charges in hand, a live at another seat leaves p1 holding half
+  // the charges at the table and a blank a third, so either shot at another
+  // seat is worth 1/2 * 1/2 + 1/2 * 1/3 = 5/12. Shooting self is worth
+  // 1/2 * 0 + 1/2 * 1/3 = 1/6, where the searched live is worth nothing, p1
+  // being out. Scoring the position met twice once leaves both of those shots
+  // where they were.
+  EXPECT_NEAR(result.value, 5.0 / 12.0, kTight);
+  EXPECT_NEAR(valueOf(result, "shoot self"), 1.0 / 6.0, kTight);
+  EXPECT_NEAR(valueOf(result, "shoot p2"), 5.0 / 12.0, kTight);
+  EXPECT_NEAR(valueOf(result, "shoot p3"), 5.0 / 12.0, kTight);
+}
+
 // ---------------------------------------------------------------------------
 // A dealer-seat blank into itself keeps the saw
 // ---------------------------------------------------------------------------

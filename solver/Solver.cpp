@@ -292,10 +292,14 @@ class Search {
     auto found = memo_.find(key);
     if (found != memo_.end()) return found->second;
     // Only a position met for the first time counts, so stopping here never
-    // changes the value of one the search has already solved.
+    // changes the value of one the search has already solved. Past the limit
+    // a position is scored by charges in hand and kept, so that meeting it
+    // again by another line neither counts it twice nor scores it differently.
     if (++nodes_ > options_.nodeLimit) {
       nodeLimitHit_ = true;
-      return boundaryValue(state, options_.seat);
+      const double boundary = boundaryValue(state, options_.seat);
+      memo_.emplace(key, boundary);
+      return boundary;
     }
 
     double worth = 0.0;
@@ -405,7 +409,9 @@ class Search {
     if (found != dealerMemo_.end()) return found->second;
     if (++nodes_ > options_.nodeLimit) {
       nodeLimitHit_ = true;
-      return boundaryValue(state, options_.seat);
+      const double boundary = boundaryValue(state, options_.seat);
+      dealerMemo_.emplace(key, boundary);
+      return boundary;
     }
     const std::vector<dealer::Branch> branches = dealer::step(state, memory, config_, brain_);
     double total = 0.0;

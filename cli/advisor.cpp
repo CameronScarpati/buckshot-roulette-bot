@@ -1380,9 +1380,11 @@ int main(int argc, char** argv) {
                    "command\nof the same name below (seat p1, 2 reloads, don and solver by "
                    "default).\n--position answers that one position and exits; --json prints "
                    "that answer as\nJSON and needs --position.\n"
-                   "--node-limit stops a search after N positions met for the first time\n"
-                   "(1 to 10000000000, 40000000 by default) and says so, since the values\n"
-                   "it gives then may be wrong.\n\n";
+                   "--node-limit stops a search from looking further once it has met N\n"
+                   "positions (1 to 10000000000, 40000000 by default) and says so, since\n"
+                   "the values it gives then may be wrong. Each new position the lines\n"
+                   "still open reach is then scored by charges in hand and counted once,\n"
+                   "so the count can end above N.\n\n";
       printHelp();
       std::cout << "\n" << cli::ruleSettingsHelp();
       return 0;
