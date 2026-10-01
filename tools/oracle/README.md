@@ -67,7 +67,10 @@ The other tokens:
 
 * `restraintused`: a pair of Handcuffs (or a Jammer) was already applied this
   turn. `skipped=pN`: seat N was just skipped by its cuffs and cannot be cuffed
-  again until its next turn.
+  again until its next turn. A restrained seat loses one turn and is freed when
+  its next turn starts (`RoundManager.gd` 308-325), so a seat named in both
+  `cuffed=` and `skipped=` is refused, and so is `skipped=` on the seat to move
+  while two or more seats are alive.
 * `listcigs` (two seats only): the item list the Dealer built on its last pass
   holds p1's Cigarettes. See "Opponent models".
 * `phoned=pS@n[,n...]`: seat S used a Burner Phone at each of these tube sizes
@@ -227,7 +230,9 @@ To pin a Dealer memory, write it for both seats (`known=p1:1B known=p2:1B`).
 * `seen`: the Dealer knows the chamber, and aims at p1 if it is live and at
   itself if it is blank. It needs `known=p2:0L` or `known=p2:0B`; unless p1 has
   seen the chamber too, it is redrawn like any other shell p2 has seen, and the
-  memory follows each draw.
+  memory follows each draw. With `sawed` the chamber is live and every seat
+  knows it, since the Dealer saws a chamber it has seen only when that chamber
+  is live (lines 181 and 203 to 215); it is not redrawn.
 * `believes:B`: the Dealer drank a Beer on a blank it had seen and still
   believes the chamber blank, aiming at itself. Story mode only.
 * `aim:self`: the Double or Nothing Dealer forgot the chamber after that Beer
@@ -328,11 +333,16 @@ away in `oracle.py`.
   index, so p1 starts at pool index 0 and p2 at pool index 1 (in `story`, p1 is
   dealt Magnifying Glass and Beer, p2 Beer and Cigarettes). Set the constant to 1
   to shift every seat one place along the pool.
-* **Inverting an unseen chamber**: the shell keeps its place in the unresolved
-  pool and a flag makes it fire as the complement. The chance the chamber fires
-  live becomes 1 − p. When the shell is finally drawn, the *drawn* type is what
-  leaves the tube and the complement is what fires, which is the net effect of the
-  shell becoming its complement and then being consumed.
+* **Inverting the chamber**: the Inverter flips the chamber's shell and shows
+  nobody its type (`ItemInteraction.gd` 165-171). The shell keeps its place and
+  the type any seat saw, and a flag makes it fire as the complement, whether or
+  not some seat has seen it. A seat that saw the chamber reads its new type from
+  the flag. A seat that did not still holds the tube's counts from before the
+  flip, so to it the chamber is a shell drawn from that pool and the chance it
+  fires live becomes 1 − p. When the shell is finally drawn, the *drawn* type is
+  what leaves the tube and the complement is what fires, which is the net effect
+  of the shell becoming its complement and then being consumed. A second
+  Inverter clears the flag.
 * **Jammer and the once-per-turn cuff limit**: "only one pair of handcuffs may
   be applied per turn" is enforced as one cuff application per turn of any kind,
   so Handcuffs and Jammer share the flag.
@@ -346,10 +356,12 @@ away in `oracle.py`.
 * When `turn` is not the solved seat, the ranking lists the mover's moves,
   still ordered by the solved seat's probability (under `--opponent dealer` the
   Dealer lists none).
-* **A written `inverted` chamber that is also written as seen**, with the Dealer
-  to move: the Dealer model turns it into its complement as it does an unseen
-  one, and the seats that saw it keep their observation of the new type (as an
-  Inverter used on a seen chamber does elsewhere in this file).
+* **A written `inverted` chamber that is also written as seen**:
+  `known=pN:0L inverted` says seat N saw a live shell that now fires blank,
+  which is how this file prints an Inverter used on a chamber a seat had seen.
+  With the Dealer to move, the Dealer model turns it into its complement as it
+  does an unseen one, and the seats that saw it keep their observation of the
+  new type.
 * **The saw after a blank into the shooter**: a blank that p2 fires into itself
   in a two-seat `don` or `story` game keeps the barrel sawed while shells remain,
   as the Dealer does in the game; this holds under both opponent models. Every

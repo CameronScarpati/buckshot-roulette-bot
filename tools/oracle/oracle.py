@@ -759,17 +759,13 @@ class Solver:
                     out.append((p * w, finish(s1, False)))
             return out
         if it == INV:
-            t, seen = st.slots[0]
-            if t is None:
-                s1 = st._replace(inverted=not st.inverted)
-            else:
-                nt = flip(t)
-                s1 = st._replace(
-                    slots=((nt, seen),) + st.slots[1:],
-                    live=st.live + (1 if nt == "L" else -1),
-                    blank=st.blank + (1 if nt == "B" else -1),
-                )
-            return [(1.0, finish(s1, False))]
+            # The Inverter flips the chamber's shell and shows nobody its type
+            # (ItemInteraction.gd 165-171).  The flip is kept as the pending
+            # inversion flag whether or not some seat has seen the chamber: a
+            # seat that saw it reads the flag with the type it saw, and a seat
+            # that did not still holds the counts from before the flip, with
+            # the chamber drawn from that pool and fired as its complement.
+            return [(1.0, finish(st._replace(inverted=not st.inverted), False))]
         if it == MED:
             me = st.seats[a]
             good = with_seat(st, a, hp=healed(me, 2))
@@ -1048,6 +1044,10 @@ MSG_PHONED_ADVISED_SEAT = ("phoned names p{0}, the seat being advised, which saw
        "looked; give known=p{0} instead")
 MSG_DEALER_READ_TOO_SMALL = ("phoned=p2@{0} cannot happen: the dealer uses a burner phone only with "
        "more than two shells in the tube")
+MSG_CUFFED_AND_SKIPPED = ("p{0} is both cuffed and skipped: a seat loses its cuffs when it loses a "
+       "turn, and cannot be cuffed again before its next turn")
+MSG_MOVER_SKIPPED = ("turn=p{0} cannot go with skipped=p{0}: a seat that lost a turn is freed when "
+       "its next turn starts")
 
 
 class Refused(Exception):
@@ -1210,6 +1210,14 @@ def parse_position(text: str, budget: int) -> Position:
     for who in cuffs | skips | set(reads) | {w for w, _, _ in known}:
         if who not in hp:
             raise ValueError(f"p{who} is not in the position")
+    # A restrained seat loses one turn and is freed when its next turn starts
+    # (RoundManager.gd 308-325), so no seat is cuffed and skipped at once, and
+    # the seat to move is not marked skipped while the round goes on.
+    both = sorted(cuffs & skips)
+    if both:
+        raise ValueError(MSG_CUFFED_AND_SKIPPED.format(both[0]))
+    if turn in skips and sum(1 for h in hp.values() if h > 0) >= 2:
+        raise ValueError(MSG_MOVER_SKIPPED.format(turn))
 
     slots: list[tuple[str | None, tuple[int, ...]]] = [(None, ())] * (live + blank)
     for who, off, ty in known:
@@ -1365,10 +1373,17 @@ def root_starts(pos: Position, seat: int, mode: str = "don", opponent: str = "op
     are drawn.  Returns (starts, most such shells, dropped)."""
     check_solvable(pos, seat, mode, opponent)
     limit = None if opponent == "dealer" else KNOWLEDGE_LIMIT
+    state = pos.state
+    if pos.dealer is not None and pos.dealer[0] == "seen" and state.sawed:
+        # The Dealer saws a chamber it has seen only when that chamber is
+        # live (lines 181 and 203-215), so the saw shows every seat a live
+        # chamber.
+        every = tuple(range(len(state.seats)))
+        state = state._replace(slots=(("L", every),) + state.slots[1:])
     starts = []
     most, dropped = 0, False
-    for w, extra in expand_reads(pos.state, pos.reads, mode):
-        branches, count, drop = knowledge_branches(pos.state, seat, limit, extra)
+    for w, extra in expand_reads(state, pos.reads, mode):
+        branches, count, drop = knowledge_branches(state, seat, limit, extra)
         dropped = dropped or drop
         if w > 0.0:
             most = max(most, count)
@@ -1740,6 +1755,57 @@ def rules_selftest(check, check_true) -> None:
     check_true("dealer seat blank on the last shell clears the saw",
                same_outcomes(got, {"p1=2/2 p2=2/2 tube=0L0B turn=p2": 1.0}), f"{got}")
 
+    # The Inverter flips the chamber and shows nobody its type
+    # (ItemInteraction.gd 165-171), even when another seat has seen it.
+    # p1=1/1[inv] p2=1/1 tube=2L2B turn=p1 known=p2:0L, and the same with 0B.
+    # p1 has not seen the chamber, so the root redraws it from 2L2B: live or
+    # blank at 1/2 each, p2 seeing it.
+    #   shoot p2: live (1/2) -> 1.  Blank (1/2) leaves 2L1B with p2 to move,
+    #     and p2 shoots p1 (shooting itself would give p1 2/3): live 2/3 -> 0,
+    #     blank 1/3 -> p1 fires a live shell at p2 -> 1.  1/2 + 1/2 * 1/3 = 2/3.
+    #   shoot self: live (1/2) -> 0.  Blank (1/2) gives p1 the gun on 2L1B,
+    #     where shooting p2 is worth 2/3 and nothing beats it.  1/3.
+    #   use Inverter: to p1 the tube is still 2L2B and the chamber fires as
+    #     the complement of a shell drawn from it, live at 1/2.  Shooting p2:
+    #     live (1/2) -> 1; blank (1/2) leaves 1L2B with p2 to move, where p2
+    #     shooting p1 gives 2/3 * 1/2 = 1/3; so 2/3.  Shooting self: live
+    #     (1/2) -> 0; blank (1/2) gives p1 the gun on 1L2B, worth 2/3; so 1/3.
+    #     p1 shoots p2: 2/3.  Reading the flipped counts would give 3/4.
+    for ty in "LB":
+        v, d, _ = run(f"p1=1/1[inv] p2=1/1 tube=2L2B turn=p1 known=p2:0{ty}", reloads=0)
+        check(f"inverter on p2's {ty}: value", v, 2.0 / 3.0)
+        check(f"inverter on p2's {ty}: use Inverter", d["use Inverter"], 2.0 / 3.0)
+        check(f"inverter on p2's {ty}: shoot p2", d["shoot p2"], 2.0 / 3.0)
+        check(f"inverter on p2's {ty}: shoot self", d["shoot self"], 1.0 / 3.0)
+    # 1L2B with p2 knowing the chamber, after p1's Inverter.  p1 still holds
+    # 1L2B: the chamber fires live at 2/3 and offset 1 is live at 1/3.  p2
+    # knows the chamber's new type, and a second flip undoes the first.
+    sv = Solver(0)
+    for ty in "LB":
+        st = parse_state(f"p1=2/2[inv,inv] p2=2/2 tube=1L2B turn=p1 known=p2:0{ty}")
+        once = sv.use(with_seat(st, 0, items=(INV,)), 0, INV, None)[0][1]
+        view = blind_to(once, 0)
+        check(f"inverter on p2's {ty}: p1's chamber", chamber_live_prob(view), 2.0 / 3.0)
+        check(f"inverter on p2's {ty}: p1's offset 1",
+              sum(p for p, _, t in resolve(view, 1) if t == "L"), 1.0 / 3.0)
+        check(f"inverter on p2's {ty}: p2's chamber", chamber_live_prob(blind_to(once, 1)),
+              1.0 if ty == "B" else 0.0)
+        twice = sv.use(with_seat(once, 0, items=()), 0, INV, None)[0][1]
+        check_true(f"inverter on p2's {ty}: second flip", twice == with_seat(st, 0, items=()),
+                   print_state(twice))
+    # p1=1/2[inv] p2=1/2[inv,saw] tube=0L2B turn=p1 sawed phoned=p2@7,5.
+    # p1 knows both shells are blank, whatever p2's phone named.  use
+    # Inverter: the chamber fires live and p1 fires it at p2 -> 1.  shoot
+    # self: a blank, p1 keeps the gun, inverts the last blank and fires it at
+    # p2 -> 1.  shoot p2: a blank, and p2 inverts the last one and fires it at
+    # p1 -> 0.
+    v, d, _ = run("p1=1/2[inv] p2=1/2[inv,saw] tube=0L2B turn=p1 sawed phoned=p2@7,5",
+                  reloads=0)
+    check("inverter on a read blank: value", v, 1.0)
+    check("inverter on a read blank: use Inverter", d["use Inverter"], 1.0)
+    check("inverter on a read blank: shoot self", d["shoot self"], 1.0)
+    check("inverter on a read blank: shoot p2", d["shoot p2"], 0.0)
+
     # p1's moves and reloads leave the stale-list bit alone.
     sv = Solver(0, "don", "dealer")
     st = parse_state("p1=2/3[cig,beer,adr] p2=2/3[mg] tube=2L2B turn=p1 listcigs")
@@ -1770,6 +1836,9 @@ def notation_selftest(check_true) -> None:
         ("p1=2/2 p2=2/2 tube=2L2B turn=p2 sawed dealer=aim:p1,med", None),
         ("p1=2/2[cuff] p2=2/2 p3=1/2 tube=1L1B turn=p1 restraintused dir=ccw "
          "cuffed=p2 skipped=p3 known=p1:0L known=p3:1B", None),
+        # A skipped seat to move is read only once the round is over.
+        ("p1=2/2 p2=2/2 tube=1L2B turn=p1 skipped=p2", None),
+        ("p1=2/2 p2=0/2 tube=1L2B turn=p1 skipped=p1", None),
     ):
         got = print_position(parse_position(given, 0))
         check_true(f"round trip: {got[:40]}", got == (want or given), got)
@@ -1800,6 +1869,11 @@ def notation_selftest(check_true) -> None:
         ("p1=2/2 p2=2/2 tube=0L0B turn=p2 dealer=med", MSG_EMPTY_TUBE),
         ("p1=2/2 p2=2/2 tube=1L1B turn=p1[beer]",
          "items go on the seat, as in p1=2/2[beer], not on turn="),
+        # A seat loses one turn and is freed when its next turn starts.
+        ("p1=2/2 p2=2/2[cuff] tube=1L2B turn=p1 skipped=p1", MSG_MOVER_SKIPPED.format(1)),
+        ("p1=2/2 p2=2/2 tube=1L2B turn=p1 cuffed=p2 skipped=p2", MSG_CUFFED_AND_SKIPPED.format(2)),
+        ("p1=2/2 p2=2/2 p3=2/2 tube=1L2B turn=p2 cuffed=p3 skipped=p3",
+         MSG_CUFFED_AND_SKIPPED.format(3)),
     )
     for text, want in refusals:
         try:
@@ -2082,6 +2156,39 @@ def dealer_selftest(check, check_true) -> None:
         starts, _, _ = root_starts(parse_position(pos, 0), 0, mode, "dealer")
         check_true(f"dealer= memory: {pos.split('dealer=')[1]}",
                    len(starts) == 1 and starts[0][2] == want, f"{starts[0][2]}")
+
+    # A sawed barrel with dealer=seen: the Dealer saws a chamber it has seen
+    # only when that chamber is live (lines 181 and 203-215), so every seat
+    # knows it is live and the root does not redraw it.
+    # p1=3/3 p2=3/3 tube=2L2B turn=p2 sawed known=p2:0L dealer=seen.  The
+    # Dealer fires it at p1 for 2 charges, and p1=1/3 moves on 1L2B with
+    # nothing seen, against p2=3/3.
+    #   On 1L1B with p1 to move, either shot is worth 1/6: shoot p2, live
+    #   (1/2) leaves p2 on 2 and one blank, which p2 fires into itself, and
+    #   the boundary gives 1/(1+2) = 1/3; blank (1/2) leaves the live shell
+    #   to the Dealer, which fires it at p1 -> 0.  Shoot self, live -> 0;
+    #   blank, p1 fires the live shell at p2 and the boundary gives 1/3.
+    #   shoot p2: live (1/3) leaves p2 on 2 with 0L2B, which the counts show
+    #     the Dealer is blank: it fires both into itself, 1/3.  Blank (2/3)
+    #     leaves 1L1B with the Dealer to move on a fair coin: itself, live
+    #     (1/2) leaves p1 a last blank, 1/3, blank (1/2) the last shell is
+    #     live and goes at p1, 0; p1, live -> 0, blank -> p1 fires the live
+    #     shell at p2, 1/3.  So 1/6.  1/3 * 1/3 + 2/3 * 1/6 = 2/9.
+    #   shoot self: live (1/3) -> 0; blank (2/3) leaves p1 on 1L1B, 1/6.  1/9.
+    # Value 2/9.  Averaging over a blank chamber as well gives 1/4.
+    pos = parse_position("p1=3/3 p2=3/3 tube=2L2B turn=p2 sawed known=p2:0L dealer=seen", 0)
+    starts, _, _ = root_starts(pos, 0, "don", "dealer")
+    check_true("sawed dealer=seen: one start, chamber live to both",
+               len(starts) == 1 and starts[0][1].slots[0] == ("L", (PLAYER, DEALER))
+               and starts[0][2] == Memory(True, "L", PLAYER, False), f"{len(starts)} starts")
+    v, _, _ = dealer("p1=3/3 p2=3/3 tube=2L2B turn=p2 sawed known=p2:0L dealer=seen")
+    check("sawed dealer=seen: value", v, 2.0 / 9.0, tight)
+    # At 2 charges each the sawed live shell takes both of p1's: 0, in either
+    # brain and whatever the reload budget.
+    for tube, mode, reloads in itertools.product(("1L2B", "2L2B"), ("don", "story"), (0, 2)):
+        v, _, _ = run(f"p1=2/2 p2=2/2 tube={tube} turn=p2 sawed known=p2:0L dealer=seen",
+                      reloads=reloads, mode=mode, opponent="dealer")
+        check(f"sawed dealer=seen: {tube} {mode} reloads {reloads}", v, 0.0, tight)
 
     # The Dealer acts on every shell it has seen, so against it the root draws
     # all of them.  Six shells only p2 has seen in 4L4B, the chamber among
