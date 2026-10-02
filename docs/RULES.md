@@ -83,8 +83,13 @@ modes p1 is the player and p2 is the dealer. A round runs until one seat is left
 Every move the game allows is offered, including uses that change nothing but the hand, such as
 a Magnifying Glass on a chamber the user already knows, Cigarettes at full charges, or a Burner
 Phone with one shell left. Such a use spends the item, as it does in the game
-([ItemInteraction.gd 117-182][ii117]; `engine/Rules.cpp`, `legalActions`). The game refuses
-four things, and so does the engine:
+([ItemInteraction.gd 117-182][ii117]; `engine/Rules.cpp`, `legalActions`). The advisor, `play`
+and the web page rank it after any move it ties with and never star it beside one, since past
+the reloads the search looks through the item may still be worth keeping. When it ranks first
+outright they say why: another seat holds Adrenaline and could take the item, as the dealer
+takes the player's Cigarettes to heal ([DealerIntelligence.gd 243-257][di243]), or the hand is
+full and the next deal needs the room (`solver/Solver.cpp`, `spendsOnly` and `spendReason`).
+The game refuses four things, and so does the engine:
 
 1. a Hand Saw on a sawed barrel ([PermissionManager.gd 65-80][pm65]);
 2. a restraint on a seat that is already restrained or is owed a turn

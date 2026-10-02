@@ -1044,10 +1044,32 @@ bool looksMidDealerTurn(const GameState& state, int seat) {
   return state.tube.sawed || state.cuffUsedThisTurn || state.players[seat].cuffed;
 }
 
+/// What a move that only spends an item says beside its value. When it ranks
+/// first, ahead of every move that does something, the note names the rule
+/// that makes spending it worth more than keeping it.
+std::string spendNote(const SolveResult& result, const ActionValue& entry, const GameState& state,
+                      const RuleConfig& config, int reloads, bool first) {
+  if (!entry.spendsOnly) return "";
+  std::string note = "only spends the item";
+  if (!first) return note;
+  switch (spendReason(state, result.mover, entry.action, config, reloads)) {
+    case SpendReason::Adrenaline:
+      note += ", which keeps it from another seat's Adrenaline";
+      break;
+    case SpendReason::Room:
+      note += ", which makes room in the hand for the next deal";
+      break;
+    case SpendReason::None:
+      break;
+  }
+  return note;
+}
+
 /// `narratedMidTurn` is set when the narration recorded the dealer using an
-/// item in the turn it is still taking.
+/// item in the turn it is still taking. `reloads` is the budget the answer
+/// looked through.
 void printRanking(const SolveResult& result, const Position& position, const RuleConfig& config,
-                  int seat, OpponentModel opponent, bool narratedMidTurn) {
+                  int seat, OpponentModel opponent, int reloads, bool narratedMidTurn) {
   const GameState& state = position.state;
   if (result.refused) {
     std::cout << result.assumptions << "\n";
@@ -1134,21 +1156,31 @@ void printRanking(const SolveResult& result, const Position& position, const Rul
     std::cout << " (p" << (static_cast<int>(state.current) + 1) << " is handcuffed and skipped)";
   }
   std::cout << "\n";
-  const double top = result.ranked.front().value;
+  const ActionValue& front = result.ranked.front();
+  const double top = front.value;
+  bool spentTie = false;
   for (const ActionValue& entry : result.ranked) {
     // An opponent's ranking is sorted the other way, so the test has to be
     // symmetric or every row looks best.
-    const bool best = std::abs(top - entry.value) < 1e-9;
+    const bool level = std::abs(top - entry.value) < 1e-9;
+    // A move that only spends an item is starred only when it leads outright,
+    // as in SolveResult::bestActions.
+    const bool best = level && (front.spendsOnly || !entry.spendsOnly);
+    if (level && !best) spentTie = true;
     // A stolen item makes for a long name, and a name that fills the column
     // used to run into the number after it.
     std::string name = entry.action.describe(result.mover);
     if (name.size() >= 34) name += " ";
     std::cout << (best ? "  * " : "    ") << std::left << std::setw(34) << name << std::right
               << std::fixed << std::setprecision(4) << entry.value;
-    if (!best) {
-      std::cout << "   (" << std::showpos << std::setprecision(4) << (entry.value - top)
-                << std::noshowpos << ")";
+    std::ostringstream gap;
+    if (!level) {
+      gap << std::showpos << std::fixed << std::setprecision(4) << (entry.value - top)
+          << std::noshowpos;
     }
+    const std::string note = spendNote(result, entry, state, config, reloads, &entry == &front);
+    if (!note.empty()) gap << (level ? "" : ", ") << note;
+    if (!gap.str().empty()) std::cout << "   (" << gap.str() << ")";
     std::cout << "\n";
   }
   // A tie among rows that are averages is an artefact of the averaging, not a
@@ -1158,6 +1190,11 @@ void printRanking(const SolveResult& result, const Position& position, const Rul
   const std::vector<Action> best = result.bestActions();
   if (best.size() > 1 && !rowsAreAverages) {
     std::cout << "  " << best.size() << " moves tie at the top; any of them is optimal.\n";
+  }
+  if (spentTie) {
+    std::cout << "  A move that only spends an item is listed after the moves it ties with and "
+                 "is not starred: past the reloads searched, the item may still be worth "
+                 "keeping.\n";
   }
   if (rowsAreAverages) {
     // Every row above is averaged over a shell p<mover> can see and this seat
@@ -1303,7 +1340,8 @@ void printJson(const SolveResult& result, OpponentModel opponent) {
   for (std::size_t i = 0; i < result.ranked.size(); ++i) {
     if (i > 0) std::cout << ", ";
     std::cout << "{\"action\": \"" << result.ranked[i].action.describe(result.mover)
-              << "\", \"value\": " << result.ranked[i].value << "}";
+              << "\", \"value\": " << result.ranked[i].value
+              << ", \"spendsOnly\": " << (result.ranked[i].spendsOnly ? "true" : "false") << "}";
   }
   std::cout << "], \"nodes\": " << result.nodes
             << ", \"truncated\": " << (result.truncated ? "true" : "false")
@@ -1366,7 +1404,7 @@ int runOnce(const std::string& text, int seat, int reloads, long long nodeLimit,
     printJson(result, options.opponent);
   } else {
     std::cout << notation::board(state) << positionExtras(position);
-    printRanking(result, position, config, seat, options.opponent, false);
+    printRanking(result, position, config, seat, options.opponent, reloads, false);
   }
   return 0;
 }
@@ -1854,7 +1892,7 @@ int main(int argc, char** argv) {
       }
       const SolveResult result = solve(position, session.config, options);
       printRanking(result, position, session.config, options.seat, options.opponent,
-                   session.narration.dealerMidTurn);
+                   options.reloadBudget, session.narration.dealerMidTurn);
       continue;
     }
     std::cout << "I do not know the command " << words[0] << ". Type help.\n";

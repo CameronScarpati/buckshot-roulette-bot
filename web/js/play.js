@@ -128,7 +128,7 @@ export function createPlay({ table, panel, openInAdvise }) {
   function hintLine() {
     if (!st.hint || st.hint.refused || !st.hint.moves.length || !myTurn()) return '';
     const best = st.hint.moves[0];
-    return `Hint: ${best.label}, ${pct(best.win)}`;
+    return `Hint: ${best.label}, ${pct(best.win)}${best.note ? `. ${best.note}` : ''}`;
   }
 
   function statusText() {

@@ -198,12 +198,16 @@ export function checkRanking(r, view = null) {
     if (!r.refused && !r.moves.length) out.push('ranking.moves is empty without a reason in refused.');
     r.moves.forEach((m, i) => {
       const w = `ranking.moves[${i}]`;
-      extraKeys(m, ['id', 'label', 'win'], w, out);
+      extraKeys(m, ['id', 'label', 'win', 'note'], w, out);
       if (typeof m.id !== 'string' || !m.id) out.push(`${w}.id is empty.`);
       if (typeof m.label !== 'string' || !m.label) out.push(`${w}.label is empty.`);
       out.push(...checkVoice(m.label, `${w}.label`));
       if (typeof m.win !== 'number' || !(m.win >= 0 && m.win <= 1)) out.push(`${w}.win is ${m.win}.`);
-      if (i > 0 && m.win > r.moves[i - 1].win) out.push(`${w} ranks above a better move.`);
+      // A move that only spends an item goes after the moves it ties with, and
+      // rounding can leave it a hair above them.
+      if (i > 0 && m.win > r.moves[i - 1].win + 1e-9) out.push(`${w} ranks above a better move.`);
+      if (m.note !== null && (typeof m.note !== 'string' || !m.note)) out.push(`${w}.note is neither null nor a sentence.`);
+      out.push(...checkVoice(m.note, `${w}.note`));
     });
     if (view && Array.isArray(view.legal) && view.legal.length) {
       const legal = new Set(view.legal.map((m) => m.id));

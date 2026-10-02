@@ -61,7 +61,27 @@ struct SolveOptions {
 struct ActionValue {
   Action action;
   double value = 0.0;  ///< probability that the solved seat survives the round
+  /// The move spends an item and changes nothing else: Cigarettes at full
+  /// charges, a Magnifying Glass on a chamber the seat has seen, a Burner Phone
+  /// with one shell left, an Adrenaline used on its own. The game allows these
+  /// (docs/RULES.md, "What a seat may do"). Such a move ranks after every move
+  /// it ties with and is not counted among the best of them, since past the
+  /// reloads the search looks through the item may still be worth keeping.
+  bool spendsOnly = false;
 };
+
+/// Why spending an item for nothing can rank above every move that does
+/// something. The search finds that it does; this names the rule behind it.
+enum class SpendReason : std::uint8_t {
+  None,        ///< neither rule below applies
+  Adrenaline,  ///< another seat holds Adrenaline and could take the item
+  Room,        ///< the hand is full, and a reload the search looks through deals into it
+};
+
+/// The reason for `action`, a move that only spends an item, played by
+/// `mover` in `state`, looking through `reloadBudget` reloads.
+SpendReason spendReason(const GameState& state, int mover, const Action& action,
+                        const RuleConfig& config, int reloadBudget);
 
 struct SolveResult {
   double value = 0.0;
@@ -100,7 +120,8 @@ struct SolveResult {
 
   bool hasTie() const;
   /// The actions that tie at the front of the ranking, which is the best play
-  /// for whichever seat is holding the gun.
+  /// for whichever seat is holding the gun. A move that only spends an item
+  /// is left out when a move that does something ties with it.
   std::vector<Action> bestActions(double tolerance = 1e-9) const;
 };
 

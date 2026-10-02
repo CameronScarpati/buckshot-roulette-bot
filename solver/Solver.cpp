@@ -472,17 +472,36 @@ class Search {
 
 bool SolveResult::hasTie() const {
   if (ranked.size() < 2) return false;
+  if (ranked[1].spendsOnly && !ranked[0].spendsOnly) return false;
   return std::abs(ranked[0].value - ranked[1].value) < 1e-9;
 }
 
 std::vector<Action> SolveResult::bestActions(double tolerance) const {
   std::vector<Action> best;
   if (ranked.empty()) return best;
-  const double top = ranked.front().value;
+  const ActionValue& front = ranked.front();
   for (const ActionValue& entry : ranked) {
-    if (std::abs(top - entry.value) <= tolerance) best.push_back(entry.action);
+    if (entry.spendsOnly && !front.spendsOnly) continue;
+    if (std::abs(front.value - entry.value) <= tolerance) best.push_back(entry.action);
   }
   return best;
+}
+
+SpendReason spendReason(const GameState& state, int mover, const Action& action,
+                        const RuleConfig& config, int reloadBudget) {
+  // Adrenaline cannot take an Adrenaline (PermissionManager.gd 65-80).
+  if (action.item != Item::Adrenaline) {
+    for (int other = 0; other < state.playerCount; ++other) {
+      if (other == mover || !state.players[other].alive()) continue;
+      if (state.players[other].hand.holds(Item::Adrenaline)) return SpendReason::Adrenaline;
+    }
+  }
+  // A deal stops at the table limit (ItemManager.gd 258, 279, 346-347).
+  if (reloadBudget > 0 && config.itemsDealtPerLoad() > 0 &&
+      state.players[mover].hand.size() >= config.itemLimit) {
+    return SpendReason::Room;
+  }
+  return SpendReason::None;
 }
 
 bool dealerSupported(const GameState& state, const RuleConfig& config, const SolveOptions& options,
@@ -564,6 +583,54 @@ constexpr const char* kStartOfTurn =
     "turn, so anything it decided earlier in that turn (the target a coin chose before it "
     "sawed the barrel, medicine already taken, what it worked out about the chamber) is not "
     "carried over.";
+
+/// Values closer than this are a tie, as in `SolveResult::bestActions`.
+constexpr double kTie = 1e-9;
+
+/// The position with every shell a seat can work out from the counts marked as
+/// seen by that seat: once the shells it has seen account for every live one,
+/// or every blank, the rest are the other type. A Magnifying Glass on a tube
+/// of live shells pins the chamber down without telling anybody anything, and
+/// this is what makes that position compare equal to the one before it. A
+/// tube with a flip pending is left as it is.
+GameState settled(const GameState& state) {
+  GameState out = state;
+  Tube& tube = out.tube;
+  if (tube.chamberInverted || tube.pinnedFlip) return out;
+  const int shells = std::min<int>(tube.size(), kMaxShells);
+  for (int seat = 0; seat < out.playerCount; ++seat) {
+    int live = tube.live;
+    int blank = tube.blank;
+    for (int i = 0; i < shells; ++i) {
+      if (!state.tube.knows(seat, i)) continue;
+      if (state.tube.truth[i] == Shell::Live) --live;
+      if (state.tube.truth[i] == Shell::Blank) --blank;
+    }
+    if (live > 0 && blank > 0) continue;
+    const Shell rest = live > 0 ? Shell::Live : Shell::Blank;
+    for (int i = 0; i < shells; ++i) {
+      if (state.tube.knows(seat, i)) continue;
+      tube.truth[i] = rest;
+      tube.knownBy[i] = static_cast<std::uint8_t>(tube.knownBy[i] | (1u << seat));
+    }
+  }
+  return out;
+}
+
+/// Whether `action` spends an item and changes nothing else: every way it can
+/// fall leaves the position as it was, less the copy it spends, with nothing
+/// learned that the counts did not already say.
+bool spendsOnly(const GameState& state, const Action& action, const RuleConfig& config) {
+  if (action.kind != Action::Kind::UseItem || action.isSteal()) return false;
+  GameState paid = state;
+  paid.players[state.current].hand.removeCopy(action.item,
+                                              action.isAdrenalineAlone() ? 0 : action.copy);
+  const GameState before = settled(paid);
+  const std::vector<Outcome> outcomes = rules::apply(state, action, config);
+  return !outcomes.empty() &&
+         std::all_of(outcomes.begin(), outcomes.end(),
+                     [&before](const Outcome& out) { return settled(out.state) == before; });
+}
 
 /// Why a position cannot be answered under this model, or empty when it can.
 std::string refusalFor(const Position& position, const RuleConfig& config,
@@ -798,6 +865,7 @@ SolveResult solve(const Position& position, const RuleConfig& config, const Solv
     Action action;
     double value = 0.0;  ///< the solved seat's chance, in the position as it is
     double key = 0.0;    ///< what the seat holding the gun is choosing on
+    bool spendsOnly = false;
   };
   std::vector<Ranked> rows;
   for (const Action& action : search.legalFor(first)) {
@@ -805,15 +873,30 @@ SolveResult solve(const Position& position, const RuleConfig& config, const Solv
     row.action = action;
     row.value = averageOver(starts, &action);
     row.key = hidden ? averageOver(seen, &action) : row.value;
+    row.spendsOnly = std::all_of(starts.begin(), starts.end(), [&](const GameState& start) {
+      return spendsOnly(start, action, config);
+    });
     rows.push_back(row);
   }
   std::stable_sort(rows.begin(), rows.end(), [mine](const Ranked& a, const Ranked& b) {
     return mine ? a.key > b.key : a.key < b.key;
   });
+  // Past the last reload the search looks through, every item in hand is worth
+  // nothing, so spending one for nothing ties with keeping it whenever nothing
+  // before then needs it. Within each run of tied rows such a move goes last,
+  // where rounding in the sums would otherwise put it anywhere.
+  for (auto run = rows.begin(); run != rows.end();) {
+    const double key = run->key;
+    const auto end = std::find_if(
+        run, rows.end(), [key](const Ranked& row) { return std::abs(row.key - key) > kTie; });
+    std::stable_partition(run, end, [](const Ranked& row) { return !row.spendsOnly; });
+    run = end;
+  }
   for (const Ranked& row : rows) {
     ActionValue entry;
     entry.action = row.action;
     entry.value = row.value;
+    entry.spendsOnly = row.spendsOnly;
     result.ranked.push_back(entry);
   }
   // Read the position's worth from the search rather than from the front of the

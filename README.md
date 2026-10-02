@@ -139,7 +139,7 @@ over 2 GB of memory on one machine.
 
 This is also the setting the results table further down calls the chair. The default is the
 rule the game uses, and playing the same hundred rounds under the other value takes seat 1
-from 74 of 100 to 52 of 100, which is the clearest measure of how much rests on it.
+from 75 of 100 to 53 of 100, which is the clearest measure of how much rests on it.
 
 ```sh
 ./build/play --selfplay 100 --seed 1 --charges 2 --reloads 0
@@ -308,7 +308,9 @@ draws its loads at random from the solver's distribution instead.
 
 The solver takes seat 1. Before each of its moves it prints the board and up to three of the
 moves it ranks highest, with their values. A star marks each move worth the most, and when
-several tie, a line says so and that p1 plays the first one listed. What p1's own glass or
+several tie, a line says so and that p1 plays the first one listed. A move that only spends an
+item, such as Cigarettes at full charges, says so and is listed after any move it ties with,
+since the item may still be worth keeping past the search. What p1's own glass or
 phone shows is printed after its move. When some of the values stop at the reload budget, the
 weighing calls its chance estimated, and the first such weighing in a round adds a note that
 says what that means. A weighing whose search stopped at the node limit says so as well. Every
@@ -326,7 +328,7 @@ tube: 2 live, 2 blank
 p1 (solver) weighs, by its estimated chance of surviving the round:
   * use Handcuffs on p2                         0.7153
     use Burner Phone                            0.7130
-    use Cigarettes                              0.6667
+    use Cigarettes                              0.6667   (only spends the item)
   Note: some lines hit the reload budget and were valued by each seat's share of
         the charges in hand. Every weighing marked estimated holds values like
         these.
@@ -350,7 +352,7 @@ tube: 2 live, 1 blank
 p1 (solver) weighs, by its estimated chance of surviving the round:
   * shoot p2                                    0.5833
   * use Burner Phone                            0.5833
-    use Cigarettes                              0.5000
+    use Cigarettes                              0.5000   (only spends the item)
   2 moves tie at the top, and p1 plays the first one listed.
 p1 shoots the dealer.
   The shell was LIVE.
@@ -371,9 +373,8 @@ tube: 0 live, 1 blank
   p2  2/2 charges  items: Adrenaline, Expired Medicine
 p1 (solver) weighs, by its estimated chance of surviving the round:
   * use Cigarettes                              0.5000
-  * use Burner Phone                            0.5000
+    use Burner Phone                            0.5000   (only spends the item)
     shoot self                                  0.3333
-  2 moves tie at the top, and p1 plays the first one listed.
 p1 uses its Cigarettes.
   p1 is now on 2/2 charges.
 
@@ -383,8 +384,8 @@ tube: 0 live, 1 blank
 p1 (solver) weighs, by its estimated chance of surviving the round:
   * shoot self                                  0.5000
   * shoot p2                                    0.5000
-  * use Burner Phone                            0.5000
-  3 moves tie at the top, and p1 plays the first one listed.
+    use Burner Phone                            0.5000   (only spends the item)
+  2 moves tie at the top, and p1 plays the first one listed.
 p1 shoots itself.
   The shell was blank.
 
@@ -396,26 +397,14 @@ tube: 2 live, 2 blank
   p2  2/2 charges  items: Adrenaline, Expired Medicine #1, Burner Phone #1, Expired Medicine #2, Inverter, Hand Saw, Burner Phone #2
 p1 (solver) weighs, by its estimated chance of surviving the round:
   * use Beer                                    1.0000
-  * use Cigarettes                              1.0000
   * use Handcuffs on p2                         1.0000
-  6 moves tie at the top (3 shown), and p1 plays the first one listed.
+  * use Hand Saw                                1.0000
+  5 moves tie at the top (3 shown), and p1 plays the first one listed.
 p1 uses its Beer.
   The shell it racked out was LIVE.
 
 tube: 1 live, 2 blank
 > p1  2/2 charges  items: Burner Phone, Cigarettes, Hand Saw, Adrenaline, Handcuffs
-  p2  2/2 charges  items: Adrenaline, Expired Medicine #1, Burner Phone #1, Expired Medicine #2, Inverter, Hand Saw, Burner Phone #2
-p1 (solver) weighs, by its estimated chance of surviving the round:
-  * use Cigarettes                              1.0000
-  * use Handcuffs on p2                         1.0000
-  * use Hand Saw                                1.0000
-  5 moves tie at the top (3 shown), and p1 plays the first one listed.
-p1 uses its Cigarettes.
-  p1 is now on 2/2 charges.
-  Healing does nothing at full charges.
-
-tube: 1 live, 2 blank
-> p1  2/2 charges  items: Burner Phone, Hand Saw, Adrenaline, Handcuffs
   p2  2/2 charges  items: Adrenaline, Expired Medicine #1, Burner Phone #1, Expired Medicine #2, Inverter, Hand Saw, Burner Phone #2
 p1 (solver) weighs, by its estimated chance of surviving the round:
   * use Handcuffs on p2                         1.0000
@@ -426,7 +415,7 @@ p1 uses its Handcuffs.
   The dealer is handcuffed and will lose the next turn.
 
 tube: 1 live, 2 blank
-> p1  2/2 charges  items: Burner Phone, Hand Saw, Adrenaline
+> p1  2/2 charges  items: Burner Phone, Cigarettes, Hand Saw, Adrenaline
   p2  2/2 charges  cuffed  items: Adrenaline, Expired Medicine #1, Burner Phone #1, Expired Medicine #2, Inverter, Hand Saw, Burner Phone #2
 p1 (solver) weighs, by its estimated chance of surviving the round:
   * shoot self                                  1.0000
@@ -438,41 +427,41 @@ p1 shoots itself.
   A blank at itself lets p1 move again.
 
 tube: 1 live, 1 blank
-> p1  2/2 charges  items: Burner Phone, Hand Saw, Adrenaline
+> p1  2/2 charges  items: Burner Phone, Cigarettes, Hand Saw, Adrenaline
   p2  2/2 charges  cuffed  items: Adrenaline, Expired Medicine #1, Burner Phone #1, Expired Medicine #2, Inverter, Hand Saw, Burner Phone #2
 p1 (solver) weighs, by its estimated chance of surviving the round:
   * shoot self                                  1.0000
   * shoot p2                                    1.0000
   * use Hand Saw                                1.0000
-  10 moves tie at the top (3 shown), and p1 plays the first one listed.
+  9 moves tie at the top (3 shown), and p1 plays the first one listed.
 p1 shoots itself.
   The shell was blank.
   A blank at itself lets p1 move again.
 
 tube: 1 live, 0 blank
-> p1  2/2 charges  items: Burner Phone, Hand Saw, Adrenaline
+> p1  2/2 charges  items: Burner Phone, Cigarettes, Hand Saw, Adrenaline
   p2  2/2 charges  cuffed  items: Adrenaline, Expired Medicine #1, Burner Phone #1, Expired Medicine #2, Inverter, Hand Saw, Burner Phone #2
 p1 (solver) weighs, by its estimated chance of surviving the round:
   * use Hand Saw                                1.0000
-  * use Burner Phone                            1.0000
-  * use Adrenaline                              1.0000
-  8 moves tie at the top (3 shown), and p1 plays the first one listed.
+  * steal Hand Saw from p2 and use it           1.0000
+  * steal Burner Phone #1 from p2 and use it    1.0000
+  6 moves tie at the top (3 shown), and p1 plays the first one listed.
 p1 uses its Hand Saw.
   The barrel is sawed: a live shell on the next shot deals two charges.
 
 tube: 1 live, 0 blank, barrel sawed
-> p1  2/2 charges  items: Burner Phone, Adrenaline
+> p1  2/2 charges  items: Burner Phone, Cigarettes, Adrenaline
   p2  2/2 charges  cuffed  items: Adrenaline, Expired Medicine #1, Burner Phone #1, Expired Medicine #2, Inverter, Hand Saw, Burner Phone #2
 p1 (solver) weighs, by its estimated chance of surviving the round:
   * shoot p2                                    1.0000
-  * use Burner Phone                            1.0000
-  * use Adrenaline                              1.0000
-  7 moves tie at the top (3 shown), and p1 plays the first one listed.
+  * steal Burner Phone #1 from p2 and use it    1.0000
+  * steal Burner Phone #2 from p2 and use it    1.0000
+  5 moves tie at the top (3 shown), and p1 plays the first one listed.
 p1 shoots the dealer.
   The shell was LIVE.
 
 tube: 0 live, 0 blank
-  p1  2/2 charges  items: Burner Phone, Adrenaline
+  p1  2/2 charges  items: Burner Phone, Cigarettes, Adrenaline
   p2  0/2 charges  out  items: Adrenaline, Expired Medicine #1, Burner Phone #1, Expired Medicine #2, Inverter, Hand Saw, Burner Phone #2
 p1 wins the round.
 ```
@@ -608,14 +597,14 @@ budget of zero) does not fall below 7 wins in 10 for seat 1.
 
 | Batch | Seat 1 survives |
 |---|---|
-| The solver against itself | 74 of 100 rounds |
-| The solver against the heuristic in `cli/play.cpp` | 85 of 100 rounds |
+| The solver against itself | 75 of 100 rounds |
+| The solver against the heuristic in `cli/play.cpp` | 86 of 100 rounds |
 
 Read those two rows together, because neither means much alone.
 
 The first row is not a measure of strength. Both seats play the same way, so what it
 measures is the chair. Every round opens with a reload, so the rule that seat 1 acts first
-after a reload also decides who makes the first move of the round, and the 24 points over an
+after a reload also decides who makes the first move of the round, and the 25 points over an
 even split are the two together. The same batch can be rerun with the reload rule changed:
 
 ```sh
@@ -624,8 +613,8 @@ even split are the two together. The same batch can be rerun with the reload rul
 ```
 
 With `keep`, a reload leaves the turn where it was, so seat 1 still makes the first move of the
-round and nothing more, and seat 1 survives 52 of 100. The reload rule is therefore worth about
-22 of the 24 points and the first move of the round the other 2. With `dealer`, seat 2 acts
+round and nothing more, and seat 1 survives 53 of 100. The reload rule is therefore worth about
+22 of the 25 points and the first move of the round the other 3. With `dealer`, seat 2 acts
 first at every load, including the first, and seat 1 survives 23 of 100, roughly the default
 reflected. (Same builds as above. On one machine the `keep` batch took about nine and a half
 minutes and 2 GB of memory, and the `dealer` batch about five minutes and 1.5 GB. A hundred
@@ -634,7 +623,7 @@ and it is still a setting, which is the only way to see what it is worth.
 [docs/RULES.md](docs/RULES.md) names the field that changes it.
 
 The second row is the one about strength, and the claim it supports is the difference
-between the rows, not the 85. Swapping a copy of the solver for a heuristic opponent is
+between the rows, not the 86. Swapping a copy of the solver for a heuristic opponent is
 worth about eleven points to the seat facing it. The heuristic is written out in
 `cli/play.cpp`: it knows the odds and the obvious tactics and searches nothing, so it is a
 floor rather than a serious opponent. A hundred rounds is a small sample, and both numbers

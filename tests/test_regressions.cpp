@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <string>
+#include <vector>
 
 #include "engine/Notation.h"
 #include "engine/Rules.h"
@@ -204,6 +205,94 @@ TEST(Regression, EveryValueStaysAProbability) {
         EXPECT_LE(entry.value, 1.0) << entry.action.describe(result.mover) << " in " << text;
       }
     }
+  }
+}
+
+const ActionValue* findUse(const SolveResult& result, Item item) {
+  for (const ActionValue& entry : result.ranked) {
+    if (entry.action.kind == Action::Kind::UseItem && entry.action.item == item &&
+        !entry.action.isSteal()) {
+      return &entry;
+    }
+  }
+  return nullptr;
+}
+
+TEST(Regression, CigarettesAtFullChargesNeverLeadATie) {
+  // Through no reloads, the depth the web page ranks at, a cigarette kept past
+  // the load is worth nothing, so smoking one at full charges tied with the
+  // best move and could be listed first, or starred beside it, as advice.
+  const std::vector<std::string> positions = {
+      "p1=4/4[cig,saw] p2=4/4 tube=1L1B turn=p1",
+      "p1=3/3[cig] p2=3/3[beer] tube=1L1B turn=p1",
+      "p1=4/4[cig,mg] p2=4/4 tube=1L2B turn=p1",
+  };
+  for (const std::string& text : positions) {
+    const GameState state = parse(text);
+    for (const OpponentModel model : {OpponentModel::Optimal, OpponentModel::Dealer}) {
+      SolveOptions opts = options(0, 0);
+      opts.opponent = model;
+      const SolveResult result =
+          solve(state, RuleConfig::doubleOrNothing(state.players[0].maxHp), opts);
+      ASSERT_FALSE(result.ranked.empty()) << text;
+      const ActionValue* smoke = findUse(result, Item::Cigarettes);
+      ASSERT_NE(smoke, nullptr) << text;
+      EXPECT_TRUE(smoke->spendsOnly) << text;
+      EXPECT_FALSE(result.ranked.front().spendsOnly) << text;
+      for (const Action& best : result.bestActions()) {
+        EXPECT_FALSE(best == smoke->action) << "starred as best in " << text;
+      }
+    }
+  }
+  // The first position is a genuine tie, so the order is what keeps it last.
+  const SolveResult tied =
+      solve(parse(positions[0]), RuleConfig::doubleOrNothing(4), options(0, 0));
+  EXPECT_NEAR(findUse(tied, Item::Cigarettes)->value, tied.ranked.front().value, 1e-9);
+  EXPECT_EQ(tied.bestActions().size(), 2u);
+}
+
+TEST(Regression, SpendingAnItemToKeepItFromAdrenalineStillLeads) {
+  // The dealer's Adrenaline takes the player's cigarettes when it is hurt
+  // (DealerIntelligence.gd 118-149, 243-257), so smoking them first at full
+  // charges is the best move. The tie rule must not bury it.
+  const GameState state = parse("p1=4/4[cig] p2=3/4[adr] tube=2L1B turn=p1");
+  SolveOptions opts = options(0, 0);
+  opts.opponent = OpponentModel::Dealer;
+  const RuleConfig config = RuleConfig::doubleOrNothing(4);
+  const SolveResult result = solve(state, config, opts);
+  ASSERT_GE(result.ranked.size(), 2u);
+  const ActionValue& front = result.ranked.front();
+  EXPECT_TRUE(front.spendsOnly);
+  EXPECT_EQ(front.action.item, Item::Cigarettes);
+  EXPECT_GT(front.value, result.ranked[1].value + 0.05);
+  EXPECT_EQ(result.bestActions().size(), 1u);
+  EXPECT_EQ(spendReason(state, result.mover, front.action, config, 0), SpendReason::Adrenaline);
+}
+
+TEST(Regression, OnlyAUseThatChangesNothingIsMarkedAsSpendingOnly) {
+  struct Case {
+    std::string position;
+    Item item;
+    bool spendsOnly;
+  };
+  const std::vector<Case> cases = {
+      {"p1=2/2[mg] p2=2/2 tube=1L1B turn=p1 known=p1:0L", Item::MagnifyingGlass, true},
+      {"p1=2/2[mg] p2=2/2 tube=1L1B turn=p1", Item::MagnifyingGlass, false},
+      // The counts already say every shell is live.
+      {"p1=2/2[mg] p2=2/2 tube=2L0B turn=p1", Item::MagnifyingGlass, true},
+      {"p1=2/2[phone] p2=2/2 tube=1L0B turn=p1", Item::BurnerPhone, true},
+      // Having seen the live chamber, p1 knows the shell behind it is blank.
+      {"p1=2/2[phone] p2=2/2 tube=1L1B turn=p1 known=p1:0L", Item::BurnerPhone, true},
+      {"p1=2/2[phone] p2=2/2 tube=1L2B turn=p1 known=p1:0B", Item::BurnerPhone, false},
+      {"p1=2/2[adr] p2=2/2 tube=1L1B turn=p1", Item::Adrenaline, true},
+      {"p1=1/2[cig] p2=2/2 tube=1L1B turn=p1", Item::Cigarettes, false},
+      {"p1=2/2[beer] p2=2/2 tube=1L1B turn=p1", Item::Beer, false},
+  };
+  for (const Case& c : cases) {
+    const SolveResult result = solve(parse(c.position), RuleConfig::doubleOrNothing(2), options());
+    const ActionValue* use = findUse(result, c.item);
+    ASSERT_NE(use, nullptr) << c.position;
+    EXPECT_EQ(use->spendsOnly, c.spendsOnly) << c.position;
   }
 }
 

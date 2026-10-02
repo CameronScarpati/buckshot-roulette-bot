@@ -775,7 +775,30 @@ struct RankedMove {
   std::string id;
   std::string label;
   double win = 0.0;
+  /// Said beside a move that only spends an item; empty for any other move.
+  std::string note;
 };
+
+/// The note on a move that only spends an item, played by `result.mover` in
+/// `state`, or empty for any other move. `first` is set when it ranks ahead
+/// of every move that does something, and the note then names the rule that
+/// makes spending the item worth more than keeping it.
+std::string spendNote(const SolveResult& result, const ActionValue& entry, const GameState& state,
+                      const RuleConfig& config, int reloads, const Names& names, bool first) {
+  if (!entry.spendsOnly) return "";
+  if (first) {
+    switch (spendReason(state, result.mover, entry.action, config, reloads)) {
+      case SpendReason::Adrenaline:
+        return "Only spends the item, which keeps it from " +
+               possessive(result.mover == kPlayer ? kDealer : kPlayer, names) + " Adrenaline.";
+      case SpendReason::Room:
+        return "Only spends the item, which makes room in the hand for the next deal.";
+      case SpendReason::None:
+        break;
+    }
+  }
+  return "Only spends the item; nothing else changes.";
+}
 
 /// A solver's assumptions as sentences, with the sentence that says the search
 /// stopped at its node limit set apart, since the page shows it above the
@@ -823,6 +846,12 @@ std::string rankingResult(int mover, bool scripted, const std::string& refused,
     // land a rounding step outside.
     json.key("win");
     json.number(std::clamp(move.win, 0.0, 1.0));
+    json.key("note");
+    if (move.note.empty()) {
+      json.null();
+    } else {
+      json.text(move.note);
+    }
     json.closeObject();
   }
   json.closeArray();
@@ -1045,11 +1074,13 @@ std::string rank() {
   const Names names = roundNames(current);
   std::vector<RankedMove> moves;
   for (std::size_t r = 0; r < result.ranked.size(); ++r) {
+    const std::string note = spendNote(result, result.ranked[r], table.state(), table.config(),
+                                       kRankReloads, names, r == 0);
     for (const int index : matches[r]) {
       const Action& action = legal[static_cast<std::size_t>(index)];
       const int slot = moveSlot(action, kPlayer, table.state(), &table);
       moves.push_back(RankedMove{std::to_string(index), moveLabel(action, kPlayer, slot, names),
-                                 result.ranked[r].value});
+                                 result.ranked[r].value, note});
     }
   }
   return rankingResult(kPlayer, true, "", moves, notesOf(result));
@@ -1126,8 +1157,9 @@ std::string advise(const std::string& text, const std::string& opponent, int rel
   for (std::size_t i = 0; i < result.ranked.size(); ++i) {
     const Action& action = result.ranked[i].action;
     const int slot = moveSlot(action, mover, state, nullptr);
-    moves.push_back(RankedMove{std::to_string(i), moveLabel(action, mover, slot, names),
-                               result.ranked[i].value});
+    moves.push_back(
+        RankedMove{std::to_string(i), moveLabel(action, mover, slot, names), result.ranked[i].value,
+                   spendNote(result, result.ranked[i], state, config, reloads, names, i == 0)});
   }
   return rankingResult(result.mover, scripted, "", moves, notesOf(result));
 }
