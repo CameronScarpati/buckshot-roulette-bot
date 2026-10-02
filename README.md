@@ -139,7 +139,7 @@ over 2 GB of memory on one machine.
 
 This is also the setting the results table further down calls the chair. The default is the
 rule the game uses, and playing the same hundred rounds under the other value takes seat 1
-from 74 of 100 to 52 of 100, which is the clearest measure of how much rests on it.
+from 75 of 100 to 53 of 100, which is the clearest measure of how much rests on it.
 
 ```sh
 ./build/play --selfplay 100 --seed 1 --charges 2 --reloads 0
@@ -597,14 +597,14 @@ budget of zero) does not fall below 7 wins in 10 for seat 1.
 
 | Batch | Seat 1 survives |
 |---|---|
-| The solver against itself | 74 of 100 rounds |
-| The solver against the heuristic in `cli/play.cpp` | 85 of 100 rounds |
+| The solver against itself | 75 of 100 rounds |
+| The solver against the heuristic in `cli/play.cpp` | 86 of 100 rounds |
 
 Read those two rows together, because neither means much alone.
 
 The first row is not a measure of strength. Both seats play the same way, so what it
 measures is the chair. Every round opens with a reload, so the rule that seat 1 acts first
-after a reload also decides who makes the first move of the round, and the 24 points over an
+after a reload also decides who makes the first move of the round, and the 25 points over an
 even split are the two together. The same batch can be rerun with the reload rule changed:
 
 ```sh
@@ -613,8 +613,8 @@ even split are the two together. The same batch can be rerun with the reload rul
 ```
 
 With `keep`, a reload leaves the turn where it was, so seat 1 still makes the first move of the
-round and nothing more, and seat 1 survives 52 of 100. The reload rule is therefore worth about
-22 of the 24 points and the first move of the round the other 2. With `dealer`, seat 2 acts
+round and nothing more, and seat 1 survives 53 of 100. The reload rule is therefore worth about
+22 of the 25 points and the first move of the round the other 3. With `dealer`, seat 2 acts
 first at every load, including the first, and seat 1 survives 23 of 100, roughly the default
 reflected. (Same builds as above. On one machine the `keep` batch took about nine and a half
 minutes and 2 GB of memory, and the `dealer` batch about five minutes and 1.5 GB. A hundred
@@ -623,7 +623,7 @@ and it is still a setting, which is the only way to see what it is worth.
 [docs/RULES.md](docs/RULES.md) names the field that changes it.
 
 The second row is the one about strength, and the claim it supports is the difference
-between the rows, not the 85. Swapping a copy of the solver for a heuristic opponent is
+between the rows, not the 86. Swapping a copy of the solver for a heuristic opponent is
 worth about eleven points to the seat facing it. The heuristic is written out in
 `cli/play.cpp`: it knows the odds and the obvious tactics and searches nothing, so it is a
 floor rather than a serious opponent. A hundred rounds is a small sample, and both numbers
