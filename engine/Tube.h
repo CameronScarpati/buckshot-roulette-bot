@@ -38,6 +38,12 @@ struct Tube {
   /// opposite. Only the chamber can carry this, and it clears when the chamber
   /// leaves.
   bool chamberInverted = false;
+  /// The chamber was flipped after a seat had pinned it down, so the counts
+  /// moved with it, either by an Inverter or by resolving a pending inversion.
+  /// A seat that has not seen the chamber cannot tell which way they moved: it
+  /// still holds the counts from before the flip, with the flip pending
+  /// (`unflipFor`). It clears when the chamber leaves.
+  bool pinnedFlip = false;
 
   constexpr std::uint8_t size() const { return static_cast<std::uint8_t>(live + blank); }
   constexpr bool empty() const { return size() == 0; }
@@ -63,10 +69,17 @@ struct Tube {
   void popChamber();
 
   /// Flip the chamber. A type somebody has already pinned down flips outright,
-  /// and the public counts move with it. A chamber nobody has seen keeps its
-  /// place in the unresolved pool and records the flip instead, so the shell
-  /// stays exchangeable while its odds invert.
+  /// the counts move with it and `pinnedFlip` records that they did. A chamber
+  /// nobody has seen keeps its place in the unresolved pool and records the
+  /// flip instead, so the shell stays exchangeable while its odds invert.
   void invertChamber();
+
+  /// The tube's counts and chamber as `player` holds them. When the chamber
+  /// was flipped after being pinned down and `player` has not seen it, the
+  /// counts go back to the ones before the flip and the chamber becomes a draw
+  /// from them that fires as its opposite, seen by nobody. Otherwise nothing
+  /// changes.
+  void unflipFor(int player);
 
   /// Resolve the chamber to the shell drawn from the unresolved pool, honouring
   /// a pending inversion, and return the type it actually fires as.

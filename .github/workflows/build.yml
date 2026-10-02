@@ -60,8 +60,26 @@ jobs:
       # reloads on one position, which is the cheap way to cover that path.
       - name: Self play
         run: ./build/play --selfplay 20 --seed 1 --charges 2 --reloads 0
-      - name: The same seed replays the same round, and the batch holds its band
+      - name: Advisor against the dealer
+        run: ./build/advisor --position "p1=2/4[saw,mg] p2=4/4[beer,cuff] tube=2L3B turn=p1" --reloads 1 --opponent dealer
+      - name: Advisor with the dealer to move
+        run: ./build/advisor --position "p1=3/4[saw] p2=3/4[mg,beer] tube=2L2B turn=p2" --reloads 1 --opponent dealer
+      # A run step has no input, so the interactive round prints its first board
+      # and menu and then leaves the table at the end of input with status 0.
+      - name: Play against the dealer
+        timeout-minutes: 2
+        run: ./build/play --opponent dealer --seed 6 --charges 2 --reloads 0
+      - name: Watch the solver play the dealer
+        run: ./build/play --watch --seed 6 --charges 2 --reloads 0
+      - name: A batch against the dealer
+        run: ./build/play --dealer 20 --seed 1 --charges 2 --reloads 0
+      - name: A batch against the dealer in a story stage
+        run: ./build/play --dealer 20 --seed 1 --reloads 0 --mode story2
+      - name: The same seed replays the same round, the batch holds its band, and dealer loads match the script
         run: ./tools/check_play.sh build
+      # Narrated sessions held to the exact position each one must leave.
+      - name: Advisor sessions print the positions they narrate
+        run: ./tools/check_advisor_session.sh build
 
   format:
     # The committed clang-format config, checked against every file, so that it
@@ -118,3 +136,83 @@ jobs:
         run: >
           python3 tools/compare_solvers.py --advisor build/advisor --random 20 --seed 23
           --heal-floor 2 --quiet
+      # The scripted dealer as the opponent, in Double or Nothing and in the story
+      # stages, whose dealer runs a simpler set of rules.
+      - name: Compare the two solvers against the dealer
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --opponent dealer --random 60
+          --seed 13 --quiet
+      - name: Compare the two solvers against the dealer in the story stages
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --opponent dealer --mode story
+          --random 30 --seed 17 --quiet
+      # Searching past a reload brings in the Double or Nothing loads, the deal
+      # appended to each hand and a sawed barrel carried through the reload.
+      # The random positions keep to small hands and short tubes, so that the
+      # Python oracle can search them, and the first step checks two positions
+      # at once.
+      - name: Compare the two solvers through a reload
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --reloads 1 --random 20
+          --seed 29 --max-items 3 --max-shells 4 --jobs 2 --quiet
+      - name: Compare the two solvers through a reload that deals no items
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --reloads 1 --items-per-load 0
+          --random 20 --seed 31 --quiet
+      - name: Compare the two solvers against the dealer through a reload
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --opponent dealer --reloads 1
+          --random 20 --seed 37 --max-items 3 --max-shells 4 --quiet
+      # A load that deals no items leaves the Dealer without fresh Cigarettes, so
+      # the item list its last pass built still decides its medicine after the
+      # reload.
+      - name: Compare the two solvers against the dealer through a reload that deals no items
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --opponent dealer --reloads 1
+          --items-per-load 0 --random 20 --seed 53 --quiet
+      - name: Compare the two solvers against the dealer through a reload in the story stages
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --opponent dealer --mode story
+          --reloads 1 --random 15 --seed 41 --max-items 3 --quiet
+      # The faded band in the story stages, where a shot stops at one charge,
+      # against the dealer and against the minimising opponent.
+      - name: Compare the two solvers against the dealer in the faded band
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --opponent dealer --mode story
+          --heal-floor 2 --random 20 --seed 43 --quiet
+      - name: Compare the two solvers in the story stages' faded band
+        run: >
+          python3 tools/compare_solvers.py --advisor build/advisor --mode story --heal-floor 2
+          --random 20 --seed 47 --quiet
+
+  web:
+    # The engine compiled to WebAssembly for the page under web/, played through
+    # seeded rounds and compared with the native advisor by the smoke test. The
+    # build and test commands are those printed in web/README.md, so that they
+    # cannot drift away from what works.
+    runs-on: ubuntu-latest
+    env:
+      EMSCRIPTEN_RELEASE: "6.0.10"
+    steps:
+      - uses: actions/checkout@v4
+      # The smoke test reads the page's own checks, which need Node 22 or newer.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Install Emscripten
+        run: |
+          git clone --depth 1 --branch "$EMSCRIPTEN_RELEASE" https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          cd "$RUNNER_TEMP/emsdk"
+          ./emsdk install "$EMSCRIPTEN_RELEASE"
+          ./emsdk activate "$EMSCRIPTEN_RELEASE"
+      - name: Build the engine for the page
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+          cmake --build build-web --target web_engine
+      - name: Build the advisor
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target advisor
+      - name: Smoke test
+        run: node web/test/smoke.mjs build-web/web build/advisor

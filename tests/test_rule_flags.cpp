@@ -1,8 +1,8 @@
-/// The rules this engine had to assume are settings, and until they could be
-/// typed on a command line, checking one against a real game meant editing C++
-/// and rebuilding. These tests cover the parsing of those settings, including
-/// the values that must be refused: a probability outside zero to one, or a
-/// count the engine cannot hold, would describe a game that cannot happen.
+/// The rule settings can be typed on a command line, where checking one
+/// against a real game once meant editing C++ and rebuilding. These tests cover
+/// the parsing of those settings, including the values that must be refused: a
+/// probability outside zero to one, or a count the engine cannot hold, would
+/// describe a game that cannot happen.
 
 #include <gtest/gtest.h>
 
@@ -59,7 +59,7 @@ TEST(RuleFlags, EverySettingReachesTheFieldItNames) {
 }
 
 TEST(RuleFlags, TheItemCountTakesARangeBecauseTheGameRedrawsIt) {
-  // Double or Nothing draws 1 to 5 items at every load, so the flag holds both
+  // The game draws its item count afresh at every load, so the flag holds both
   // ends. A solved reload deals the middle of the range, rounded up.
   const RuleConfig range = applied("--items-per-load", "1-5");
   EXPECT_EQ(range.itemsPerLoad, 1);
@@ -81,7 +81,7 @@ TEST(RuleFlags, TheItemCountTakesARangeBecauseTheGameRedrawsIt) {
   // The line every answer carries names the range and the count it used, so
   // the rounding is never hidden behind one number.
   RuleConfig shown = RuleConfig::doubleOrNothing(4);
-  EXPECT_NE(shown.describe().find("1 to 5 items dealt per load, modelled at 3"), std::string::npos)
+  EXPECT_NE(shown.describe().find("2 to 5 items dealt per load, modelled at 4"), std::string::npos)
       << shown.describe();
   EXPECT_NE(applied("--items-per-load", "2").describe().find("2 items dealt per load"),
             std::string::npos);
@@ -173,8 +173,8 @@ TEST(RuleFlags, TheHelpTextNamesEverySettingThatCanBeTyped) {
   EXPECT_FALSE(isRuleSetting("--reload-turn=keep")) << "the value is a separate word";
 }
 
-/// The setting that docs/RULES.md calls the largest of the assumptions has to
-/// reach the printed model line, since that line is what a reader checks.
+/// A rule setting has to reach the printed model line, since that line is what
+/// a reader checks.
 TEST(RuleFlags, TheAssumptionLineFollowsTheSetting) {
   RuleConfig config = RuleConfig::doubleOrNothing(4);
   const std::string before = config.describe();

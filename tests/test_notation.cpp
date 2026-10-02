@@ -28,9 +28,9 @@ TEST(Notation, ReadsEveryField) {
   EXPECT_EQ(state.playerCount, 2);
   EXPECT_EQ(state.players[0].hp, 3);
   EXPECT_EQ(state.players[0].maxHp, 4);
-  EXPECT_EQ(state.players[0].items[itemIndex(Item::HandSaw)], 1);
-  EXPECT_EQ(state.players[0].items[itemIndex(Item::Beer)], 1);
-  EXPECT_EQ(state.players[1].items[itemIndex(Item::MagnifyingGlass)], 1);
+  EXPECT_EQ(state.players[0].hand.count(Item::HandSaw), 1);
+  EXPECT_EQ(state.players[0].hand.count(Item::Beer), 1);
+  EXPECT_EQ(state.players[1].hand.count(Item::MagnifyingGlass), 1);
   EXPECT_EQ(state.tube.live, 2);
   EXPECT_EQ(state.tube.blank, 3);
   EXPECT_EQ(state.current, 1);
@@ -108,10 +108,23 @@ TEST(Notation, CarriesTheFlagsThatDecideWhoMayBeRestrained) {
   EXPECT_TRUE(parseOk(printed) == state);
 }
 
+TEST(Notation, RefusesALostTurnTheSeatCannotStillBeOwed) {
+  // A restrained seat loses one turn and is freed as its next turn starts
+  // (RoundManager.gd 308-325, DealerIntelligence.gd 39-57). The seat to move
+  // has that turn, and a seat still waiting to lose one has not lost it.
+  parseFails("p1=2/2 p2=2/2[cuff] tube=1L2B turn=p1 skipped=p1");
+  parseFails("p1=2/2 p2=2/2 tube=1L2B turn=p1 cuffed=p2 skipped=p2");
+  parseFails("p1=2/2 p2=2/2 p3=2/2 tube=1L2B turn=p2 cuffed=p3 skipped=p3");
+  // The seat that moves next is still owed one, and a finished round may
+  // leave the turn anywhere.
+  EXPECT_TRUE(parseOk("p1=2/2 p2=2/2 tube=1L2B turn=p1 skipped=p2").players[1].skipConsumed);
+  EXPECT_TRUE(parseOk("p1=2/2 p2=0/2 tube=1L2B turn=p2 skipped=p2").players[1].skipConsumed);
+}
+
 TEST(Notation, AcceptsItemNamesAsWellAsTokens) {
   const GameState state = parseOk("p1=2/2[handsaw,magnifyingglass] p2=2/2 tube=1L1B turn=p1");
-  EXPECT_EQ(state.players[0].items[itemIndex(Item::HandSaw)], 1);
-  EXPECT_EQ(state.players[0].items[itemIndex(Item::MagnifyingGlass)], 1);
+  EXPECT_EQ(state.players[0].hand.count(Item::HandSaw), 1);
+  EXPECT_EQ(state.players[0].hand.count(Item::MagnifyingGlass), 1);
 }
 
 TEST(Notation, TheBoardNamesWhatEachSeatKnows) {

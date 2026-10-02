@@ -204,7 +204,10 @@ TEST(Solver, EachSideIsFlatteredByTheOpponentModel) {
 
 TEST(Solver, LookingThroughMoreReloadsChangesNothingThatIsAlreadyDecided) {
   const GameState state = parse("p1=1/1[saw] p2=2/2 tube=1L0B turn=p1");
-  const RuleConfig config = RuleConfig::doubleOrNothing(2);
+  // Three items a load keeps the two-reload search well inside the node limit.
+  RuleConfig config = RuleConfig::doubleOrNothing(2);
+  config.itemsPerLoad = 3;
+  config.itemsPerLoadMax = 3;
   const double shallow = solve(state, config, options(0)).ranked.front().value;
   const double deep = solve(state, config, options(2)).ranked.front().value;
   EXPECT_NEAR(shallow, 1.0, 1e-12);

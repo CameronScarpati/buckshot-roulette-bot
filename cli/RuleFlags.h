@@ -12,13 +12,14 @@
 namespace bsr {
 namespace cli {
 
-/// The rules this engine had to assume, as command line settings.
+/// The rule settings, as command line options.
 ///
-/// docs/RULES.md lists eleven assumptions and names the field that changes
-/// each. Until these flags existed, changing one meant editing C++ and
-/// rebuilding, so nobody without a compiler could check a rule against their
-/// own game. Every answer already prints the assumptions it used, so a flag
-/// here and the line under the ranking describe the same thing.
+/// docs/RULES.md lists them under Settings, with the default each mode uses
+/// and the field each one changes. Without these flags, changing one meant
+/// editing C++ and rebuilding, so nobody without a compiler could check a rule
+/// against their own game. Every answer already prints the rules it used, so a
+/// flag here and the model line at the head of the answer describe the same
+/// thing.
 struct RuleSetting {
   const char* flag;
   const char* values;
@@ -30,7 +31,7 @@ inline const std::vector<RuleSetting>& ruleSettings() {
       {"--reload-turn", "keep|p1|dealer", "who acts first after a mid-round reload"},
       {"--saw-survives", "yes|no", "whether a sawed barrel survives a reload"},
       {"--clear-cuffs", "yes|no", "whether a reload releases handcuffs and jammers"},
-      {"--items-per-load", "0 to 8, or 1-5", "items dealt to each seat at a reload"},
+      {"--items-per-load", "0 to 8, or 2-5", "items dealt to each seat at a reload"},
       {"--item-limit", "1 to 8", "how many items a seat may hold"},
       {"--med-success", "0 to 1", "the chance Expired Medicine works"},
       {"--med-heal", "0 to 8", "charges Expired Medicine returns on success"},
@@ -135,12 +136,12 @@ inline bool applyRuleSetting(const std::string& flag, const std::string& value, 
     if (dash != std::string::npos && dash > 0) {
       if (!parseWholeNumber(value.substr(0, dash), 0, 8, &number) ||
           !parseWholeNumber(value.substr(dash + 1), 0, 8, &high) || high < number) {
-        *error = shown + "a number between 0 and 8 or a range like 1-5, not " + value;
+        *error = shown + "a number between 0 and 8 or a range like 2-5, not " + value;
         return false;
       }
     } else {
       if (!parseWholeNumber(value, 0, 8, &number)) {
-        *error = shown + "a number between 0 and 8 or a range like 1-5, not " + value;
+        *error = shown + "a number between 0 and 8 or a range like 2-5, not " + value;
         return false;
       }
       high = number;
@@ -187,7 +188,7 @@ inline bool applyRuleSettings(const std::vector<std::pair<std::string, std::stri
 }
 
 inline std::string ruleSettingsHelp() {
-  std::string text = "  Rules that this engine had to assume (docs/RULES.md)\n";
+  std::string text = "  Rule settings (docs/RULES.md, Settings)\n";
   for (const RuleSetting& setting : ruleSettings()) {
     std::string line = "    ";
     line += setting.flag;
