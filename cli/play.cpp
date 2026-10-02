@@ -255,7 +255,10 @@ void printNew(const Table& table, std::size_t* printed, Audience audience) {
 /// board, the moves it ranks highest with their values, and the one it plays.
 /// Moves that tie at the top are starred as the advisor stars them, and every
 /// starred row prints the same value. The values carry enough decimals that an
-/// unstarred row never prints the same number as a starred one. A weighing
+/// unstarred row never prints the same number as a starred one, except a move
+/// that only spends an item, which is never starred while a move that does
+/// something ties with it. Such a move says so beside its value, and why it
+/// leads when it does. A weighing
 /// whose values were not all searched to the end of the round says it is
 /// estimated. The first weighing in a round that stops at the reload budget
 /// sets `budgetNoted` and adds a note saying what that means, and every
@@ -291,11 +294,27 @@ Action watchedSolverMove(const Table& table, const RuleConfig& config, const Opt
     }
     if (clash) ++decimals;
   }
+  const bool frontSpends = result.ranked.front().spendsOnly;
   for (std::size_t i = 0; i < shown; ++i) {
-    const bool starred = std::abs(top - result.ranked[i].value) <= kTie;
+    const ActionValue& entry = result.ranked[i];
+    const bool level = std::abs(top - entry.value) <= kTie;
+    const bool starred = level && (frontSpends || !entry.spendsOnly);
     std::cout << (starred ? "  * " : "    ") << std::left << std::setw(44)
-              << result.ranked[i].action.describe(kPlayerSeat) << std::right
-              << fixed(starred ? top : result.ranked[i].value, decimals) << "\n";
+              << entry.action.describe(kPlayerSeat) << std::right
+              << fixed(level ? top : entry.value, decimals);
+    if (entry.spendsOnly) {
+      std::cout << "   (only spends the item";
+      const SpendReason reason = i == 0 ? spendReason(table.state(), kPlayerSeat, entry.action,
+                                                      config, options.reloadBudget)
+                                        : SpendReason::None;
+      if (reason == SpendReason::Adrenaline) {
+        std::cout << ", which keeps it from the dealer's Adrenaline";
+      } else if (reason == SpendReason::Room) {
+        std::cout << ", which makes room in the hand for the next deal";
+      }
+      std::cout << ")";
+    }
+    std::cout << "\n";
   }
   const std::size_t tied = result.bestActions(kTie).size();
   if (tied > 1) {

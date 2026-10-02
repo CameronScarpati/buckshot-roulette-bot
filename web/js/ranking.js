@@ -1,7 +1,8 @@
 // A ranking as a list of moves with win-chance bars, best first. Every bar
 // carries a tick at even odds. The best row says how far it leads the next
-// move; every other row says how far it trails the best. A search that
-// stopped at its node limit says so above the list.
+// move; every other row says how far it trails the best. A move that only
+// spends an item carries a note saying so. A search that stopped at its node
+// limit says so above the list.
 
 import { esc, pct, points } from './vocab.js';
 
@@ -67,6 +68,7 @@ export function renderRanking(el, r, o = {}) {
       } else if (!best) {
         gap = tie ? 'Level with the best.' : `${points(top - m.win)} points behind the best.`;
       }
+      if (m.note) gap = gap ? `${gap} ${m.note}` : m.note;
       const tags = [
         best ? '<span class="tag tag--best">Best</span>' : '',
         best && o.next && !o.playedId ? `<span class="tag tag--plays">${esc(o.next)}</span>` : '',

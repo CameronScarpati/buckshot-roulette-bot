@@ -128,8 +128,9 @@ the advisor's tokens: `mg`, `beer`, `cig`, `cuff`, `saw`, `phone`, `adr`, `inv` 
   (`seat`) and `over` (`winner`). An Adrenaline that takes an item is an `adr` event with a
   target, followed by the event of the item taken.
 - **Ranking**: `mover`, `opponent`, `refused` (null, or why there is nothing to rank),
-  `moves` (best first, each `id`, `label` and `win`, the chance of being the last seat
-  standing), `stopped` (null, or the sentence above) and `assumptions`.
+  `moves` (best first, each `id`, `label`, `win`, the chance of being the last seat
+  standing, and `note`, null or a sentence on a move that only spends an item), `stopped`
+  (null, or the sentence above) and `assumptions`.
 
 `js/contract.js` checks each of these shapes as the page reads them.
 

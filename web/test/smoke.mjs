@@ -366,12 +366,20 @@ function checkRanking(ranking, view) {
   expect(Array.isArray(ranking.moves), 'ranking.moves');
   expect((ranking.refused === null) === ranking.moves.length > 0, 'refused and moves agree');
   ranking.moves.forEach((move, i) => {
-    keysWithin(move, ['id', 'label', 'win'], `ranking.moves[${i}]`);
+    keysWithin(move, ['id', 'label', 'win', 'note'], `ranking.moves[${i}]`);
     expect(typeof move.id === 'string' && move.id.length > 0, 'ranking move id');
     expect(typeof move.label === 'string' && move.label.length > 0, 'ranking move label');
     voice(move.label, 'ranking move label');
     expect(typeof move.win === 'number' && move.win >= 0 && move.win <= 1, `win is ${move.win}`);
-    expect(i === 0 || move.win <= ranking.moves[i - 1].win, 'the ranking is best first');
+    // A move that only spends an item goes after the moves it ties with, and
+    // rounding can leave it a hair above them.
+    expect(i === 0 || move.win <= ranking.moves[i - 1].win + 1e-9, 'the ranking is best first');
+    expect(
+      move.note === null ||
+        (typeof move.note === 'string' && /^Only spends the item/.test(move.note)),
+      `ranking move note ${move.note}`,
+    );
+    voice(move.note, 'ranking move note');
   });
   expect(
     ranking.stopped === null ||
@@ -670,6 +678,10 @@ const FIXED = [
   'p1=3/4[saw] p2=3/4[mg,adr] tube=2L2B turn=p1 cuffed=p1',
   'p1=2/2[adr] p2=2/2[cig,beer] tube=1L2B turn=p1',
   'p1=2/3[cig,adr,cig] p2=2/3[adr,mg,cuff,saw] tube=3L2B turn=p1 known=p1:1L',
+  // Cigarettes at full charges, tied with moves that do something, and leading
+  // them while the dealer holds an Adrenaline that could take it.
+  'p1=4/4[cig,saw] p2=4/4 tube=1L1B turn=p1',
+  'p1=4/4[cig] p2=3/4[adr] tube=2L1B turn=p1',
 ];
 const positions = [...FIXED, ...donDecisions];
 let compared = 0;
@@ -703,6 +715,10 @@ for (const text of positions) {
       expect(
         move !== undefined && pageMove(move.label) === nativeMove(action.action),
         `${opponent} ${text}: ${move?.label} is ${action.action}`,
+      );
+      expect(
+        move !== undefined && (move.note !== null) === action.spendsOnly,
+        `${opponent} ${text}: ${move?.label} and the advisor agree on spending only`,
       );
     });
     compared += 1;
