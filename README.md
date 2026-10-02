@@ -13,6 +13,8 @@ and this ranks the moves worth considering by the probability that you are the l
 standing, under a stated opponent model, along with the assumptions that produced the number.
 It also plays.
 
+**[Open it in the browser](https://cameronscarpati.github.io/buckshot-roulette-bot/)**
+
 </div>
 
 ## What it does
@@ -38,7 +40,9 @@ assumed by this engine because nothing settles it.
 
 ![Watch: the solver ranks its moves before each turn against the dealer](docs/images/web-watch.jpg)
 
-The engine and the solver also run on a web page, compiled to WebAssembly. It has three modes.
+The engine and the solver also run on
+[a web page](https://cameronscarpati.github.io/buckshot-roulette-bot/), compiled to
+WebAssembly. It has three modes.
 
 - **Watch.** The solver plays the scripted dealer and shows its top three moves, with their
   chances, before each of its turns.
@@ -52,7 +56,8 @@ The page runs entirely in the browser. It is static files and the compiled engin
 requests nothing from any other site. [web/README.md](web/README.md) has the commands to build
 the engine with Emscripten and to serve the page locally.
 
-`.github/workflows/pages.yml` builds the page and publishes it with GitHub Pages.
+`.github/workflows/pages.yml` builds the page and publishes it with GitHub Pages at
+<https://cameronscarpati.github.io/buckshot-roulette-bot/>.
 
 ## Quick start
 
